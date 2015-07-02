@@ -1402,7 +1402,7 @@ INFO_TABLE_RET(stg_patomically_frame, ATOMICALLY_FRAME,
     P_ checkpoint;
     gcptr trec, outer, next_invariant, q;
 
-    trec   = StgTSO_ptrec(CurrentTSO);
+    trec = StgTSO_ptrec(CurrentTSO);
 
     /* We've got no more invariants to check, try to commit */
     ("ptr" checkpoint) = ccall p_stmCommitTransaction(MyCapability() "ptr", trec "ptr");

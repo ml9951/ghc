@@ -426,6 +426,7 @@ wanteds = concat
           ,closureField  C    "StgTSO"      "cap"
           ,closureField  C    "StgTSO"      "saved_errno"
           ,closureField  C    "StgTSO"      "trec"
+          ,closureField  C    "StgTSO"      "ptrec"
           ,closureField  C    "StgTSO"      "flags"
           ,closureField  C    "StgTSO"      "dirty"
           ,closureField  C    "StgTSO"      "bq"
@@ -480,6 +481,9 @@ wanteds = concat
           ,closureField C "StgAtomicInvariant" "code"
 
           ,closureField C "StgTRecHeader" "enclosing_trec"
+
+          ,closureField C "StgPTRecWithK" "continuation"
+          ,closureField C "StgPTRecWithK" "read_value"
 
           ,closureSize  C "StgCatchSTMFrame"
           ,closureField C "StgCatchSTMFrame" "handler"
