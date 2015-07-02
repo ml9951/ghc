@@ -1,46 +1,21 @@
-The Glasgow Haskell Compiler
+The Glasgow Haskell Compiler with Partial Abort STM
 ============================
-
-[![Build Status](https://api.travis-ci.org/ghc/ghc.svg?branch=master)](http://travis-ci.org/ghc/ghc)
-
-This is the source tree for [GHC][1], a compiler and interactive
-environment for the Haskell functional programming language.
-
-For more information, visit [GHC's web site][1].
-
-Information for developers of GHC can be found on the [GHC Trac][2].
+This is a fork of GHC that adds a new STM monad which is able to 
+partially abort transactions.  Below are the steps necessary to
+get everything checked out and built:
 
 
-Getting the Source
-==================
+    git clone https://github.com/ml9951/ghc.git
+    cd ghc
+    git remote set-url origin git://git.haskell.org/ghc.git   # so submodules work
+    git submodule update --init
+    perl boot
+    ./configure
+    make
 
-There are two ways to get a source tree:
+Instructions for getting the submodules to work in a forked version of GHC
+where shamelessly ripped off from: https://github.com/goldfirere/ghc/blob/nokinds/README.md
 
- 1. *Download source tarballs*
-
-  Download the GHC source distribution:
-
-        ghc-<version>-src.tar.bz2
-
-  which contains GHC itself and the "boot" libraries.
-
- 2. *Check out the source code from git*
-
-  The official mirror for GHC on GitHub is located at https://github.com/ghc/ghc.
-
-        $ git clone git://github.com/ghc/ghc.git
-        $ cd ghc
-        $ ./sync-all get
-
-  If you want to clone your own fork instead, add an argument to `sync-all` to
-  tell it where it can find the other repositories it needs.
-
-        $ git clone <your preferred github.com GHC fork URL> ghc
-        $ cd ghc
-        $ ./sync-all -r git://github.com/ghc get
-
-  **DO NOT submit pull request directly to the github repo.**
-  *See the GHC developer team's working conventions re [contributing patches](http://ghc.haskell.org/trac/ghc/wiki/WorkingConventions/Git#Contributingpatches "ghc.haskell.org/trac/ghc/wiki/WorkingConventions/Git#Contributingpatches").*
 
 
 Building & Installing
