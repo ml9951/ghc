@@ -286,7 +286,6 @@ typedef struct {
     StgClosure*              value;
 } StgMVar;
 
-
 /* STM data structures
  *
  *  StgTVar defines the only type that can be updated through the STM
@@ -395,6 +394,63 @@ typedef struct {
   StgClosure    *first_code;
   StgClosure    *alt_code;
 } StgCatchRetryFrame;
+
+/* Partial Abort STM data structures
+ *
+ *  The StgPTRecHeader_ differs from the StgTRecHeader_
+ *  in that we are not currently supporting nested transactions,
+ *  or invariant checking.  Additionally, I have split up the log
+ *  into a read set and a write set and included a read_version
+ *  indicating when the transaction started with respect to the 
+ *  global version clock
+ *
+ */
+
+typedef struct StgPTRecChunk_{
+    StgHeader               header;
+    struct StgPTRecChunk_ * prev_chunk;
+    StgWord                 next_entry_idx;
+    TRecEntry               entries[TREC_CHUNK_NUM_ENTRIES];
+}PTRecChunk;
+
+//Write set element
+typedef struct StgWriteSet_{
+    StgHeader            header;
+    StgTVar             *tvar;
+    StgClosure          *val;
+    struct StgWriteSet_ *next;
+} StgWriteSet;
+
+//Read set element without a continuation
+typedef struct StgPTRecWithoutK_{
+    StgHeader                 header;
+    StgTVar                  *tvar;
+    StgClosure               *read_value;
+    struct StgPTRecWithoutK_ *next;
+} StgPTRecWithoutK;
+
+//Read set element with a continuation
+typedef struct StgPTRecWithK_{
+    StgHeader              header;
+    StgTVar               *tvar;
+    StgClosure            *read_value;
+    StgPTRecWithoutK      *next;
+    StgWriteSet           *write_set;
+    StgClosure            *continuation;
+    struct StgPTRecWithK_ *prev_k;
+} StgPTRecWithK;
+
+//TRec 
+typedef struct StgPTRecHeader_ {
+    StgHeader                  header;
+    StgPTRecWithoutK          *read_set;
+    StgPTRecWithK             *lastK;
+    StgWriteSet               *write_set;
+    unsigned long              read_version;
+    StgInt64                   capture_freq;
+    StgInt                     numK;
+} StgPTRecHeader;
+
 
 /* ----------------------------------------------------------------------------
    Messages

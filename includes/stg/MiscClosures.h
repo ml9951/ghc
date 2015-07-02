@@ -146,6 +146,14 @@ RTS_ENTRY(stg_END_INVARIANT_CHECK_QUEUE);
 RTS_ENTRY(stg_END_STM_CHUNK_LIST);
 RTS_ENTRY(stg_NO_TREC);
 
+/* partial abort STM objects */
+RTS_ENTRY(stg_PTREC_HEADER);
+RTS_ENTRY(stg_PTREC_WITHK);
+RTS_ENTRY(stg_PTREC_WITHOUTK);
+RTS_ENTRY(stg_WRITE_SET);
+RTS_ENTRY(stg_NO_PTREC);
+RTS_CLOSURE(stg_NO_PTREC_closure);
+
 /* closures */
 
 RTS_CLOSURE(stg_END_TSO_QUEUE_closure);
@@ -435,6 +443,12 @@ RTS_FUN_DECL(stg_readTVarzh);
 RTS_FUN_DECL(stg_readTVarIOzh);
 RTS_FUN_DECL(stg_writeTVarzh);
 RTS_FUN_DECL(stg_checkzh);
+
+/*Partial Abort Prim Ops*/
+RTS_FUN_DECL(stg_patomicallyzh);
+RTS_FUN_DECL(stg_preadTVarzh);
+RTS_FUN_DECL(stg_pwriteTVarzh);
+
 
 RTS_FUN_DECL(stg_unpackClosurezh);
 RTS_FUN_DECL(stg_getApStackValzh);
