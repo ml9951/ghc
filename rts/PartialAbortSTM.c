@@ -87,7 +87,7 @@ static void sanity_check(StgPTRecHeader * trec){
 
 }
 
-static StgBool validate(StgPTRecHeader * trec, StgPTRecWithK ** checkpoint){
+static StgPTRecWithK * validate(StgPTRecHeader * trec){
     sanity_check(trec);
     while(TRUE){
         unsigned long time = version_clock;
@@ -96,27 +96,26 @@ static StgBool validate(StgPTRecHeader * trec, StgPTRecWithK ** checkpoint){
         }
         //validate read set
         StgPTRecWithoutK * ptr = trec->read_set;
-        *checkpoint = NULL;
+        StgPTRecWithK *checkpoint = NULL;
         StgBool needCheckpoint = FALSE;
         int i = 0;
         while(ptr != NULL){
             if(ptr->header.info == WITHK_HEADER){ // this is a WithK entry
                 StgPTRecWithK * withK = (StgPTRecWithK*)ptr;
                 if(withK->read_value != withK->tvar->current_value){
-                    *checkpoint = withK;
+                    checkpoint = withK;
                     needCheckpoint = FALSE;
                 }else if(needCheckpoint){ //Valid and we need a checkpoint
-                    *checkpoint = withK;
+                    checkpoint = withK;
                     needCheckpoint = FALSE;
                 }
                 if(should_abort && i > 20){
-                    *checkpoint = withK;
                     should_abort = FALSE;
-                    return FALSE;
+                    return withK;
                 }
             }else if(ptr->header.info == WITHOUTK_HEADER){
                 if(ptr->read_value != ptr->tvar->current_value){
-                    *checkpoint = NULL;
+                    checkpoint = NULL;
                     needCheckpoint = TRUE;
                 }
             }else{
@@ -126,15 +125,20 @@ static StgBool validate(StgPTRecHeader * trec, StgPTRecWithK ** checkpoint){
             i++;
         }
         if(needCheckpoint){ //no checkpoint found, but we need to abort
-            return FALSE;
+            return (StgPTRecWithK *) 1;
         }
-        if(*checkpoint != NULL){ //validation failed, but we found a checkpoint
+        if(checkpoint != NULL){ //validation failed, but we found a checkpoint
             //try reading from this tvar
-            StgTVar * tvar = (*checkpoint)->tvar;
+            StgTVar * tvar = checkpoint->tvar;
             StgClosure * val = tvar->current_value;
             if(time == version_clock){
-                (*checkpoint)->read_value = val; //apply the continuation to this in C--
-                return FALSE;
+                checkpoint->read_value = val; //apply the continuation to this in C--
+                trec->read_set = (StgPTRecWithoutK*)checkpoint;
+                trec->write_set = checkpoint->write_set;
+                trec->lastK = checkpoint;
+                StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+                trec->capture_freq = capture_freq | (capture_freq >> 32);
+                return checkpoint;
             }else{
                 continue; //revalidate the whole log
             }
@@ -142,11 +146,10 @@ static StgBool validate(StgPTRecHeader * trec, StgPTRecWithK ** checkpoint){
 
         if(time == version_clock){
             trec->read_version = time;
-            return TRUE;
+            return (StgPTRecWithK *) 0;
         }
     }
 }
-
 
 StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
                            StgTVar * tvar, StgClosure * k){
@@ -162,9 +165,10 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     //Not found in write set
     StgClosure * val = tvar->current_value;
     while(trec->read_version != version_clock){
-        StgPTRecWithK * checkpoint = NULL;
-        StgBool valid = validate(trec, &checkpoint);
-        //TODO: if valid is FALSE, then abort
+        StgPTRecWithK * checkpoint = validate(trec);
+        if(checkpoint != (StgPTRecWithK *) 0){
+            //Abort!
+        }
         val = tvar->current_value;
     }
     
@@ -240,29 +244,16 @@ void p_stmWriteTVar(Capability *cap,
 StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     unsigned long snapshot = trec->read_version;
     while (should_abort || cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
-        StgPTRecWithK * checkpoint = NULL;
-        StgBool valid = validate(trec, &checkpoint);
-        if(!valid){
-            if(checkpoint == NULL){ //no checkpoint found
-                return (StgPTRecWithK *) 1;
-            }else{
-                trec->read_set = (StgPTRecWithoutK*)checkpoint;
-                trec->write_set = checkpoint->write_set;
-                trec->lastK = checkpoint;
-                StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
-                trec->capture_freq = capture_freq | (capture_freq >> 32);
-                return checkpoint;
-            }
+        StgPTRecWithK * checkpoint = validate(trec);
+        if(checkpoint != (StgPTRecWithK *) 0){
+            //The validate function sets up the trec with the appropriate read/write sets
+            return checkpoint;
         }
         snapshot = trec->read_version;
     }
-
     
-
     StgWriteSet * write_set = trec->write_set;
     while(write_set != NULL){
-        //update contents
-        //unlock_tvar(cap, trec, s, e -> new_value, TRUE);
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;
         dirty_TVAR(cap,tvar);
