@@ -85,9 +85,13 @@ StgWord16 closure_flags[] = {
  [SMALL_MUT_ARR_PTRS_CLEAN]   =  (_HNF|     _NS|         _MUT|_UPT           ),
  [SMALL_MUT_ARR_PTRS_DIRTY]   =  (_HNF|     _NS|         _MUT|_UPT           ),
  [SMALL_MUT_ARR_PTRS_FROZEN0] =  (_HNF|     _NS|         _MUT|_UPT           ),
- [SMALL_MUT_ARR_PTRS_FROZEN]  =  (_HNF|     _NS|              _UPT           )
+ [SMALL_MUT_ARR_PTRS_FROZEN]  =  (_HNF|     _NS|              _UPT           ),
+ //Partial Abort: These are probably wrong, but I'm not really sure what they should be (or if we need them at all)
+ [WRITE_SET]            =  ( 0                                         ),
+ [PTREC_WITHK]          =  ( 0                                         ),
+ [PTREC_WITHOUTK]       =  ( 0                                         )
 };
 
-#if N_CLOSURE_TYPES != 65
+#if N_CLOSURE_TYPES != 68
 #error Closure types changed: update ClosureFlags.c!
 #endif

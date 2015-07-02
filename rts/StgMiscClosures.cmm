@@ -527,6 +527,26 @@ CLOSURE(stg_END_STM_CHUNK_LIST_closure,stg_END_STM_CHUNK_LIST);
 
 CLOSURE(stg_NO_TREC_closure,stg_NO_TREC);
 
+/* -----------------------------------------------------------------------------
+   Partial Abort STM
+   -------------------------------------------------------------------------- */
+INFO_TABLE(stg_PTREC_HEADER, 3, 3, MUT_PRIM, "PTREC_HEADER", "PTREC_HEADER")
+{ foreign "C" barf("PTREC_HEADER object entered!") never returns; }
+
+INFO_TABLE(stg_WRITE_SET, 3, 0, WRITE_SET, "WRITE_SET", "WRITE_SET")
+{ foreign "C" barf("WRITE_SET object entered!") never returns; }
+
+INFO_TABLE(stg_PTREC_WITHOUTK, 3, 0, PTREC_WITHOUTK, "PTREC_WITHOUTK", "PTREC_WITHOUTK")
+{ foreign "C" barf("PTREC_WITHOUTK object entered!") never returns; }
+
+INFO_TABLE(stg_PTREC_WITHK, 6, 0, PTREC_WITHK, "PTREC_WITHK", "PTREC_WITHK")
+{ foreign "C" barf("PTREC_WITHK object entered!") never returns; }
+
+INFO_TABLE_CONSTR(stg_NO_PTREC,0,0,0,CONSTR_NOCAF_STATIC,"NO_PTREC","NO_PTREC")
+{ foreign "C" barf("NO_PTREC object entered!") never returns; }
+
+CLOSURE(stg_NO_PTREC_closure,stg_NO_PTREC);
+
 /* ----------------------------------------------------------------------------
    Messages
    ------------------------------------------------------------------------- */

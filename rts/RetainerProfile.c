@@ -605,7 +605,6 @@ push( StgClosure *c, retainer c_child_r, StgClosure **first_child )
         *first_child = (StgClosure *)((StgTRecChunk *)c)->prev_chunk;
         se.info.next.step = 0;  // entry no.
         break;
-
         // cannot appear
     case PAP:
     case AP:

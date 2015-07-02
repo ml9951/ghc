@@ -248,7 +248,7 @@ extern volatile StgWord pending_sync;
 //
 // On return, *cap is non-NULL, and points to the Capability acquired.
 //
-void waitForCapability (Capability **cap/*in/out*/, Task *task);
+void waitForReturnCapability (Capability **cap/*in/out*/, Task *task);
 
 EXTERN_INLINE void recordMutableCap (StgClosure *p, Capability *cap, nat gen);
 
@@ -268,6 +268,12 @@ EXTERN_INLINE void recordClosureMutated (Capability *cap, StgClosure *p);
 // current task should then re-acquire it using waitForCapability().
 //
 rtsBool yieldCapability (Capability** pCap, Task *task, rtsBool gcAllowed);
+
+// Acquires a capability for doing some work.
+//
+// On return: pCap points to the capability.
+//
+void waitForCapability (Task *task, Mutex *mutex, Capability **pCap);
 
 // Wakes up a worker thread on just one Capability, used when we
 // need to service some global event.

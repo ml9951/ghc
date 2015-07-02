@@ -13,6 +13,7 @@
 #include "Updates.h"
 #include "Threads.h"
 #include "STM.h"
+#include "PartialAbortSTM.h"
 #include "Schedule.h"
 #include "Trace.h"
 #include "ThreadLabels.h"
@@ -111,6 +112,8 @@ createThread(Capability *cap, W_ size)
     ASSIGN_Int64((W_*)&(tso->alloc_limit), 0);
 
     tso->trec = NO_TREC;
+
+    tso->ptrec = NULL;
 
 #ifdef PROFILING
     tso->prof.cccs = CCS_MAIN;

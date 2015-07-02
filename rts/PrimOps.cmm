@@ -1011,7 +1011,6 @@ INFO_TABLE_RET(stg_catch_retry_frame, CATCH_RETRY_FRAME,
     p_ next,                                                            \
     p_ result
 
-
 INFO_TABLE_RET(stg_atomically_frame, ATOMICALLY_FRAME,
                // layout of the frame, and bind the field names
                ATOMICALLY_FRAME_FIELDS(W_,P_,
@@ -1152,7 +1151,6 @@ INFO_TABLE_RET(stg_catch_stm_frame, CATCH_STM_FRAME,
             (code);
     }
 }
-
 
 // Primop definition -----------------------------------------------------------
 
@@ -1385,6 +1383,122 @@ stg_writeTVarzh (P_ tvar,     /* :: TVar a */
     trec = StgTSO_trec(CurrentTSO);
     ccall stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
                        new_value "ptr");
+    return ();
+}
+
+/* -----------------------------------------------------------------------------
+ * Partial Abort TVar primitives
+ * -------------------------------------------------------------------------- */
+
+INFO_TABLE_RET(stg_patomically_frame, ATOMICALLY_FRAME,
+               // layout of the frame, and bind the field names
+               ATOMICALLY_FRAME_FIELDS(W_,P_,
+                                       info_ptr, p1, p2,
+                                       code,
+                                       next_invariant,
+                                       frame_result))
+    return (P_ result) // value returned to the frame
+{
+    P_ checkpoint;
+    gcptr trec, outer, next_invariant, q;
+
+    trec   = StgTSO_ptrec(CurrentTSO);
+
+    /* We've got no more invariants to check, try to commit */
+    ("ptr" checkpoint) = ccall p_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
+
+    if(checkpoint == 0){ //Validation succeeded
+        StgTSO_ptrec(CurrentTSO) = NO_PTREC;
+        frame_result = result;
+        return(frame_result);
+    }
+    if(checkpoint == 1){ //Validation failed and no checkpoint
+        ("ptr" trec) = ccall p_stmStartTransaction(MyCapability() "ptr");
+        StgTSO_ptrec(CurrentTSO) = trec;
+        next_invariant = END_INVARIANT_CHECK_QUEUE;
+
+        jump stg_ap_v_fast
+            // push the StgAtomicallyFrame again: the code generator is
+            // clever enough to only assign the fields that have changed.
+            (ATOMICALLY_FRAME_FIELDS(,,info_ptr,p1,p2,
+                                     code,next_invariant,frame_result))
+            (code);
+    }else{//Validation failed, but we have a checkpoint
+
+        P_ k;
+        P_ val;
+
+        k = StgPTRecWithK_continuation(checkpoint);
+        val = StgPTRecWithK_read_value(checkpoint);
+
+        jump stg_ap_pv_fast  
+            // push the StgAtomicallyFrame again: the code generator is
+            // clever enough to only assign the fields that have changed.
+            (ATOMICALLY_FRAME_FIELDS(,,info_ptr,p1,p2,
+                                     code,next_invariant,frame_result))
+            (k, val);
+    }
+}
+
+stg_patomicallyzh (P_ stm)
+{
+    P_ old_trec;
+    P_ new_trec;
+    P_ code, next_invariant, frame_result;
+
+    // stmStartTransaction may allocate
+    MAYBE_GC_P(stg_patomicallyzh, stm);
+
+    STK_CHK_GEN();
+
+    old_trec = StgTSO_ptrec(CurrentTSO);
+
+    /* Start the memory transcation */
+    ("ptr" new_trec) = ccall p_stmStartTransaction(MyCapability() "ptr");
+    StgTSO_ptrec(CurrentTSO) = new_trec;
+
+    /* Nested transactions are not allowed; raise an exception */
+    /*    
+    if (old_trec != NO_PTREC) {
+        jump stg_raisezh(base_ControlziExceptionziBase_nestedAtomically_closure);
+    }
+    */
+
+    code = stm;
+    next_invariant = END_INVARIANT_CHECK_QUEUE;
+    frame_result = NO_TREC;
+
+    jump stg_ap_v_fast
+        (ATOMICALLY_FRAME_FIELDS(,,stg_patomically_frame_info, CCCS, 0,
+                                 code,next_invariant,frame_result))
+        (stm);
+}
+
+stg_preadTVarzh (P_ tvar, P_ k)
+{
+    P_ trec;
+    P_ result;
+
+    // Call to stmReadTVar may allocate
+    MAYBE_GC_P (stg_preadTVarzh, tvar);
+
+    trec = StgTSO_ptrec(CurrentTSO);
+    ("ptr" result) = ccall p_stmReadTVar(MyCapability() "ptr", trec "ptr",
+                                         tvar "ptr", k "ptr");
+    return (result);
+}
+
+stg_pwriteTVarzh (P_ tvar,     /* :: TVar a */
+                 P_ new_value /* :: a      */)
+{
+    W_ trec;
+
+    // Call to stmWriteTVar may allocate
+    MAYBE_GC_PP (stg_pwriteTVarzh, tvar, new_value);
+
+    trec = StgTSO_ptrec(CurrentTSO);
+    ccall p_stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
+                         new_value "ptr");
     return ();
 }
 
