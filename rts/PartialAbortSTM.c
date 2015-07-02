@@ -111,6 +111,7 @@ static StgBool validate(StgPTRecHeader * trec, StgPTRecWithK ** checkpoint){
                 }
                 if(should_abort && i > 20){
                     *checkpoint = withK;
+                    should_abort = FALSE;
                     return FALSE;
                 }
             }else if(ptr->header.info == WITHOUTK_HEADER){
@@ -192,17 +193,19 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         }
     }else{//filter the read set
         StgPTRecWithK * ptr = trec->lastK;
+        int numK = trec->numK;
         while(ptr != NULL){
             if(ptr->prev_k != NULL){
                 StgPTRecWithK * dropped = ptr->prev_k;
                 ptr->prev_k = ptr->prev_k->prev_k;
                 ptr = ptr->prev_k;
                 SET_HDR(dropped, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
+                numK--;
             }else{
                 break;
             }
         }
-        trec->numK = trec->numK >> 1; //cut number in half
+        trec->numK = numK;
         StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
         SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
         entry->tvar = tvar;
@@ -234,21 +237,21 @@ void p_stmWriteTVar(Capability *cap,
  * This is pretty ugly, but I'm not familiar enough with C-- to come
  * up with anything better...
  */
-StgClosure * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     unsigned long snapshot = trec->read_version;
     while (should_abort || cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
         StgPTRecWithK * checkpoint = NULL;
         StgBool valid = validate(trec, &checkpoint);
         if(!valid){
             if(checkpoint == NULL){ //no checkpoint found
-                return (StgClosure *) 1;
+                return (StgPTRecWithK *) 1;
             }else{
                 trec->read_set = (StgPTRecWithoutK*)checkpoint;
                 trec->write_set = checkpoint->write_set;
                 trec->lastK = checkpoint;
                 StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
                 trec->capture_freq = capture_freq | (capture_freq >> 32);
-                return checkpoint->continuation;
+                return checkpoint;
             }
         }
         snapshot = trec->read_version;
@@ -265,7 +268,7 @@ StgClosure * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
         dirty_TVAR(cap,tvar);
         write_set = write_set->next;
     }
-    return (StgClosure *)0;
+    return (StgPTRecWithK *)0;
 }
 
 

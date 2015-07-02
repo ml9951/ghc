@@ -25,7 +25,7 @@ StgClosure * p_stmReadTVar(Capability *, StgPTRecHeader *,
 void p_stmWriteTVar(Capability *, StgPTRecHeader *,
                     StgTVar *, StgClosure *);
 
-StgClosure * p_stmCommitTransaction(Capability *, StgPTRecHeader *);
+StgPTRecWithK * p_stmCommitTransaction(Capability *, StgPTRecHeader *);
 
 #define NO_PTREC ((StgPTRecHeader *)(void *)&stg_NO_PTREC_closure)
 #define WITHK_HEADER &stg_PTREC_WITHK_info
