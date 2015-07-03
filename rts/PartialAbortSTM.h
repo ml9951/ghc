@@ -27,6 +27,8 @@ void p_stmWriteTVar(Capability *, StgPTRecHeader *,
 
 StgPTRecWithK * p_stmCommitTransaction(Capability *, StgPTRecHeader *);
 
+void p_setAtomicallyFrameHelper (Capability *, StgTSO *);
+
 #define NO_PTREC ((StgPTRecHeader *)(void *)&stg_NO_PTREC_closure)
 #define WITHK_HEADER &stg_PTREC_WITHK_info
 #define WITHOUTK_HEADER &stg_PTREC_WITHOUTK_info

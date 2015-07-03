@@ -52,43 +52,10 @@ StgPTRecHeader * p_stmStartTransaction(Capability *cap) {
     return t;
 }
 
-static StgBool should_abort = TRUE;
+static int abortCount = 10;
 
-static void sanity_check(StgPTRecHeader * trec){
-    //run forward
-
-    int withKCount1, withKCount2;
-    withKCount1 = 0;
-    withKCount2 = 0;
-    StgPTRecWithoutK * ptr = trec->read_set;
-    while(ptr != NULL){
-        if(ptr->header.info == WITHK_HEADER){
-            withKCount1++;
-            ptr = ptr->next;
-        }else{
-            ptr = ptr->next;
-        }
-    }
-
-    //run backwards
-    StgPTRecWithK * wptr = trec->lastK;
-    while(wptr != NULL){
-        if(wptr->header.info != WITHK_HEADER){
-            printf("Error! found entry on short path without continuation\n");
-            return;
-        }
-        withKCount2++;
-        wptr = wptr->prev_k;
-    }
-
-    if(trec->numK != withKCount1 || trec->numK != withKCount2){
-        printf("Sanity check failed: trec->numK = %ld, long path continuations = %d, short path continuations = %d\n", trec->numK, withKCount1, withKCount2);
-    }
-
-}
 
 static StgPTRecWithK * validate(StgPTRecHeader * trec){
-    sanity_check(trec);
     while(TRUE){
         unsigned long time = version_clock;
         if((time & 1) != 0){
@@ -100,6 +67,7 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
         StgBool needCheckpoint = FALSE;
         int i = 0;
         while(ptr != NULL){
+            printf("%p: Header is %p, expected %p (WithK) or %p (WithoutK)\n", ptr, ptr->header.info, WITHK_HEADER, WITHOUTK_HEADER);
             if(ptr->header.info == WITHK_HEADER){ // this is a WithK entry
                 StgPTRecWithK * withK = (StgPTRecWithK*)ptr;
                 if(withK->read_value != withK->tvar->current_value){
@@ -109,9 +77,10 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
                     checkpoint = withK;
                     needCheckpoint = FALSE;
                 }
-                if(should_abort && i > 20){
-                    should_abort = FALSE;
-                    return withK;
+                if(abortCount > 0 && i > 20){
+                    abortCount--;
+                    checkpoint = withK;
+                    goto abortWithK;
                 }
             }else if(ptr->header.info == WITHOUTK_HEADER){
                 if(ptr->read_value != ptr->tvar->current_value){
@@ -119,7 +88,7 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
                     needCheckpoint = TRUE;
                 }
             }else{
-                //something bad happened
+                printf("Something bad happened: unrecognized header.  Header is %p, expected %p (WithK) or %p (WithoutK)\n", ptr->header.info, WITHK_HEADER, WITHOUTK_HEADER);
             }
             ptr = ptr->next;
             i++;
@@ -128,19 +97,22 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
             return (StgPTRecWithK *) 1;
         }
         if(checkpoint != NULL){ //validation failed, but we found a checkpoint
-            //try reading from this tvar
-            StgTVar * tvar = checkpoint->tvar;
-            StgClosure * val = tvar->current_value;
-            if(time == version_clock){
-                checkpoint->read_value = val; //apply the continuation to this in C--
-                trec->read_set = (StgPTRecWithoutK*)checkpoint;
-                trec->write_set = checkpoint->write_set;
-                trec->lastK = checkpoint;
-                StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
-                trec->capture_freq = capture_freq | (capture_freq >> 32);
-                return checkpoint;
-            }else{
-                continue; //revalidate the whole log
+        abortWithK:
+            {
+                //try reading from this tvar
+                StgTVar * tvar = checkpoint->tvar;
+                StgClosure * val = tvar->current_value;
+                if(time == version_clock){
+                    checkpoint->read_value = val; //apply the continuation to this in C--
+                    trec->read_set = (StgPTRecWithoutK*)checkpoint;
+                    trec->write_set = checkpoint->write_set;
+                    trec->lastK = checkpoint;
+                    StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+                    trec->capture_freq = capture_freq | (capture_freq >> 32);
+                    return checkpoint;
+                }else{
+                    continue; //revalidate the whole log
+                }
             }
         }
 
@@ -151,9 +123,13 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
     }
 }
 
+static int readCount = 0;
+
 StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
                            StgTVar * tvar, StgClosure * k){
     StgWriteSet * ws = trec->write_set;
+
+    readCount++;
 
     while(ws != NULL){
         if(ws->tvar == tvar){
@@ -161,13 +137,25 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         }
         ws = ws->next;
     }
-
+    /*
+    //force an abort if readCount == 20
+    if(readCount == 20){
+        StgPTRecWithK * checkpoint = trec->lastK->prev_k->prev_k; //this should be safe
+        trec->read_set = (StgPTRecWithoutK*)checkpoint;
+        trec->write_set = checkpoint->write_set;
+        trec->lastK = checkpoint;
+        StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+        trec->capture_freq = capture_freq | (capture_freq >> 32);
+        trec->numK -= 2;
+        return (StgClosure *)checkpoint;
+    }
+    */
     //Not found in write set
     StgClosure * val = tvar->current_value;
     while(trec->read_version != version_clock){
         StgPTRecWithK * checkpoint = validate(trec);
         if(checkpoint != (StgPTRecWithK *) 0){
-            //Abort!
+            return (StgClosure*) checkpoint;
         }
         val = tvar->current_value;
     }
@@ -184,6 +172,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->prev_k = trec->lastK;
             trec->read_set = (StgPTRecWithoutK*)entry;
             trec->lastK = entry;
+            trec->capture_freq <<= 2; //double frequency
             trec->capture_freq |= (trec->capture_freq >> 32);
             trec->numK++;
         }else{//Don't store the continuation
@@ -201,6 +190,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         while(ptr != NULL){
             if(ptr->prev_k != NULL){
                 StgPTRecWithK * dropped = ptr->prev_k;
+                dropped->continuation = NULL;
                 ptr->prev_k = ptr->prev_k->prev_k;
                 ptr = ptr->prev_k;
                 SET_HDR(dropped, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
@@ -242,8 +232,9 @@ void p_stmWriteTVar(Capability *cap,
  * up with anything better...
  */
 StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+    printf("Committing transactions\n");
     unsigned long snapshot = trec->read_version;
-    while (should_abort || cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
+    while (abortCount > 0 || cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
         StgPTRecWithK * checkpoint = validate(trec);
         if(checkpoint != (StgPTRecWithK *) 0){
             //The validate function sets up the trec with the appropriate read/write sets
@@ -262,5 +253,39 @@ StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     return (StgPTRecWithK *)0;
 }
 
+/* -----------------------------------------------------------------------------
+ * p_setAtomicallyFrameHelper
+ * 
+ * This function is called by the preadTVar# primitive.  It traverses the stack
+ * leaving tso->sp referring to the enclosing atomically frame
+ * --------------------------------------------------------------------------- */
+void p_setAtomicallyFrameHelper(Capability *cap, StgTSO *tso){
+  StgPtr           p, next;
+  StgRetInfoTable *info;
+
+  p = tso->stackobj->sp;
+  while (1) {
+    info = get_ret_itbl((StgClosure *)p);
+    next = p + stack_frame_sizeW((StgClosure *)p);
+    switch (info->i.type) {
+
+    case ATOMICALLY_FRAME:
+        tso->stackobj->sp = p;
+        return;
+
+    case UNDERFLOW_FRAME: 
+        tso->stackobj->sp = p;
+        threadStackUnderflow(cap,tso);
+        p = tso->stackobj->sp;
+        continue;
+
+    default:
+      ASSERT(info->i.type != CATCH_FRAME);
+      ASSERT(info->i.type != STOP_FRAME);
+      p = next;
+      continue;
+    }
+  }
+}
 
 

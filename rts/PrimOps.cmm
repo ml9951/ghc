@@ -1474,19 +1474,184 @@ stg_patomicallyzh (P_ stm)
         (stm);
 }
 
+stg_eagerFullAbort
+{
+    W_ frame;
+    P_ code; 
+
+    //fully abort -- p_findAtomicallyFrameHelper will unwind the stack to the nearest atomic frame
+    //According to StgCmmForeign.hs, SAVE_THREAD_STATE() gets compiled to:
+    //tso = CurrentTSO;
+    //tso->stackobj->sp = Sp;
+    SAVE_THREAD_STATE();
+    ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr");
+
+    /* According to StgCmmForeign.hs:
+       tso = CurrentTSO;
+       stack = tso->stackobj;
+       Sp = stack->sp;
+       SpLim = stack->stack + RESERVED_STACK_WORDS;
+       HpAlloc = 0;
+       --   HpAlloc is assumed to be set to non-zero only by a failed
+       --   heap check, see HeapStackCheck.cmm:GC_GENERIC
+       p_findAtomicallyFrameHelper will set the tso->stackobj->sp to point to the 
+       nearest enclosing atomically frame (there should only be one), so we use
+       LOAD_THREAD_STATE() to read the stack pointer out of the TSO and store it in Sp
+    */
+        
+    LOAD_THREAD_STATE();
+    frame = Sp;
+
+    //stg_patomically_frame has the same layout as stg_atomically_frame,
+    //so just use the macro that they defined for extracting the code
+    R1 = StgAtomicallyFrame_code(frame);
+    jump stg_ap_v_fast [R1];
+
+}
+
+/*************************************************************************
+ * Calling Conventions (comment taken from ghc/compiler/cmm/CmmParse.y)
+ * -------------------
+ *
+ * High-level procedures use the NativeNode calling convention, or the
+ * NativeReturn convention if the 'return' keyword is used (see Stack
+ * Frames below).
+ *
+ * Low-level procedures implement their own calling convention, so it can
+ * be anything at all.
+ *
+ * If a low-level procedure implements the NativeNode calling convention,
+ * then it can be called by high-level code using an ordinary function
+ * call.  In general this is hard to arrange because the calling
+ * convention depends on the number of physical registers available for
+ * parameter passing, but there are two cases where the calling
+ * convention is platform-independent:
+ * 
+ * - Zero arguments.
+ *
+ * - One argument of pointer or non-pointer word type; this is always
+ *   passed in R1 according to the NativeNode convention.
+ * 
+ * - Returning a single value; these conventions are fixed and platform
+ *   independent.
+ *************************************************************************/
+//Pass the checkpoint in R1
+stg_eagerPartialAbort
+{
+    P_ k;
+    P_ val;
+
+    SAVE_THREAD_STATE(); //see stg_eagerFullAbort for details
+    ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr");
+    LOAD_THREAD_STATE();
+
+    k = StgPTRecWithK_continuation(R1);
+    val = StgPTRecWithK_read_value(R1);
+    
+    jump stg_ap_pv_fast(k, val);
+
+}
+
 stg_preadTVarzh (P_ tvar, P_ k)
 {
     P_ trec;
     P_ result;
-
+    W_ header;
+    
     // Call to stmReadTVar may allocate
     MAYBE_GC_P (stg_preadTVarzh, tvar);
 
     trec = StgTSO_ptrec(CurrentTSO);
     ("ptr" result) = ccall p_stmReadTVar(MyCapability() "ptr", trec "ptr",
                                          tvar "ptr", k "ptr");
+
+    if(result == 1){
+        jump stg_eagerFullAbort []; //full abort
+    }
+    
+    header = StgHeader_info(result);
+
+    if(header == stg_PTREC_WITHK_info){
+        jump stg_eagerPartialAbort(result);
+    }
+
     return (result);
 }
+
+/*
+stg_retryzh // no arg list: explicit stack layout 
+{
+    W_ frame_type;
+    W_ frame;
+    W_ trec;
+    W_ outer;
+    W_ r;
+
+    // STM operations may allocate
+    MAYBE_GC_ (stg_retryzh); // NB. not MAYBE_GC(), we cannot make a
+                             // function call in an explicit-stack proc
+
+    // Find the enclosing ATOMICALLY_FRAME or CATCH_RETRY_FRAME
+retry_pop_stack:
+    SAVE_THREAD_STATE();
+    (frame_type) = ccall findRetryFrameHelper(MyCapability(), CurrentTSO "ptr");
+    LOAD_THREAD_STATE();
+    frame = Sp;
+    trec = StgTSO_trec(CurrentTSO);
+    outer  = StgTRecHeader_enclosing_trec(trec);
+
+    if (frame_type == CATCH_RETRY_FRAME) {
+        // The retry reaches a CATCH_RETRY_FRAME before the atomic frame
+        ASSERT(outer != NO_TREC);
+        // Abort the transaction attempting the current branch
+        ccall stmAbortTransaction(MyCapability() "ptr", trec "ptr");
+        ccall stmFreeAbortedTRec(MyCapability() "ptr", trec "ptr");
+        if (!StgCatchRetryFrame_running_alt_code(frame) != 0) {
+            // Retry in the first branch: try the alternative
+            ("ptr" trec) = ccall stmStartTransaction(MyCapability() "ptr", outer "ptr");
+            StgTSO_trec(CurrentTSO) = trec;
+            StgCatchRetryFrame_running_alt_code(frame) = 1 :: CInt; // true;
+            R1 = StgCatchRetryFrame_alt_code(frame);
+            jump stg_ap_v_fast [R1];
+        } else {
+            // Retry in the alternative code: propagate the retry
+            StgTSO_trec(CurrentTSO) = outer;
+            Sp = Sp + SIZEOF_StgCatchRetryFrame;
+            goto retry_pop_stack;
+        }
+    }
+
+    // We've reached the ATOMICALLY_FRAME: attempt to wait
+    ASSERT(frame_type == ATOMICALLY_FRAME);
+    if (outer != NO_TREC) {
+        // We called retry while checking invariants, so abort the current
+        // invariant check (merging its TVar accesses into the parents read
+        // set so we'll wait on them)
+        ccall stmAbortTransaction(MyCapability() "ptr", trec "ptr");
+        ccall stmFreeAbortedTRec(MyCapability() "ptr", trec "ptr");
+        trec = outer;
+        StgTSO_trec(CurrentTSO) = trec;
+        outer  = StgTRecHeader_enclosing_trec(trec);
+    }
+    ASSERT(outer == NO_TREC);
+
+    (r) = ccall stmWait(MyCapability() "ptr", CurrentTSO "ptr", trec "ptr");
+    if (r != 0) {
+        // Transaction was valid: stmWait put us on the TVars' queues, we now block
+        StgHeader_info(frame) = stg_atomically_waiting_frame_info;
+        Sp = frame;
+        R3 = trec; // passing to stmWaitUnblock()
+        jump stg_block_stmwait [R3];
+    } else {
+        // Transaction was not valid: retry immediately
+        ("ptr" trec) = ccall stmStartTransaction(MyCapability() "ptr", outer "ptr");
+        StgTSO_trec(CurrentTSO) = trec;
+        Sp = frame;
+        R1 = StgAtomicallyFrame_code(frame);
+        jump stg_ap_v_fast [R1];
+    }
+}
+*/
 
 stg_pwriteTVarzh (P_ tvar,     /* :: TVar a */
                  P_ new_value /* :: a      */)
