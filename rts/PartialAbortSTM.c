@@ -21,6 +21,7 @@
 #define FALSE 0
 #define TRACE(_x...) debugTrace(DEBUG_stm, "STM: " _x)
 #define KBOUND 20
+#define START_FREQ 4
 
 static volatile unsigned long version_clock = 0;
 
@@ -37,7 +38,7 @@ static StgPTRecHeader * alloc_stg_ptrec_header(Capability * cap){
     while((ptrec->read_version & 1) != 0){
         ptrec->read_version = version_clock;
     }
-    ptrec->capture_freq = ((unsigned long)1 << 32) + 1 ; 
+    ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ; 
     ptrec->numK = 0;
     return ptrec;
 }
@@ -52,10 +53,28 @@ StgPTRecHeader * p_stmStartTransaction(Capability *cap) {
     return t;
 }
 
+static void sanity_check(StgPTRecHeader * trec){
+    StgPTRecWithoutK * ptr = trec->read_set;
+    unsigned long freq = trec->capture_freq >> 32;
+    unsigned long counter = freq;
+    while(ptr != NULL){
+        if(ptr->header.info == WITHK_HEADER){
+            if(counter != 0){
+                printf("Counter should be zero, instead it is %lu\n", counter);
+            }else{
+                counter = freq;
+            }
+        }else{
+            counter--;
+        }
+        ptr = ptr->next;
+    }
+}
+
 static int abortCount = 10;
 
-
 static StgPTRecWithK * validate(StgPTRecHeader * trec){
+    sanity_check(trec);
     while(TRUE){
         unsigned long time = version_clock;
         if((time & 1) != 0){
@@ -88,7 +107,8 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
                     needCheckpoint = TRUE;
                 }
             }else{
-                printf("Something bad happened: unrecognized header.  Header is %p, expected %p (WithK) or %p (WithoutK)\n", ptr->header.info, WITHK_HEADER, WITHOUTK_HEADER);
+                printf("Something bad happened: unrecognized header.  Header is %p, expected %p (WithK) or %p (WithoutK)\n", 
+                       ptr->header.info, WITHK_HEADER, WITHOUTK_HEADER);
             }
             ptr = ptr->next;
             i++;
@@ -150,6 +170,10 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         return (StgClosure *)checkpoint;
     }
     */
+
+    printf("Reading with frequency = %d and counter = %d\n",
+           (int)(trec->capture_freq >> 32),
+           (int)(trec->capture_freq & 0xFFFFFFFF));
     //Not found in write set
     StgClosure * val = tvar->current_value;
     while(trec->read_version != version_clock){
@@ -172,9 +196,11 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->prev_k = trec->lastK;
             trec->read_set = (StgPTRecWithoutK*)entry;
             trec->lastK = entry;
-            trec->capture_freq <<= 2; //double frequency
-            trec->capture_freq |= (trec->capture_freq >> 32);
             trec->numK++;
+            if(trec->numK == KBOUND)
+                trec->capture_freq <<= 1; //double the frequency
+            trec->capture_freq |= (trec->capture_freq >> 32);
+            
         }else{//Don't store the continuation
             StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
             SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);

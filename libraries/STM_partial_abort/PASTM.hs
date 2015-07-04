@@ -4,12 +4,13 @@ module PASTM
 (
     readTVar,
     writeTVar,
-    newTVar,
     atomically,
-    TVar(..),
     STM(..),
-    newTVarIO,  --No need to change from original STM
-    readTVarIO  --Same here
+    --The following are just re-exporting from the original STM
+    newTVarIO,   
+    readTVarIO, 
+    TVar(..),    
+    newTVar         
 )
 where
 
@@ -48,19 +49,3 @@ initK s a = (# s, a #)
 
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> patomically# (c initK) s)
-
-test = do
-     x <- newTVar 0
-     writeTVar x 123
-     y <- readTVar x
-     return(y)
-
-main = do
-     x <- atomically test
-     print("Result = " ++ show x)
-     return()
-
-
-
-
-
