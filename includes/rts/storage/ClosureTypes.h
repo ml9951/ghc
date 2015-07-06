@@ -83,10 +83,7 @@
 #define SMALL_MUT_ARR_PTRS_DIRTY      62
 #define SMALL_MUT_ARR_PTRS_FROZEN0    63
 #define SMALL_MUT_ARR_PTRS_FROZEN     64
-#define WRITE_SET 65
-#define PTREC_WITHK 66
-#define PTREC_WITHOUTK 67
-#define N_CLOSURE_TYPES         68
+#define N_CLOSURE_TYPES         65
 
 
 #endif /* RTS_STORAGE_CLOSURETYPES_H */

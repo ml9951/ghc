@@ -29,9 +29,10 @@ static StgPTRecHeader * alloc_stg_ptrec_header(Capability * cap){
     StgPTRecHeader * ptrec;
     ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
     SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
-    ptrec->read_set = NULL;
-    ptrec->lastK = NULL;
-    ptrec->write_set = NULL;
+    printf("&stg_PTREC_HEADER_info = %p\n", &stg_PTREC_HEADER_info);
+    ptrec->read_set = NO_PTREC;
+    ptrec->lastK = NO_PTREC;
+    ptrec->write_set = NO_PTREC;
 
     //get a read version
     ptrec->read_version = version_clock;
@@ -58,7 +59,7 @@ static void sanity_check(StgPTRecHeader * trec){
     unsigned long freq = trec->capture_freq >> 32;
     unsigned long counter = freq - (trec->capture_freq & 0xFFFFFFFF);
     int i = 0;
-    while(ptr != NULL){
+    while(ptr != NO_PTREC){
         if(ptr->header.info == WITHK_HEADER){
             if(counter != 0){
                 printf("Counter should be zero, instead it is %lu\n", counter);
@@ -84,10 +85,10 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
         }
         //validate read set
         StgPTRecWithoutK * ptr = trec->read_set;
-        StgPTRecWithK *checkpoint = NULL;
+        StgPTRecWithK *checkpoint = NO_PTREC;
         StgBool needCheckpoint = FALSE;
         int i = 0;
-        while(ptr != NULL){
+        while(ptr != NO_PTREC){
             if(ptr->header.info == WITHK_HEADER){ // this is a WithK entry
                 StgPTRecWithK * withK = (StgPTRecWithK*)ptr;
                 if(withK->read_value != withK->tvar->current_value){
@@ -104,7 +105,7 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
                 }
             }else if(ptr->header.info == WITHOUTK_HEADER){
                 if(ptr->read_value != ptr->tvar->current_value){
-                    checkpoint = NULL;
+                    checkpoint = NO_PTREC;
                     needCheckpoint = TRUE;
                 }
             }else{
@@ -117,7 +118,7 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
         if(needCheckpoint){ //no checkpoint found, but we need to abort
             return (StgPTRecWithK *) 1;
         }
-        if(checkpoint != NULL){ //validation failed, but we found a checkpoint
+        if(checkpoint != NO_PTREC){ //validation failed, but we found a checkpoint
         abortWithK:
             {
                 //try reading from this tvar
@@ -152,7 +153,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 
     readCount++;
 
-    while(ws != NULL){
+    while(ws != NO_PTREC){
         printf("Write set address is currently %p\n", ws);
         if(ws->tvar == tvar){
             return ws->val;
@@ -213,10 +214,10 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     }else{//filter the read set
         StgPTRecWithK * ptr = trec->lastK;
         int numK = trec->numK;
-        while(ptr != NULL){
-            if(ptr->prev_k != NULL){
+        while(ptr != NO_PTREC){
+            if(ptr->prev_k != NO_PTREC){
                 StgPTRecWithK * dropped = ptr->prev_k;
-                dropped->continuation = NULL;
+                dropped->continuation = NO_PTREC;
                 ptr->prev_k = ptr->prev_k->prev_k;
                 ptr = ptr->prev_k;
                 SET_HDR(dropped, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
@@ -270,7 +271,7 @@ StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     }
     
     StgWriteSet * write_set = trec->write_set;
-    while(write_set != NULL){
+    while(write_set != NO_PTREC){
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;
         dirty_TVAR(cap,tvar);

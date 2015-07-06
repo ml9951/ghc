@@ -6,8 +6,8 @@
  *
  *----------------------------------------------------------------------*/
 
-#ifndef STM_H
-#define STM_H
+#ifndef PASTM_H
+#define PASTM_H
 
 #ifdef THREADED_RTS
 #define STM_FG_LOCKS

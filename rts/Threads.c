@@ -113,7 +113,7 @@ createThread(Capability *cap, W_ size)
 
     tso->trec = NO_TREC;
 
-    tso->ptrec = NULL;
+    tso->ptrec = NO_PTREC;
 
 #ifdef PROFILING
     tso->prof.cccs = CCS_MAIN;

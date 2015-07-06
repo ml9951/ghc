@@ -72,6 +72,8 @@ scavengeTSO (StgTSO *tso)
     // scavange current transaction record
     evacuate((StgClosure **)&tso->trec);
 
+    evacuate((StgClosure **)&tso->ptrec);  //Partial Abort
+
     evacuate((StgClosure **)&tso->stackobj);
 
     evacuate((StgClosure **)&tso->_link);
@@ -752,6 +754,10 @@ scavenge_block (bdescr *bd)
         StgPtr end;
 
         gct->eager_promotion = rtsFalse;
+
+        if(((StgClosure *)p)->header.info == &stg_PTREC_HEADER_info){
+            printf("Scavenging partial trec header\n");
+        }
 
         end = (P_)((StgClosure *)p)->payload + info->layout.payload.ptrs;
         for (p = (P_)((StgClosure *)p)->payload; p < end; p++) {
