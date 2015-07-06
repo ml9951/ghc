@@ -56,7 +56,8 @@ StgPTRecHeader * p_stmStartTransaction(Capability *cap) {
 static void sanity_check(StgPTRecHeader * trec){
     StgPTRecWithoutK * ptr = trec->read_set;
     unsigned long freq = trec->capture_freq >> 32;
-    unsigned long counter = freq;
+    unsigned long counter = freq - (trec->capture_freq & 0xFFFFFFFF);
+    int i = 0;
     while(ptr != NULL){
         if(ptr->header.info == WITHK_HEADER){
             if(counter != 0){
@@ -68,6 +69,7 @@ static void sanity_check(StgPTRecHeader * trec){
             counter--;
         }
         ptr = ptr->next;
+        i++;
     }
 }
 
@@ -86,7 +88,6 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
         StgBool needCheckpoint = FALSE;
         int i = 0;
         while(ptr != NULL){
-            printf("%p: Header is %p, expected %p (WithK) or %p (WithoutK)\n", ptr, ptr->header.info, WITHK_HEADER, WITHOUTK_HEADER);
             if(ptr->header.info == WITHK_HEADER){ // this is a WithK entry
                 StgPTRecWithK * withK = (StgPTRecWithK*)ptr;
                 if(withK->read_value != withK->tvar->current_value){
@@ -152,6 +153,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     readCount++;
 
     while(ws != NULL){
+        printf("Write set address is currently %p\n", ws);
         if(ws->tvar == tvar){
             return ws->val;
         }
@@ -171,9 +173,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     }
     */
 
-    printf("Reading with frequency = %d and counter = %d\n",
-           (int)(trec->capture_freq >> 32),
-           (int)(trec->capture_freq & 0xFFFFFFFF));
+    
     //Not found in write set
     StgClosure * val = tvar->current_value;
     while(trec->read_version != version_clock){
@@ -258,7 +258,7 @@ void p_stmWriteTVar(Capability *cap,
  * up with anything better...
  */
 StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
-    printf("Committing transactions\n");
+    printf("Committing transaction\n");
     unsigned long snapshot = trec->read_version;
     while (abortCount > 0 || cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
         StgPTRecWithK * checkpoint = validate(trec);

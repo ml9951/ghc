@@ -1586,10 +1586,14 @@ scavenge_mutable_list(bdescr *bd, generation *gen)
             case MUT_PRIM:
                 if (((StgClosure*)p)->header.info == &stg_TVAR_WATCH_QUEUE_info)
                     mutlist_TVAR_WATCH_QUEUE++;
-                else if (((StgClosure*)p)->header.info == &stg_TREC_HEADER_info)
+                else if (((StgClosure*)p)->header.info == &stg_TREC_HEADER_info){
+                    printf("mutlist_PTREC_HEADER++;\n");
                     mutlist_TREC_HEADER++;
-                else if (((StgClosure*)p)->header.info == &stg_PTREC_HEADER_info)  //Partial Abort
+                }
+                else if (((StgClosure*)p)->header.info == &stg_PTREC_HEADER_info){  //Partial Abort
+                    printf("mutlist_PTREC_HEADER++;\n");
                     mutlist_PTREC_HEADER++;
+                }
                 else if (((StgClosure*)p)->header.info == &stg_ATOMIC_INVARIANT_info)
                     mutlist_ATOMIC_INVARIANT++;
                 else if (((StgClosure*)p)->header.info == &stg_INVARIANT_CHECK_QUEUE_info)

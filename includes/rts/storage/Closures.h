@@ -406,13 +406,6 @@ typedef struct {
  *
  */
 
-typedef struct StgPTRecChunk_{
-    StgHeader               header;
-    struct StgPTRecChunk_ * prev_chunk;
-    StgWord                 next_entry_idx;
-    TRecEntry               entries[TREC_CHUNK_NUM_ENTRIES];
-}PTRecChunk;
-
 //Write set element
 typedef struct StgWriteSet_{
     StgHeader            header;
