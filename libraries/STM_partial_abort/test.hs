@@ -41,7 +41,9 @@ lookup x l = do
                      else lookup x tl
 
 
-insert :: Ord a => Show a => TVar (STMList a) -> a -> STM ()
+--return a pure list for the sake of allocating extra data to
+--exercise the garbage collector
+insert :: Ord a => Show a => TVar (STMList a) -> a -> STM [a]
 insert l x = do
        raw <- readTVar l        
        case raw of
@@ -50,24 +52,27 @@ insert l x = do
                  traceM ("Writing " ++ show x ++ " at end of list")
                  newTail <- newTVar Null
                  writeTVar l (Node x newTail)
-                 return()
+                 return [x]
             Node hd tl -> do
                  if x < hd
                  then do
                       traceM ("Writing " ++ show x ++ " after node " ++ show hd)
                       newNode <- newTVar (Node hd tl)
                       writeTVar l (Node x newNode)
-                      return ()
-                 else trace ("Read: " ++ show hd) $ insert tl x
-                     
+                      return [x]
+                 else do
+                      traceM ("Read: " ++ show hd)
+                      res <- insert tl x
+                      return (hd : res)
+
 printList l = do
           list <- toList l
           print("List = " ++ show list)
 
 main = do
-     stmList <- initList 50 0
+     stmList <- initList 500 0
      printList stmList
-     atomically $ insert stmList 100
+     atomically $ insert stmList 1000
      printList stmList
      return()
 
