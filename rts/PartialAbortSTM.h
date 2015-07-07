@@ -29,9 +29,13 @@ StgPTRecWithK * p_stmCommitTransaction(Capability *, StgPTRecHeader *);
 
 void p_setAtomicallyFrameHelper (Capability *, StgTSO *);
 
-#define NO_PTREC ((StgPTRecHeader *)(void *)&stg_NO_PTREC_closure)
-#define WITHK_HEADER &stg_PTREC_WITHK_info
-#define WITHOUTK_HEADER &stg_PTREC_WITHOUTK_info
+
+#define PASTM_SUCCESS              ((StgClosure*)(void*)&stg_PA_STM_SUCCESS_closure)
+#define PASTM_FAIL                 ((StgClosure*)(void*)&stg_PA_STM_FAIL_closure)
+#define NO_PTREC                   ((StgPTRecHeader *)(void *)&stg_NO_PTREC_closure)
+#define WITHK_HEADER               &stg_PTREC_WITHK_info
+#define WITHOUTK_HEADER            &stg_PTREC_WITHOUTK_info
+#define WRITESET_HEADER            &stg_WRITE_SET_info
 
 #include "EndPrivate.h"
 

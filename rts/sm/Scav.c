@@ -552,6 +552,7 @@ scavenge_block (bdescr *bd)
     case PRIM:
     {
         StgPtr end;
+        StgPtr orig = p;
 
         end = (P_)((StgClosure *)p)->payload + info->layout.payload.ptrs;
         for (p = (P_)((StgClosure *)p)->payload; p < end; p++) {
@@ -754,10 +755,6 @@ scavenge_block (bdescr *bd)
         StgPtr end;
 
         gct->eager_promotion = rtsFalse;
-
-        if(((StgClosure *)p)->header.info == &stg_PTREC_HEADER_info){
-            printf("Scavenging partial trec header\n");
-        }
 
         end = (P_)((StgClosure *)p)->payload + info->layout.payload.ptrs;
         for (p = (P_)((StgClosure *)p)->payload; p < end; p++) {
@@ -1592,14 +1589,10 @@ scavenge_mutable_list(bdescr *bd, generation *gen)
             case MUT_PRIM:
                 if (((StgClosure*)p)->header.info == &stg_TVAR_WATCH_QUEUE_info)
                     mutlist_TVAR_WATCH_QUEUE++;
-                else if (((StgClosure*)p)->header.info == &stg_TREC_HEADER_info){
-                    printf("mutlist_PTREC_HEADER++;\n");
+                else if (((StgClosure*)p)->header.info == &stg_TREC_HEADER_info)
                     mutlist_TREC_HEADER++;
-                }
-                else if (((StgClosure*)p)->header.info == &stg_PTREC_HEADER_info){  //Partial Abort
-                    printf("mutlist_PTREC_HEADER++;\n");
+                else if (((StgClosure*)p)->header.info == &stg_PTREC_HEADER_info)  //Partial Abort
                     mutlist_PTREC_HEADER++;
-                }
                 else if (((StgClosure*)p)->header.info == &stg_ATOMIC_INVARIANT_info)
                     mutlist_ATOMIC_INVARIANT++;
                 else if (((StgClosure*)p)->header.info == &stg_INVARIANT_CHECK_QUEUE_info)

@@ -547,6 +547,18 @@ INFO_TABLE_CONSTR(stg_NO_PTREC,0,0,0,CONSTR_NOCAF_STATIC,"NO_PTREC","NO_PTREC")
 
 CLOSURE(stg_NO_PTREC_closure,stg_NO_PTREC);
 
+INFO_TABLE_CONSTR(stg_PA_STM_SUCCESS,0,0,0,CONSTR_NOCAF_STATIC,"NO_PTREC","NO_PTREC")
+{ foreign "C" barf("PA_STM_SUCCESS object entered!") never returns; }
+
+CLOSURE(stg_PA_STM_SUCCESS_closure,stg_PA_STM_SUCCESS);
+
+INFO_TABLE_CONSTR(stg_PA_STM_FAIL,0,0,0,CONSTR_NOCAF_STATIC,"NO_PTREC","NO_PTREC")
+{ foreign "C" barf("PA_STM_FAIL object entered!") never returns; }
+
+CLOSURE(stg_PA_STM_FAIL_closure,stg_PA_STM_FAIL);
+
+
+
 /* ----------------------------------------------------------------------------
    Messages
    ------------------------------------------------------------------------- */

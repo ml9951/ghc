@@ -788,7 +788,8 @@
    -------------------------------------------------------------------------- */
 
 #define NO_PTREC                   stg_NO_PTREC_closure
-
+#define PASTM_SUCCESS              stg_PA_STM_SUCCESS_closure
+#define PASTM_FAIL                 stg_PA_STM_FAIL_closure
 
 
 
