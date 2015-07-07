@@ -552,7 +552,6 @@ scavenge_block (bdescr *bd)
     case PRIM:
     {
         StgPtr end;
-        StgPtr orig = p;
 
         end = (P_)((StgClosure *)p)->payload + info->layout.payload.ptrs;
         for (p = (P_)((StgClosure *)p)->payload; p < end; p++) {
