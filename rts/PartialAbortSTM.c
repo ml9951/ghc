@@ -19,20 +19,28 @@
 
 #define TRUE 1
 #define FALSE 0
-#define TRACE(_x...) debugTrace(DEBUG_stm, "STM: " _x)
+#define TRACE(_x...) debugTrace(DEBUG_stm, "STM: " _x) //supply "+RTS -Dm" for STM trace output 
 #define KBOUND 20
 #define START_FREQ 4
 
+//casts
+#define TO_WITHK(x) ((StgPTRecWithK*)x)
+#define TO_WITHOUTK(x) ((StgPTRecWithoutK*)x)
+#define TO_WRITE_SET(x) ((StgWriteSet*)x)
+#define TO_CLOSURE(x) ((StgClosure*)x)
+
 static volatile unsigned long version_clock = 0;
 
-static StgPTRecHeader * alloc_stg_ptrec_header(Capability * cap){
+StgPTRecHeader * p_stmStartTransaction(Capability *cap) {
+    TRACE("p_stmStartTransaction");
+    
     StgPTRecHeader * ptrec;
     ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
     SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
     
-    ptrec->read_set = NO_PTREC;
-    ptrec->lastK = NO_PTREC;
-    ptrec->write_set = NO_PTREC;
+    ptrec->read_set = TO_WITHOUTK(NO_PTREC);
+    ptrec->lastK = TO_WITHK(NO_PTREC);
+    ptrec->write_set = TO_WRITE_SET(NO_PTREC);
 
     //get a read version
     ptrec->read_version = version_clock;
@@ -41,17 +49,8 @@ static StgPTRecHeader * alloc_stg_ptrec_header(Capability * cap){
     }
     ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ; 
     ptrec->numK = 0;
-    return ptrec;
-}
 
-StgPTRecHeader * p_stmStartTransaction(Capability *cap) {
-    StgPTRecHeader * t;
-    TRACE("p_stmStartTransaction with %d tokens",
-          cap -> transaction_tokens);
-        
-    t = alloc_stg_ptrec_header(cap);
-    TRACE("stmStartTransaction()=%p", t);
-    return t;
+    return ptrec;
 }
 
 static void sanity_check(StgPTRecHeader * trec){
@@ -59,10 +58,10 @@ static void sanity_check(StgPTRecHeader * trec){
     unsigned long freq = trec->capture_freq >> 32;
     unsigned long counter = freq - (trec->capture_freq & 0xFFFFFFFF);
     int i = 0;
-    while(ptr != NO_PTREC){
+    while(ptr != TO_WITHOUTK(NO_PTREC)){
         if(ptr->header.info == WITHK_HEADER){
             if(counter != 0){
-                printf("Counter should be zero, instead it is %lu\n", counter);
+                TRACE("Counter should be zero, instead it is %lu\n", counter);
             }else{
                 counter = freq;
             }
@@ -81,14 +80,16 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
         if((time & 1) != 0){
             continue; //clock is locked
         }
+        TRACE("Validating: version clock is currently %lu (must be odd at this point)\n", version_clock);
+        trec->read_version = time;
         //validate read set
         StgPTRecWithoutK * ptr = trec->read_set;
-        StgPTRecWithK *checkpoint = (StgPTRecWithK*)PASTM_SUCCESS;
+        StgPTRecWithK *checkpoint = TO_WITHK(PASTM_SUCCESS);
         StgBool needCheckpoint = FALSE;
         int i = 0;
-        while(ptr != NO_PTREC){
+        while(ptr != TO_WITHOUTK(NO_PTREC)){
             if(ptr->header.info == WITHK_HEADER){ // this is a WithK entry
-                StgPTRecWithK * withK = (StgPTRecWithK*)ptr;
+                StgPTRecWithK * withK = TO_WITHK(ptr);
                 if(withK->read_value != withK->tvar->current_value){
                     checkpoint = withK;
                     needCheckpoint = FALSE;
@@ -98,51 +99,52 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
                 }
             }else if(ptr->header.info == WITHOUTK_HEADER){
                 if(ptr->read_value != ptr->tvar->current_value){
-                    checkpoint = NO_PTREC;
+                    checkpoint = TO_WITHK(NO_PTREC);
                     needCheckpoint = TRUE;
                 }
             }else{
-                printf("Something bad happened: unrecognized header.  Header is %p, expected %p (WithK) or %p (WithoutK)\n", 
+                TRACE("Something bad happened: unrecognized header.  Header is %p, expected %p (WithK) or %p (WithoutK)\n", 
                        ptr->header.info, WITHK_HEADER, WITHOUTK_HEADER);
             }
             ptr = ptr->next;
             i++;
         }
         if(needCheckpoint){ //no checkpoint found, but we need to abort
-            return (StgPTRecWithK *) PASTM_FAIL;
+            TRACE("Validation failed an no checkpoint was found...\n");
+            return TO_WITHK(PASTM_FAIL);
         }
-        if(checkpoint != PASTM_SUCCESS){ //validation failed, but we found a checkpoint
+        if(checkpoint != TO_WITHK(PASTM_SUCCESS)){ //validation failed, but we found a checkpoint
             //try reading from this tvar
             StgTVar * tvar = checkpoint->tvar;
             StgClosure * val = tvar->current_value;
             if(time == version_clock){
+                TRACE("Validation failed, a checkpoint was found, and we successfully read from the checkpointed tvar\n");
                 checkpoint->read_value = val; //apply the continuation to this in C--
-                trec->read_set = (StgPTRecWithoutK*)checkpoint;
+                trec->read_set = TO_WITHOUTK(checkpoint);
                 trec->write_set = checkpoint->write_set;
                 trec->lastK = checkpoint;
                 StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
                 trec->capture_freq = capture_freq | (capture_freq >> 32);
                 return checkpoint;
             }else{
+                TRACE("Someone else committed while we tried to re-read from the checkpointed tvar\n");
                 continue; //revalidate the whole log
             }
             
         }
 
         if(time == version_clock){
-            trec->read_version = time;
+            TRACE("Validation succeeded\n");
             return checkpoint; //necessarily PASTM_SUCCESS
         }
     }
 }
 
-static int readCount = 0;
-
 StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
                            StgTVar * tvar, StgClosure * k){
     StgWriteSet * ws = trec->write_set;
 
-    while(ws != NO_PTREC){
+    while(ws != TO_WRITE_SET(NO_PTREC)){
         if(ws->tvar == tvar){
             return ws->val;
         }
@@ -153,15 +155,15 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     StgClosure * val = tvar->current_value;
     while(trec->read_version != version_clock){
         StgPTRecWithK * checkpoint = validate(trec);
-        if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
-            printf("Eagerly aborting\n");
-            return (StgClosure*) checkpoint;
+        if(checkpoint != TO_WITHK(PASTM_SUCCESS)){
+            return TO_CLOSURE(checkpoint);
         }
         val = tvar->current_value;
     }
     
     if(trec->numK < KBOUND){//Still room for more
         if((trec->capture_freq & 0xFFFFFFFF) == 0){//Store the continuation
+            TRACE("Read from tvar %p, capturing a continuation...");
             StgPTRecWithK * entry = (StgPTRecWithK *)allocate(cap, sizeofW(StgPTRecWithK));
             SET_HDR(entry , &stg_PTREC_WITHK_info, CCS_SYSTEM);
             entry->tvar = tvar;
@@ -170,7 +172,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->write_set = trec->write_set;
             entry->continuation = k;
             entry->prev_k = trec->lastK;
-            trec->read_set = (StgPTRecWithoutK*)entry;
+            trec->read_set = TO_WITHOUTK(entry);
             trec->lastK = entry;
             trec->numK++;
             if(trec->numK == KBOUND)
@@ -178,6 +180,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             trec->capture_freq |= (trec->capture_freq >> 32);
             
         }else{//Don't store the continuation
+            TRACE("Read from tvar %p, not capturing a continuation");
             StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
             SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
             entry->tvar = tvar;
@@ -187,12 +190,13 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             trec->capture_freq--;
         }
     }else{//filter the read set
+        TRACE("Read from tvar %p, filtering read set");
         StgPTRecWithK * ptr = trec->lastK;
         int numK = trec->numK;
-        while(ptr != NO_PTREC){
-            if(ptr->prev_k != NO_PTREC){
+        while(ptr != TO_WITHK(NO_PTREC)){
+            if(ptr->prev_k != TO_WITHK(NO_PTREC)){
                 StgPTRecWithK * dropped = ptr->prev_k;
-                dropped->continuation = NO_PTREC;
+                dropped->continuation = TO_CLOSURE(NO_PTREC);
                 ptr->prev_k = ptr->prev_k->prev_k;
                 ptr = ptr->prev_k;
                 SET_HDR(dropped, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
@@ -217,6 +221,7 @@ void p_stmWriteTVar(Capability *cap,
                     StgPTRecHeader *trec,
                     StgTVar *tvar,
                     StgClosure *new_value) {
+    TRACE("Writing to tvar %p");
     StgWriteSet * newEntry = (StgWriteSet *) allocate(cap, sizeofW(StgWriteSet));
     SET_HDR(newEntry , &stg_WRITE_SET_info, CCS_SYSTEM);
     newEntry->tvar = tvar;
@@ -238,7 +243,6 @@ StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
         StgPTRecWithK * checkpoint = validate(trec);
         if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
-            printf("Commit time abort\n");
             //The validate function sets up the trec with the appropriate read/write sets
             return checkpoint;
         }
@@ -246,12 +250,14 @@ StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     }
     
     StgWriteSet * write_set = trec->write_set;
-    while(write_set != NO_PTREC){
+    while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;
         dirty_TVAR(cap,tvar);
         write_set = write_set->next;
     }
+    TRACE("Committing transaction, version clock is currently %lu, soon to be %lu (must currently be odd)\n", version_clock, snapshot+2);
+    version_clock = snapshot + 2;//unlock clock
     return (StgPTRecWithK *)PASTM_SUCCESS;
 }
 
