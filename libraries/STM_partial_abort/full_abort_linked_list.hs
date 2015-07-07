@@ -70,7 +70,7 @@ printList l = do
 main = do
      stmList <- initList 500 0
      printList stmList
-     atomically $ insert stmList 100000
+     atomically $ insert stmList 100
      printList stmList
      return()
 

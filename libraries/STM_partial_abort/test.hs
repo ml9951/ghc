@@ -1,7 +1,7 @@
 import PASTM
 import Prelude hiding (lookup)
 import GHC.IO
-import Dump
+import Debug.Trace
 
 data STMList a = Head (TVar (STMList a))
                | Null
