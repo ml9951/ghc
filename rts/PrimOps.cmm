@@ -1479,10 +1479,10 @@ stg_eagerFullAbort
     W_ frame;
     P_ code; 
 
-    //fully abort -- p_findAtomicallyFrameHelper will unwind the stack to the nearest atomic frame
+    //fully abort -- p_setAtomicallyFrameHelper will unwind the stack to the nearest atomic frame
     //According to StgCmmForeign.hs, SAVE_THREAD_STATE() gets compiled to:
     //tso = CurrentTSO;
-    //tso->stackobj->sp = Sp;
+    //tso->stackobj->sp = Sp;  --Sp is the register containing the stack pointer
     SAVE_THREAD_STATE();
     ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr");
 

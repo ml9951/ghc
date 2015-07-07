@@ -11,6 +11,7 @@ import Prelude hiding (lookup)
 import GHC.Conc(numCapabilities, forkIO)
 import Control.Concurrent.MVar
 import Control.Exception
+import Dump
 
 data STMList a = Head (TVar (STMList a))
                | Null
@@ -84,34 +85,34 @@ delete trailer x = (do ptr <- next trailer; loop ptr trailer) where
 
 threadLoop :: Ord a => TVar (STMList a) -> [a] -> IO()
 threadLoop l [] = return()
-threadLoop l (hd:tl) = do
-           atomically $ do
+threadLoop l (hd:tl) = 
+           (atomically $ do
                       insert l hd
                       res <- lookup l hd
                       if res == True
                       then return()
-                      else error ("Lookup invariant failed!")
-           threadLoop l tl
+                      else error ("Lookup invariant failed!")) >>= \_ ->
+           threadLoop l tl >>= \_ ->
            return()
          
 remove :: Show a => Ord a => TVar (STMList a) -> [a] -> IO()
 remove l [] = return()
 remove l (hd:tl) = do
        removed <- atomically $ delete l hd 
-       if removed == False
-       then return()
+       if removed == True
+       then remove l tl >>= \_ -> return()
        else do
-            putStrLn("Error: tried to remove element " ++ show hd ++ ", but it was not found in list")
+            id <- myThreadId
+            putStrLn(show id ++ ": Error, tried to remove element " ++ show hd ++ ", but it was not found in list")
             remove l tl 
             return()
        
-
 mkThreads :: TVar (STMList Int) -> Int -> IO [MVar ()]
 mkThreads l 0 = return []
 mkThreads l i = do
           mv <- newEmptyMVar
           opList <- return [0..500]
-          forkIO (do threadLoop l opList; putMVar mv (); putMVar mv (); remove l opList; putMVar mv())
+          forkIO (do threadLoop l opList; remove l opList; putMVar mv())
           mvs <- mkThreads l (i-1)
           return(mv:mvs)
 
@@ -143,12 +144,21 @@ toList l = do
                  tl' <- toList tl
                  return(hd : tl')
 
+listLen :: TVar (STMList a) -> IO Int
+listLen l = do
+        raw <- readTVarIO l
+        case raw of
+             Head l -> listLen l
+             Null -> return 0
+             Node hd tl -> do
+                  len <- listLen tl
+                  return (len + 1)
+
 main = do
      stmList <- newList
      mvars <- mkThreads stmList numCapabilities
      join mvars --wait for everyone to finish adding to list
-     join mvars --allow everyone to start removing
-     join mvars --wait for everyone to finish removing
+     putStrLn "Threads are finished with their operations"
      check stmList `catch` \ msg -> do raw <- toList stmList; putStrLn (show (msg::AssertionFailed) ++ show raw)
      return()
 
