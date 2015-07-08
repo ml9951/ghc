@@ -1408,11 +1408,27 @@ INFO_TABLE_RET(stg_patomically_frame, ATOMICALLY_FRAME,
     ("ptr" checkpoint) = ccall p_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
 
     if(checkpoint == PASTM_SUCCESS){ //Validation succeeded
+#if defined(STM_STATS)
+        P_ stats;
+        W_ stat;
+        stats = StgTSO_pastmStats(CurrentTSO);
+        stat = StgPASTMStats_numCommits(stats);
+        stat = stat + 1;
+        StgPASTMStats_numCommits(stats) = stat;
+#endif
         StgTSO_ptrec(CurrentTSO) = NO_PTREC;
         frame_result = result;
         return(frame_result);
     }
     if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint
+#if defined(STM_STATS)
+        P_ stats;
+        W_ stat;
+        stats = StgTSO_pastmStats(CurrentTSO);
+        stat = StgPASTMStats_commitTimeFullAborts(stats);
+        stat = stat + 1;
+        StgPASTMStats_commitTimeFullAborts(stats) = stat;
+#endif
         ("ptr" trec) = ccall p_stmStartTransaction(MyCapability() "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
@@ -1427,6 +1443,15 @@ INFO_TABLE_RET(stg_patomically_frame, ATOMICALLY_FRAME,
 
         P_ k;
         P_ val;
+
+#if defined(STM_STATS)
+        P_ stats;
+        W_ stat;
+        stats = StgTSO_pastmStats(CurrentTSO);
+        stat = StgPASTMStats_commitTimePartialAborts(stats);
+        stat = stat + 1;
+        StgPASTMStats_commitTimePartialAborts(stats) = stat;
+#endif
 
         k = StgPTRecWithK_continuation(checkpoint);
         val = StgPTRecWithK_read_value(checkpoint);
@@ -1478,6 +1503,15 @@ stg_eagerFullAbort
 {
     W_ frame;
     P_ code; 
+
+#if defined(STM_STATS)
+    P_ stats;
+    W_ stat;
+    stats = StgTSO_pastmStats(CurrentTSO);
+    stat = StgPASTMStats_eagerFullAborts(stats);
+    stat = stat + 1;
+    StgPASTMStats_eagerFullAborts(stats) = stat;
+#endif
 
     //fully abort -- p_setAtomicallyFrameHelper will unwind the stack to the nearest atomic frame
     //According to StgCmmForeign.hs, SAVE_THREAD_STATE() gets compiled to:
@@ -1601,6 +1635,24 @@ stg_pwriteTVarzh (P_ tvar,     /* :: TVar a */
     return ();
 }
 
+stg_getStatszh()
+{
+    P_ stats;
+    W_ s1;
+    W_ s2;
+    W_ s3;
+    W_ s4;
+    W_ s5;
+    
+    stats = StgTSO_pastmStats(CurrentTSO);
+    s1 = StgPASTMStats_eagerPartialAborts(stats);
+    s2 = StgPASTMStats_eagerFullAborts(stats);
+    s3 = StgPASTMStats_commitTimePartialAborts(stats);
+    s4 = StgPASTMStats_commitTimeFullAborts(stats);
+    s5 = StgPASTMStats_numCommits(stats);
+    
+    return(s1, s2, s3, s4, s5);
+}
 
 /* -----------------------------------------------------------------------------
  * MVar primitives

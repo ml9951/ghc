@@ -453,7 +453,7 @@ RTS_FUN_DECL(stg_checkzh);
 RTS_FUN_DECL(stg_patomicallyzh);
 RTS_FUN_DECL(stg_preadTVarzh);
 RTS_FUN_DECL(stg_pwriteTVarzh);
-
+RTS_FUN_DECL(stg_getStatszh);
 
 RTS_FUN_DECL(stg_unpackClosurezh);
 RTS_FUN_DECL(stg_getApStackValzh);

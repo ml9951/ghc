@@ -1992,6 +1992,41 @@ primop  MaskStatus "getMaskingState#" GenPrimOp
    has_side_effects = True
 
 ------------------------------------------------------------------------
+section "Partial Abort STM-accessible Mutable Variables"
+------------------------------------------------------------------------
+
+primop  PAtomicallyOp "patomically#" GenPrimOp
+      (State# RealWorld -> (# State# RealWorld , b #) )
+   -> State# RealWorld -> (# State# RealWorld, b #)
+   with
+   strictness  = { \ _arity -> mkClosedStrictSig [apply1Dmd,topDmd] topRes }
+   out_of_line = True
+   has_side_effects = True
+
+primop  PReadTVarOp "preadTVar#" GenPrimOp
+       TVar# s a -> (State# s -> a -> (# State# s, b #))
+    -> State# s -> (# State# s, a #)
+   {Read contents of {\tt TVar\#}.  Result is not yet evaluated.}
+   with
+   out_of_line  = True
+   has_side_effects = True
+
+primop  PWriteTVarOp "pwriteTVar#" GenPrimOp
+       TVar# s a
+    -> a
+    -> State# s -> State# s
+   {Write contents of {\tt TVar\#}.}
+   with
+   out_of_line      = True
+   has_side_effects = True
+
+primop GetStatsOp "getStats#" GenPrimOp
+       State# s -> (# State# s, Int#, Int#, Int#, Int#, Int# #)
+       {Return a struct containing various statistics regarding transactional memory}
+       with
+       out_of_line = True
+
+------------------------------------------------------------------------
 section "STM-accessible Mutable Variables"
 ------------------------------------------------------------------------
 

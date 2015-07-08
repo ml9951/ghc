@@ -12,6 +12,7 @@ import GHC.Conc(numCapabilities, forkIO)
 import Control.Concurrent.MVar
 import Control.Exception
 import Dump
+import Data.Map(Map, empty)
 
 data STMList a = Head (TVar (STMList a))
                | Null
@@ -103,21 +104,21 @@ remove l (hd:tl) = do
             remove l tl 
             return()
        
-mkThreads :: TVar (STMList Int) -> Int -> IO [MVar ()]
+mkThreads :: TVar (STMList Int) -> Int -> IO [MVar (Map String [Int])]
 mkThreads l 0 = return []
 mkThreads l i = do
           mv <- newEmptyMVar
           opList <- return [0..500]
-          forkIO (do threadLoop l opList; remove l opList; putMVar mv())
+          forkIO (do threadLoop l opList; remove l opList; stats <- getStats; putMVar mv stats)
           mvs <- mkThreads l (i-1)
           return(mv:mvs)
 
-join :: [MVar()] -> IO ()
-join [] = return()
+join :: [MVar(Map String [Int])] -> IO (Map String [Int])
+join [] = return(empty)
 join (mv:mvs) = do
-     takeMVar mv
-     join mvs
-     return()
+     stats <- takeMVar mv
+     allStats <- join mvs
+     return(mergeStats stats allStats)
 
 check :: TVar (STMList a) -> IO ()
 check l = do
@@ -153,8 +154,8 @@ listLen l = do
 main = do
      stmList <- newList
      mvars <- mkThreads stmList numCapabilities
-     join mvars --wait for everyone to finish adding to list
-     putStrLn "Threads are finished with their operations"
+     stats <- join mvars --wait for everyone to finish adding to list
+     putStrLn (show stats)
      check stmList `catch` \ msg -> do raw <- toList stmList; putStrLn (show (msg::AssertionFailed) ++ show raw)
      return()
 
