@@ -80,7 +80,7 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
         if((time & 1) != 0){
             continue; //clock is locked
         }
-        TRACE("Validating: version clock is currently %lu (must be odd at this point)\n", version_clock);
+        TRACE("Validating: sampled version clock is currently %lu (must be even at this point)\n", time);
         trec->read_version = time;
         //validate read set
         StgPTRecWithoutK * ptr = trec->read_set;
@@ -163,7 +163,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     
     if(trec->numK < KBOUND){//Still room for more
         if((trec->capture_freq & 0xFFFFFFFF) == 0){//Store the continuation
-            TRACE("Read from tvar %p, capturing a continuation...");
+            //TRACE("Read from tvar %p, capturing a continuation...");
             StgPTRecWithK * entry = (StgPTRecWithK *)allocate(cap, sizeofW(StgPTRecWithK));
             SET_HDR(entry , &stg_PTREC_WITHK_info, CCS_SYSTEM);
             entry->tvar = tvar;
@@ -180,7 +180,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             trec->capture_freq |= (trec->capture_freq >> 32);
             
         }else{//Don't store the continuation
-            TRACE("Read from tvar %p, not capturing a continuation");
+            //TRACE("Read from tvar %p, not capturing a continuation");
             StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
             SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
             entry->tvar = tvar;
@@ -190,7 +190,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             trec->capture_freq--;
         }
     }else{//filter the read set
-        TRACE("Read from tvar %p, filtering read set");
+        //TRACE("Read from tvar %p, filtering read set");
         StgPTRecWithK * ptr = trec->lastK;
         int numK = trec->numK;
         while(ptr != TO_WITHK(NO_PTREC)){

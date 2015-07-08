@@ -79,7 +79,7 @@ delete trailer x = (do ptr <- next trailer; loop ptr trailer) where
                       if x == hd
                       then readTVar trailer >>= \rawTrailer ->
                            case rawTrailer of Head t -> writeTVar trailer (Head tl) >>= \_ -> return(True)
-                                              Node hd tl -> readTVar tl >>= \rawTL -> writeTVar trailer rawTL >>= \_ -> return(True)
+                                              Node hd' tl' -> writeTVar trailer (Node hd' tl) >>= \_ -> return True
                                               _ -> error "delete: loop: Impossible"
                       else loop tl ptr
 
@@ -102,8 +102,7 @@ remove l (hd:tl) = do
        if removed == True
        then remove l tl >>= \_ -> return()
        else do
-            id <- myThreadId
-            putStrLn(show id ++ ": Error, tried to remove element " ++ show hd ++ ", but it was not found in list")
+            putStrLn("Error, tried to remove element " ++ show hd ++ ", but it was not found in list")
             remove l tl 
             return()
        
