@@ -13,6 +13,9 @@ import Control.Concurrent.MVar
 import Control.Exception
 import Dump
 import Data.Map(Map, empty)
+import System.CPUTime
+import Text.Printf
+import STMStats
 
 data STMList a = Head (TVar (STMList a))
                | Null
@@ -23,16 +26,6 @@ newList = do
         nullPtr <- newTVarIO Null
         l <- newTVarIO (Head nullPtr)
         return(l)
-
-
-initList :: Integer -> Integer -> IO (TVar (STMList Integer))
-initList 0 j = do
-         tv <- newTVarIO Null
-         return(tv)
-initList i j = do
-     tail <- initList (i-1) (j+1)
-     head <- newTVarIO (Node j tail)
-     return(head)
 
 lookup :: Eq a => TVar (STMList a) -> a -> STM Bool
 lookup l x = do
@@ -141,22 +134,17 @@ toList l = do
                  tl' <- toList tl
                  return(hd : tl')
 
-listLen :: TVar (STMList a) -> IO Int
-listLen l = do
-        raw <- readTVarIO l
-        case raw of
-             Head l -> listLen l
-             Null -> return 0
-             Node hd tl -> do
-                  len <- listLen tl
-                  return (len + 1)
-
 main = do
      stmList <- newList
+     startTime <- getCPUTime
      mvars <- mkThreads stmList numCapabilities
      stats <- join mvars --wait for everyone to finish adding to list
+     endTime <- getCPUTime
+     let diff = (fromIntegral (endTime - startTime)) / (10^12)
+     printf "Computation time: %0.3f sec\n" (diff :: Double)
      putStrLn (show stats)
      check stmList `catch` \ msg -> do raw <- toList stmList; putStrLn (show (msg::AssertionFailed) ++ show raw)
      return()
+
 
 

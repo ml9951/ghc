@@ -32,3 +32,4 @@ getStats =
 mergeStats :: Map String [Int] -> Map String [Int] -> Map String [Int]
 mergeStats s1 s2 = unionWith (++) s1 s2
 
+

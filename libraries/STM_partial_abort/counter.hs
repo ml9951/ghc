@@ -43,5 +43,3 @@ main = do
      count <- readTVarIO counter
      putStrLn("Count is " ++ show count)
      return()
-
-

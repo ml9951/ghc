@@ -1060,10 +1060,25 @@ INFO_TABLE_RET(stg_atomically_frame, ATOMICALLY_FRAME,
         /* We've got no more invariants to check, try to commit */
         (valid) = ccall stmCommitTransaction(MyCapability() "ptr", trec "ptr");
         if (valid != 0) {
+            P_ stats;
+            W_ stat;
+            stats = StgTSO_pastmStats(CurrentTSO);
+            stat = StgPASTMStats_numCommits(stats);
+            stat = stat + 1;
+            StgPASTMStats_numCommits(stats) = stat;
+
+
             /* Transaction was valid: commit succeeded */
             StgTSO_trec(CurrentTSO) = NO_TREC;
             return (frame_result);
         } else {
+            P_ stats;
+            W_ stat;
+            stats = StgTSO_pastmStats(CurrentTSO);
+            stat = StgPASTMStats_commitTimeFullAborts(stats);
+            stat = stat + 1;
+            StgPASTMStats_commitTimeFullAborts(stats) = stat;
+
             /* Transaction was not valid: try again */
             ("ptr" trec) = ccall stmStartTransaction(MyCapability() "ptr",
                                                      NO_TREC "ptr");
@@ -1408,27 +1423,25 @@ INFO_TABLE_RET(stg_patomically_frame, ATOMICALLY_FRAME,
     ("ptr" checkpoint) = ccall p_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
 
     if(checkpoint == PASTM_SUCCESS){ //Validation succeeded
-#if defined(STM_STATS)
         P_ stats;
         W_ stat;
         stats = StgTSO_pastmStats(CurrentTSO);
         stat = StgPASTMStats_numCommits(stats);
         stat = stat + 1;
         StgPASTMStats_numCommits(stats) = stat;
-#endif
+
         StgTSO_ptrec(CurrentTSO) = NO_PTREC;
         frame_result = result;
         return(frame_result);
     }
     if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint
-#if defined(STM_STATS)
         P_ stats;
         W_ stat;
         stats = StgTSO_pastmStats(CurrentTSO);
         stat = StgPASTMStats_commitTimeFullAborts(stats);
         stat = stat + 1;
         StgPASTMStats_commitTimeFullAborts(stats) = stat;
-#endif
+
         ("ptr" trec) = ccall p_stmStartTransaction(MyCapability() "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
@@ -1444,14 +1457,13 @@ INFO_TABLE_RET(stg_patomically_frame, ATOMICALLY_FRAME,
         P_ k;
         P_ val;
 
-#if defined(STM_STATS)
         P_ stats;
         W_ stat;
         stats = StgTSO_pastmStats(CurrentTSO);
         stat = StgPASTMStats_commitTimePartialAborts(stats);
         stat = stat + 1;
         StgPASTMStats_commitTimePartialAborts(stats) = stat;
-#endif
+
 
         k = StgPTRecWithK_continuation(checkpoint);
         val = StgPTRecWithK_read_value(checkpoint);
@@ -1504,14 +1516,12 @@ stg_eagerFullAbort
     W_ frame;
     P_ code; 
 
-#if defined(STM_STATS)
     P_ stats;
     W_ stat;
     stats = StgTSO_pastmStats(CurrentTSO);
     stat = StgPASTMStats_eagerFullAborts(stats);
     stat = stat + 1;
     StgPASTMStats_eagerFullAborts(stats) = stat;
-#endif
 
     //fully abort -- p_setAtomicallyFrameHelper will unwind the stack to the nearest atomic frame
     //According to StgCmmForeign.hs, SAVE_THREAD_STATE() gets compiled to:
@@ -1575,14 +1585,12 @@ stg_eagerPartialAbort
     P_ k;
     P_ val;
 
-#if defined(STM_STATS)
     P_ stats;
     W_ stat;
     stats = StgTSO_pastmStats(CurrentTSO);
     stat = StgPASTMStats_eagerPartialAborts(stats);
     stat = stat + 1;
     StgPASTMStats_eagerPartialAborts(stats) = stat;
-#endif
 
     SAVE_THREAD_STATE(); //see stg_eagerFullAbort for details
     ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr");

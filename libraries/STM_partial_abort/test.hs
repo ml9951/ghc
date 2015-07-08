@@ -75,4 +75,3 @@ main = do
      atomically $ insert stmList 1000
      printList stmList
      return()
-
