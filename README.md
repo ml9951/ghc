@@ -10,6 +10,7 @@ get everything checked out and built:
     git remote set-url origin git://git.haskell.org/ghc.git   # so submodules work
     git submodule update --init
     perl boot
+    cp mk/build.mk.sample mk/build.mk  #Uncomment the following line: "BuildFlavour = quick"
     ./configure
     make         # can also say 'make -jX' for X number of jobs
     make install
