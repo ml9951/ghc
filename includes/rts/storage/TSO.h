@@ -135,6 +135,7 @@ typedef struct StgTSO_ {
     struct StgTRecHeader_ * trec;       /* STM transaction record */
 
     StgPTRecHeader * ptrec;             /*Partial Abort STM transaction record*/
+    StgPASTMStats * pastmStats;         /*Partial Abort STM statistics*/
 
     /*
      * A list of threads blocked on this TSO waiting to throw exceptions.

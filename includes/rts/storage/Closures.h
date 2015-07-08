@@ -444,6 +444,16 @@ typedef struct StgPTRecHeader_ {
     StgInt                     numK;
 } StgPTRecHeader;
 
+//Statistics
+typedef struct StgPASTMStats_{
+    StgHeader header;
+    StgInt64  eagerPartialAborts;
+    StgInt64  eagerFullAborts;
+    StgInt64  commitTimePartialAborts;
+    StgInt64  commitTimeFullAborts;
+    StgInt64  numCommits;
+} StgPASTMStats;
+
 
 /* ----------------------------------------------------------------------------
    Messages

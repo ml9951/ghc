@@ -557,6 +557,9 @@ INFO_TABLE_CONSTR(stg_PA_STM_FAIL,0,0,0,CONSTR_NOCAF_STATIC,"NO_PTREC","NO_PTREC
 
 CLOSURE(stg_PA_STM_FAIL_closure,stg_PA_STM_FAIL);
 
+INFO_TABLE(stg_PASTM_STATS, 0, 5, CONSTR, "PASTM_STATS", "PASTM_STATS")
+{ foreign "C" barf("WRITE_SET object entered!") never returns; }
+
 
 
 /* ----------------------------------------------------------------------------

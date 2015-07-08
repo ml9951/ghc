@@ -73,6 +73,7 @@ scavengeTSO (StgTSO *tso)
     evacuate((StgClosure **)&tso->trec);
 
     evacuate((StgClosure **)&tso->ptrec);  //Partial Abort
+    evacuate((StgClosure **)&tso->pastmStats);  //Partial abort stats
 
     evacuate((StgClosure **)&tso->stackobj);
 

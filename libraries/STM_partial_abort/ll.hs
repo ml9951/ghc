@@ -85,15 +85,12 @@ delete trailer x = (do ptr <- next trailer; loop ptr trailer) where
 
 threadLoop :: Ord a => TVar (STMList a) -> [a] -> IO()
 threadLoop l [] = return()
-threadLoop l (hd:tl) = 
-           (atomically $ do
-                      insert l hd
-                      res <- lookup l hd
-                      if res == True
-                      then return()
-                      else error ("Lookup invariant failed!")) >>= \_ ->
-           threadLoop l tl >>= \_ ->
-           return()
+threadLoop l (hd:tl) = do
+           atomically $ insert l hd
+           res <- atomically $ lookup l hd
+           if res == True
+           then threadLoop l tl
+           else putStrLn "Lookup invariant failed!" >>= \_ -> threadLoop l tl
          
 remove :: Show a => Ord a => TVar (STMList a) -> [a] -> IO()
 remove l [] = return()

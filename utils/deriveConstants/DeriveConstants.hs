@@ -427,6 +427,7 @@ wanteds = concat
           ,closureField  C    "StgTSO"      "saved_errno"
           ,closureField  C    "StgTSO"      "trec"
           ,closureField  C    "StgTSO"      "ptrec"
+          ,closureField  C    "StgTSO"      "pastmStats"
           ,closureField  C    "StgTSO"      "flags"
           ,closureField  C    "StgTSO"      "dirty"
           ,closureField  C    "StgTSO"      "bq"
@@ -484,6 +485,12 @@ wanteds = concat
 
           ,closureField C "StgPTRecWithK" "continuation"
           ,closureField C "StgPTRecWithK" "read_value"
+
+          ,closureField C "StgPASTMStats" "eagerPartialAborts"
+          ,closureField C "StgPASTMStats" "eagerFullAborts"
+          ,closureField C "StgPASTMStats" "commitTimePartialAborts"
+          ,closureField C "StgPASTMStats" "commitTimeFullAborts"
+          ,closureField C "StgPASTMStats" "numCommits"
 
           ,closureSize  C "StgCatchSTMFrame"
           ,closureField C "StgCatchSTMFrame" "handler"

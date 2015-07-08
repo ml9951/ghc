@@ -115,6 +115,15 @@ createThread(Capability *cap, W_ size)
 
     tso->ptrec = NO_PTREC;
 
+    StgPASTMStats * stats = (StgPASTMStats*)allocate(cap, sizeofW(StgPASTMStats));
+    SET_HDR(stats, &stg_PASTM_STATS_info, cap->r.rCCCS);
+    stats->eagerPartialAborts = 0;
+    stats->eagerFullAborts = 0;
+    stats->commitTimePartialAborts = 0;
+    stats->commitTimeFullAborts = 0;
+    stats->numCommits = 0;
+    tso->pastmStats = stats;
+
 #ifdef PROFILING
     tso->prof.cccs = CCS_MAIN;
 #endif

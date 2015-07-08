@@ -157,7 +157,7 @@ RTS_ENTRY(stg_PA_STM_SUCCESS);
 RTS_CLOSURE(stg_PA_STM_SUCCESS_closure);
 RTS_ENTRY(stg_PA_STM_FAIL);
 RTS_CLOSURE(stg_PA_STM_FAIL_closure);
-
+RTS_ENTRY(stg_PASTM_STATS);
 
 /* closures */
 

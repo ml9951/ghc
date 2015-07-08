@@ -1541,6 +1541,15 @@ stg_eagerPartialAbort
     P_ k;
     P_ val;
 
+#if defined(STM_STATS)
+    P_ stats;
+    W_ stat;
+    stats = StgTSO_pastmStats(CurrentTSO);
+    stat = StgPASTMStats_eagerPartialAborts(stats);
+    stat = stat + 1;
+    StgPASTMStats_eagerPartialAborts(stats) = stat;
+#endif
+
     SAVE_THREAD_STATE(); //see stg_eagerFullAbort for details
     ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr");
     LOAD_THREAD_STATE();
