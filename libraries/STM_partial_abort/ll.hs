@@ -142,7 +142,7 @@ main = do
      endTime <- getCPUTime
      let diff = (fromIntegral (endTime - startTime)) / (10^12)
      printf "Computation time: %0.3f sec\n" (diff :: Double)
-     putStrLn (show stats)
+     printStats stats
      check stmList `catch` \ msg -> do raw <- toList stmList; putStrLn (show (msg::AssertionFailed) ++ show raw)
      return()
 

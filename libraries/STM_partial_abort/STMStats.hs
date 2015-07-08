@@ -1,9 +1,9 @@
 {-# LANGUAGE MagicHash, UnboxedTuples, CPP#-}
 
-module STMStats(getStats, mergeStats)
+module STMStats(getStats, mergeStats, printStats)
 where
 
-import Data.Map(Map, unionWith, fromList)
+import Data.Map(Map, unionWith, fromList, toList)
 import GHC.Base
 
 #ifdef FULL_ABORT
@@ -32,4 +32,9 @@ getStats =
 mergeStats :: Map String [Int] -> Map String [Int] -> Map String [Int]
 mergeStats s1 s2 = unionWith (++) s1 s2
 
-
+printStats :: Map String [Int] -> IO ()
+printStats stats = loop (toList stats) where
+           loop [] = return()
+           loop ((key,val):stats) = do
+                putStrLn (key ++ " = " ++ show val)
+                loop stats

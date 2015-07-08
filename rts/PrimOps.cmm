@@ -1494,12 +1494,10 @@ stg_patomicallyzh (P_ stm)
     ("ptr" new_trec) = ccall p_stmStartTransaction(MyCapability() "ptr");
     StgTSO_ptrec(CurrentTSO) = new_trec;
 
-    /* Nested transactions are not allowed; raise an exception */
-    /*    
+    /* Nested transactions are idempotent */ 
     if (old_trec != NO_PTREC) {
-        jump stg_raisezh(base_ControlziExceptionziBase_nestedAtomically_closure);
+        jump stg_ap_v_fast(stm);
     }
-    */
 
     code = stm;
     next_invariant = END_INVARIANT_CHECK_QUEUE;
