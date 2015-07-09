@@ -1628,7 +1628,7 @@ stg_preadTVarzh (P_ tvar, P_ k)
 }
 
 stg_pwriteTVarzh (P_ tvar,     /* :: TVar a */
-                 P_ new_value /* :: a      */)
+                  P_ new_value /* :: a      */)
 {
     W_ trec;
 

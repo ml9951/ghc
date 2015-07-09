@@ -51,3 +51,9 @@ initK s a = (# s, a #)
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> patomically# (c initK) s)
 
+
+
+
+
+
+
