@@ -27,6 +27,8 @@ module Control.Concurrent.PASTM.Core
     writeTVar,
     atomically,
     STM(..),
+    retry,
+    orElse,
     --The following are just re-exporting from the original STM
     newTVarIO,   
     readTVarIO, 
@@ -71,8 +73,21 @@ initK s a = (# s, a #)
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> patomically# (c initK) s)
 
+-- |Retry execution of the current memory transaction because it has seen
+-- values in TVars which mean that it should not continue (e.g. the TVars
+-- represent a shared buffer that is now empty).  The implementation may
+-- block the thread until one of the TVars that it has read from has been
+-- udpated. (GHC only)
+retry :: STM a
+retry = STM $ \c -> \s# -> pretry# s#
 
-
+-- |Compose two alternative STM actions (GHC only).  If the first action
+-- completes without retrying then it forms the result of the orElse.
+-- Otherwise, if the first action retries, then the second action is
+-- tried in its place.  If both actions retry then the orElse as a
+-- whole retries.
+orElse :: STM a -> STM a -> STM a
+orElse (STM m) e = STM $ \c -> \s -> pcatchRetry# (m c) (unSTM e c) s
 
 
 

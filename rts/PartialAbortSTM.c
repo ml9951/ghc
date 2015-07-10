@@ -28,6 +28,7 @@
 #define TO_WITHOUTK(x) ((StgPTRecWithoutK*)x)
 #define TO_WRITE_SET(x) ((StgWriteSet*)x)
 #define TO_CLOSURE(x) ((StgClosure*)x)
+#define TO_OR_ELSE(x) ((StgPTRecOrElse *)x)
 
 static volatile unsigned long version_clock = 0;
 
@@ -41,6 +42,8 @@ StgPTRecHeader * p_stmStartTransaction(Capability *cap) {
     ptrec->read_set = TO_WITHOUTK(NO_PTREC);
     ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
+
+    ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
 
     //get a read version
     ptrec->read_version = version_clock;
@@ -274,5 +277,17 @@ void p_setAtomicallyFrameHelper(Capability *cap, StgTSO *tso){
     }
   }
 }
+
+
+StgClosure * p_stmRetry(StgPTRecHeader * trec){
+    if(trec->retry_stack == TO_OR_ELSE(NO_PTREC)){
+        return TO_CLOSURE(NO_PTREC);
+    }
+
+    StgClosure * alt = trec->retry_stack->alt;
+    
+}
+
+
 
 

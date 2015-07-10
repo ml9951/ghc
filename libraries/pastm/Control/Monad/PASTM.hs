@@ -45,7 +45,8 @@ import GHC.Conc hiding (catchSTM)
 import Control.Monad    ( MonadPlus(..) )
 import Control.Exception
 #else
-import GHC.Conc hiding (atomically)
+import Control.Concurrent.PASTM.Core
+import GHC.Conc(always,alwaysSucceeds,throwSTM,catchSTM)
 #endif
 import GHC.Exts
 import Control.Monad.Fix
@@ -111,7 +112,7 @@ throwSTM :: Exception e => e -> STM a
 throwSTM e = STM $ raiseIO# (toException e)
 #endif
 
-
+{-
 data STMret a = STMret (State# RealWorld) a
 
 liftSTM :: STM a -> State# RealWorld -> STMret a
@@ -122,3 +123,4 @@ instance MonadFix STM where
     let ans        = liftSTM (k r) s
         STMret _ r = ans
     in case ans of STMret s' x -> (# s', x #)
+-}

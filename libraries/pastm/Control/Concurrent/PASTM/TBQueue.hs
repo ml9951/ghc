@@ -43,7 +43,8 @@ module Control.Concurrent.PASTM.TBQueue (
   ) where
 
 import Data.Typeable
-import GHC.Conc
+--import GHC.Conc
+import Control.Concurrent.PASTM.Core
 
 #define _UPK_(x) {-# UNPACK #-} !(x)
 

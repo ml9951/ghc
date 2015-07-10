@@ -152,6 +152,7 @@ RTS_ENTRY(stg_PTREC_WITHK);
 RTS_ENTRY(stg_PTREC_WITHOUTK);
 RTS_ENTRY(stg_WRITE_SET);
 RTS_ENTRY(stg_NO_PTREC);
+RTS_ENTRY(stg_PTREC_OR_ELSE);
 RTS_CLOSURE(stg_NO_PTREC_closure);
 RTS_ENTRY(stg_PA_STM_SUCCESS);
 RTS_CLOSURE(stg_PA_STM_SUCCESS_closure);
@@ -453,6 +454,8 @@ RTS_FUN_DECL(stg_checkzh);
 RTS_FUN_DECL(stg_patomicallyzh);
 RTS_FUN_DECL(stg_preadTVarzh);
 RTS_FUN_DECL(stg_pwriteTVarzh);
+RTS_FUN_DECL(stg_pretryzh);
+RTS_FUN_DECL(stg_pcatchRetryzh);
 RTS_FUN_DECL(stg_getStatszh);
 
 RTS_FUN_DECL(stg_unpackClosurezh);

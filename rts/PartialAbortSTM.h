@@ -29,6 +29,7 @@ StgPTRecWithK * p_stmCommitTransaction(Capability *, StgPTRecHeader *);
 
 void p_setAtomicallyFrameHelper (Capability *, StgTSO *);
 
+StgClosure * p_stmRetry(StgPTRecHeader *);
 
 #define PASTM_SUCCESS              ((StgClosure*)(void*)&stg_PA_STM_SUCCESS_closure)
 #define PASTM_FAIL                 ((StgClosure*)(void*)&stg_PA_STM_FAIL_closure)

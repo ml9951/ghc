@@ -2020,6 +2020,32 @@ primop  PWriteTVarOp "pwriteTVar#" GenPrimOp
    out_of_line      = True
    has_side_effects = True
 
+-- NB: retry#'s strictness information specifies it to return bottom.
+-- This lets the compiler perform some extra simplifications, since retry#
+-- will technically never return.
+--
+-- This allows the simplifier to replace things like:
+--   case retry# s1
+--     (# s2, a #) -> e
+-- with:
+--   retry# s1
+-- where 'e' would be unreachable anyway.  See Trac #8091.
+primop  PRetryOp "pretry#" GenPrimOp
+   State# RealWorld -> (# State# RealWorld, a #)
+   with
+   strictness  = { \ _arity -> mkClosedStrictSig [topDmd] botRes }
+   out_of_line = True
+   has_side_effects = True
+
+primop  PCatchRetryOp "pcatchRetry#" GenPrimOp
+      (State# RealWorld -> (# State# RealWorld, a #) )
+   -> (State# RealWorld -> (# State# RealWorld, a #) )
+   -> (State# RealWorld -> (# State# RealWorld, a #) )
+   with
+   strictness  = { \ _arity -> mkClosedStrictSig [apply1Dmd,apply1Dmd,topDmd] topRes }
+   out_of_line = True
+   has_side_effects = True
+
 primop GetStatsOp "getStats#" GenPrimOp
        State# s -> (# State# s, Int#, Int#, Int#, Int#, Int# #)
        {Return a struct containing various statistics regarding transactional memory}

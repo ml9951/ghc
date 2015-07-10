@@ -422,6 +422,13 @@ typedef struct StgPTRecWithoutK_{
     struct StgPTRecWithoutK_ *next;
 } StgPTRecWithoutK;
 
+typedef struct StgPTRecOrElse_{
+    StgHeader               header;
+    StgClosure *            alt;
+    StgPTRecWithoutK *      read_set;
+    struct StgPTRecOrElse_ *next;
+} StgPTRecOrElse;
+
 //Read set element with a continuation
 typedef struct StgPTRecWithK_{
     StgHeader              header;
@@ -439,6 +446,7 @@ typedef struct StgPTRecHeader_ {
     StgPTRecWithoutK          *read_set;
     StgPTRecWithK             *lastK;
     StgWriteSet               *write_set;
+    StgPTRecOrElse            *retry_stack;
     unsigned long              read_version;
     StgInt64                   capture_freq;
     StgInt                     numK;

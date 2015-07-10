@@ -1641,6 +1641,32 @@ stg_pwriteTVarzh (P_ tvar,     /* :: TVar a */
     return ();
 }
 
+stg_pretryzh()
+{
+
+    W_ trec;
+    W_ result;
+
+    MAYBE_GC_ (stg_pretryzh);
+     
+    trec = StgTSO_ptrec(CurrentTSO);
+    ("ptr" result) = ccall p_stmRetry(trec "ptr");
+    
+    if(result == PASTM_FAIL){ //uncaught retry
+        return();
+    }
+
+    //pull out the orelse frame
+    return();
+}
+
+stg_pcatchRetryzh (P_ first_code, /* :: STM a */
+                   P_ alt_code    /* :: STM a */)
+{
+
+    return();
+}
+
 stg_getStatszh()
 {
     P_ stats;

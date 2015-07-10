@@ -21,7 +21,7 @@ numTVars :: Int
 numTVars = 100
 numSamples = 10
 numWrites = 10 
-numIters = 1000
+numIters = 200 --1000
 
 type TVars = TArray Int Int
 
@@ -84,6 +84,7 @@ main = do
      mvs <- mkThreads numCapabilities
      writes <- join mvs
      let freq = MS.toOccurList (MS.fromList writes)
+     putStrLn ("Frequency = " ++ show freq)
      failed <- atomically $ check freq
      mapM_ (\(i,freq,actual) -> putStrLn(show i ++ ": Count should be " ++ show actual ++ ", but found " ++ show freq)) failed
      return()
