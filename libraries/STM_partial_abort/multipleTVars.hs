@@ -22,21 +22,7 @@ numSamples = 10
 numWrites = 10 
 numIters = 1000
 
-test :: RandT StdGen STM Int
-test = do
-     x <- lift $ newTVar 0
-     r <- getRandomR (0, 12)
-     return r
-
-
-
-test2 :: STM Int
-test2 = evalRandT test (mkStdGen 0)
-
 type TVars = Array Int (TVar Int)
-
---tvars :: Array Int (STM (TVar Int))
---tvars = listArray (0, numTVars) (repeat (newTVar 0))
 
 sample :: TVars -> Int -> Int -> RandT StdGen STM Int
 sample tvars 0 x = return x

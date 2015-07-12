@@ -31,20 +31,23 @@ tvars = newArray (0, numTVars) 0
 sample :: Int -> Int -> RandT StdGen STM Int
 sample 0 x = return x
 sample i x = do
-       tvars <- lift tvars
-       rn <- getRandomR (0, numTVars)
-       x <- lift $ readArray tvars rn
+       rn <- getRandomR(0, numTVars)
+       x <- lift (do  
+            tvars <- tvars
+            x <- readArray tvars rn
+            return(x))
        sample (i-1) x
 
 write :: Int -> RandT StdGen STM [Int]
 write 0 = return []
 write i = do
-      tvars <- lift tvars
       rn <- getRandomR (0, numTVars)
-      temp <- lift $ readArray tvars rn
-      lift $ writeArray tvars rn (temp + 1)
       rands <- write (i-1)
-      lift $ return $ rn : rands
+      lift $ do
+           tvars <- tvars
+           temp <- readArray tvars rn
+           writeArray tvars rn (temp + 1)
+           return $ rn : rands
 
 threadLoop :: StdGen -> Int -> IO [Int]
 threadLoop g 0 = return []
