@@ -16,6 +16,7 @@ import System.Random
 import Control.Monad.Random
 import qualified Data.MultiSet as MS
 import Data.Array.MArray
+import Dump
 
 numTVars :: Int
 numTVars = 100
