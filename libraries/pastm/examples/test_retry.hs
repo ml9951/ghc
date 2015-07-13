@@ -13,13 +13,15 @@ alt2 x = do
 
 retryTest = do
           x <- newTVar 0
-          alt1 x `orElse` alt2 x
-          t <- readTVar x
-          return(t)
+          y <- newTVar 0
+          alt1 x `orElse` alt2 y
+          tx <- readTVar x
+          ty <- readTVar y
+          return(tx, ty)
 
 main = do
-     x <- atomically $ retryTest 
-     putStrLn("Result = " ++ show x)
+     (x, y) <- atomically $ retryTest 
+     putStrLn("x = " ++ show x ++ ", y = " ++ show y)
      return()
 
 
