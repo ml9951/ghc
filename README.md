@@ -9,6 +9,7 @@ get everything checked out and built:
     cd ghc
     git remote set-url origin git://git.haskell.org/ghc.git   # so submodules work
     git submodule update --init
+    git remote set-url origin https://github.com/ml9951/ghc.git #change it back
     perl boot
     cp mk/build.mk.sample mk/build.mk  #Uncomment the following line: "BuildFlavour = quick"
     ./configure

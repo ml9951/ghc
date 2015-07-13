@@ -151,6 +151,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->write_set = trec->write_set;
             entry->continuation = k;
             entry->prev_k = trec->lastK;
+            entry->is_retry = FALSE;
             trec->read_set = TO_WITHOUTK(entry);
             trec->lastK = entry;
             trec->numK++;
