@@ -310,8 +310,6 @@ static StgTVar retryTV = {.header = {.info = &stg_TVAR_CLEAN_info /*, TODO: add 
                           .current_value = PASTM_SUCCESS, //dummy value
                           .first_watch_queue_entry = ((StgTVarWatchQueue *)(void *)&stg_END_STM_WATCH_QUEUE_closure),
                           .num_updates = 0};
-                          
-
 
 void p_stmCatchRetry(Capability *cap, StgPTRecHeader * trec, 
                      StgClosure * alt, StgClosure * continuation){

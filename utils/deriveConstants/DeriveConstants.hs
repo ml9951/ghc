@@ -485,6 +485,7 @@ wanteds = concat
 
           ,closureField C "StgPTRecWithK" "continuation"
           ,closureField C "StgPTRecWithK" "read_value"
+          ,closureField C "StgPTRecHeader" "retry_stack"
 
           ,closureField C "StgPASTMStats" "eagerPartialAborts"
           ,closureField C "StgPASTMStats" "eagerFullAborts"

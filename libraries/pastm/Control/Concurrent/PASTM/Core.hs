@@ -47,7 +47,7 @@ newtype STM a = STM {unSTM :: forall r . --r is the type of the final result
 
 instance Monad STM where
     return a = STM $ \c -> \s -> c a s
-    m >>= k = STM $ \c -> \s -> unSTM m (\s' -> \a -> unSTM (k a) c s') s
+    m >>= k = STM $ \c -> \s -> unSTM m (\a -> \s' -> unSTM (k a) c s') s
 
 instance Applicative STM where
     (<*>) = ap
@@ -67,7 +67,7 @@ newTVar :: a -> STM (TVar a)
 newTVar x = STM $ \c -> \s -> case newTVar# x s of
                                 (# s', tv #) -> c (TVar tv) s'
 
-initK :: State# RealWorld -> a -> (# State# RealWorld, a #)
+initK :: a -> State# RealWorld -> (# State# RealWorld, a #)
 initK a s = (# s, a #)
 
 atomically :: STM a -> IO a

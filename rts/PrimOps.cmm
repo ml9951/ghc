@@ -1641,27 +1641,38 @@ stg_pwriteTVarzh (P_ tvar,     /* :: TVar a */
     return ();
 }
 
+/*
+ * Bail on a transaction, execution should continue with the alternative
+ * branch of the nearest orElse.  We currently are not supporting the 
+ * blocking semantics of retry if it propogates all the way up to the 
+ * top of the transaction.  Instead, we simply immediatly retry.
+ */
 stg_pretryzh()
 {
 
     W_ trec;
-    W_ result;
+    W_ alt;
+    W_ retry_stack;
 
     MAYBE_GC_ (stg_pretryzh);
      
     trec = StgTSO_ptrec(CurrentTSO);
-    ("ptr" result) = ccall p_stmRetry(trec "ptr");
+
+    retry_stack = StgPTRecHeader_retry_stack(trec);
     
-    if(result == PASTM_FAIL){ //uncaught retry
-        return();
+    if(retry_stack == NO_PTREC){
+        jump stg_eagerFullAbort []; //retry from beginning
     }
 
-    //pull out the orelse frame
-    return();
+    //Have at least one catchRetry on our retry_stack
+    ("ptr" alt) = ccall p_stmRetry(trec "ptr");
+    
+    jump stg_ap_v_fast(alt);
+
 }
 
-stg_pcatchRetryzh (P_ first_code, /* :: STM a */
-                   P_ alt_code,   /* :: STM a */
+stg_pcatchRetryzh (P_ first_code,     /* :: STM a */
+                   P_ alt_code,       /* :: STM a */
                    P_ continuation)
 {
 
@@ -1669,7 +1680,11 @@ stg_pcatchRetryzh (P_ first_code, /* :: STM a */
     
     MAYBE_GC_PPP(stg_pcatchRetryzh, first_code, alt_code, continuation);
 
-    return();
+    trec = StgTSO_ptrec(CurrentTSO);
+    ccall p_stmCatchRetry(MyCapability() "ptr", trec "ptr", 
+                          alt_code "ptr", continuation "ptr");
+    
+    jump stg_ap_v_fast(first_code);
 }
 
 stg_getStatszh()

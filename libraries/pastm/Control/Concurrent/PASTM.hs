@@ -27,7 +27,7 @@
 -----------------------------------------------------------------------------
 
 module Control.Concurrent.PASTM (
-        module Control.Monad.PASTM,
+--        module Control.Monad.PASTM,
         module Control.Concurrent.PASTM.TVar,
 #ifdef __GLASGOW_HASKELL__
         module Control.Concurrent.PASTM.TMVar,
