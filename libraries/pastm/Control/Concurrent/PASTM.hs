@@ -39,7 +39,7 @@ module Control.Concurrent.PASTM (
         module Control.Concurrent.PASTM.TArray
   ) where
 
-import Control.Monad.PASTM
+--import Control.Monad.PASTM
 import Control.Concurrent.PASTM.TVar
 #ifdef __GLASGOW_HASKELL__
 import Control.Concurrent.PASTM.TMVar

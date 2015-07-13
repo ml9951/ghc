@@ -3,7 +3,7 @@
 
 name:                pastm
 version:             0.1.0.0
-synopsis:            Software Transactional Memory with Partial Aborts
+synopsis:            Partial Abort Software Transactional Memory
 -- description:         
 homepage:            https://github.com/ml9951/ghc.git
 -- license:             
@@ -17,7 +17,7 @@ extra-source-files:  changelog.md, README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Control.Concurrent.PASTM, Control.Concurrent.PASTM.Core, Control.Concurrent.PASTM.TArray, Control.Concurrent.PASTM.TBQueue, Control.Concurrent.PASTM.TChan, Control.Concurrent.PASTM.TMVar, Control.Concurrent.PASTM.TQueue, Control.Concurrent.PASTM.TSem, Control.Concurrent.PASTM.TVar, Control.Monad.PASTM, Control.Sequential.PASTM
+  exposed-modules:     Control.Concurrent.PASTM, Control.Concurrent.PASTM.Core, Control.Concurrent.PASTM.TArray, Control.Concurrent.PASTM.TBQueue, Control.Concurrent.PASTM.TChan, Control.Concurrent.PASTM.TMVar, Control.Concurrent.PASTM.TQueue, Control.Concurrent.PASTM.TSem, Control.Concurrent.PASTM.TVar, Control.Sequential.PASTM
   -- other-modules:       
   other-extensions:    CPP, Safe, Trustworthy, MagicHash, UnboxedTuples, Rank2Types, DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances
   build-depends:       base >=4.8 && <4.9, array >=0.5 && <0.6, stm >=2.4 && <2.5
