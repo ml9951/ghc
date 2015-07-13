@@ -422,13 +422,6 @@ typedef struct StgPTRecWithoutK_{
     struct StgPTRecWithoutK_ *next;
 } StgPTRecWithoutK;
 
-typedef struct StgPTRecOrElse_{
-    StgHeader               header;
-    StgClosure *            alt;
-    StgPTRecWithoutK *      read_set;
-    struct StgPTRecOrElse_ *next;
-} StgPTRecOrElse;
-
 //Read set element with a continuation
 typedef struct StgPTRecWithK_{
     StgHeader              header;
@@ -438,7 +431,15 @@ typedef struct StgPTRecWithK_{
     StgWriteSet           *write_set;
     StgClosure            *continuation;
     struct StgPTRecWithK_ *prev_k;
+    StgBool                is_retry; //used for or else/retry, don't drop these when filtering read set!
 } StgPTRecWithK;
+
+typedef struct StgPTRecOrElse_{
+    StgHeader               header;
+    StgClosure *            alt;
+    StgPTRecWithK *         read_set;
+    struct StgPTRecOrElse_ *next;
+} StgPTRecOrElse;
 
 //TRec 
 typedef struct StgPTRecHeader_ {

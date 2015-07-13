@@ -31,6 +31,8 @@ void p_setAtomicallyFrameHelper (Capability *, StgTSO *);
 
 StgClosure * p_stmRetry(StgPTRecHeader *);
 
+void p_stmCatchRetry(Capability *, StgPTRecHeader *, StgClosure *, StgClosure *);
+
 #define PASTM_SUCCESS              ((StgClosure*)(void*)&stg_PA_STM_SUCCESS_closure)
 #define PASTM_FAIL                 ((StgClosure*)(void*)&stg_PA_STM_FAIL_closure)
 #define NO_PTREC                   ((StgPTRecHeader *)(void *)&stg_NO_PTREC_closure)

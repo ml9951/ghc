@@ -41,12 +41,12 @@ import GHC.Conc.Sync(TVar(..), readTVarIO, newTVarIO)
 import GHC.Base
 
 newtype STM a = STM {unSTM :: forall r . --r is the type of the final result
-                                 (State# RealWorld -> a -> (# State# RealWorld, r #)) -> --Continuation
+                                 (a -> State# RealWorld -> (# State# RealWorld, r #)) -> --Continuation
                                  State# RealWorld ->                                     --Incoming State
                                  (# State# RealWorld, r #)}                              --New state and result
 
 instance Monad STM where
-    return a = STM $ \c -> \s -> c s a
+    return a = STM $ \c -> \s -> c a s
     m >>= k = STM $ \c -> \s -> unSTM m (\s' -> \a -> unSTM (k a) c s') s
 
 instance Applicative STM where
@@ -58,17 +58,17 @@ instance  Functor STM where
 
 readTVar :: TVar a -> STM a
 readTVar (TVar tv) = STM $ \c -> \s-> case preadTVar# tv c s of
-                                        (# s', t #) -> c s' t
+                                        (# s', t #) -> c t s'
 
 writeTVar :: TVar a -> a -> STM ()
-writeTVar (TVar tv) a = STM $ \c -> \s -> c (pwriteTVar# tv a s) ()
+writeTVar (TVar tv) a = STM $ \c -> \s -> c () (pwriteTVar# tv a s)
 
 newTVar :: a -> STM (TVar a)
 newTVar x = STM $ \c -> \s -> case newTVar# x s of
-                                (# s', tv #) -> c s' (TVar tv)
+                                (# s', tv #) -> c (TVar tv) s'
 
 initK :: State# RealWorld -> a -> (# State# RealWorld, a #)
-initK s a = (# s, a #)
+initK a s = (# s, a #)
 
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> patomically# (c initK) s)
@@ -87,7 +87,9 @@ retry = STM $ \c -> \s# -> pretry# s#
 -- tried in its place.  If both actions retry then the orElse as a
 -- whole retries.
 orElse :: STM a -> STM a -> STM a
-orElse (STM m) e = STM $ \c -> \s -> pcatchRetry# (m c) (unSTM e c) s
+orElse (STM m) e = STM $ \c -> \s -> 
+       let m' = m c -- :: State# RealWorld -> (# State$ RealWorld, r #)
+       in pcatchRetry# m' (unSTM e c) (\a -> m') s
 
 
 

@@ -278,16 +278,60 @@ void p_setAtomicallyFrameHelper(Capability *cap, StgTSO *tso){
   }
 }
 
-
+/*
+ * Retry the transaction, we check to see that we 
+ * have something on our retry stack before entering
+ * this function.  This will return the alternative
+ * branch of the orElse and set the read set/write set
+ * appropriately.  
+ */
 StgClosure * p_stmRetry(StgPTRecHeader * trec){
-    if(trec->retry_stack == TO_OR_ELSE(NO_PTREC)){
-        return TO_CLOSURE(NO_PTREC);
+    StgClosure * alt = trec->retry_stack->alt;
+    StgPTRecWithK * checkpoint = trec->retry_stack->read_set;
+    trec->read_set = checkpoint->next;               //set read set
+    trec->write_set = checkpoint->write_set;         //set write set
+    trec->lastK = checkpoint->prev_k;                //set short path
+    trec->retry_stack = trec->retry_stack->next;     //pop the retry stack
+
+    StgInt numK = 0;
+    StgPTRecWithK * ptr = checkpoint->prev_k;
+    while(ptr != TO_WITHK(NO_PTREC)){
+        numK++;
+        ptr = ptr->prev_k;
     }
 
-    StgClosure * alt = trec->retry_stack->alt;
-    
+    trec->numK = numK;
+    return alt;
 }
 
+//I think the header can be clean, since it isn't going to be pointing
+//to anything in a younger generation
+static StgTVar retryTV = {.header = {.info = &stg_TVAR_CLEAN_info /*, TODO: add profiling field*/}, 
+                          .current_value = PASTM_SUCCESS, //dummy value
+                          .first_watch_queue_entry = ((StgTVarWatchQueue *)(void *)&stg_END_STM_WATCH_QUEUE_closure),
+                          .num_updates = 0};
+                          
 
 
-
+void p_stmCatchRetry(Capability *cap, StgPTRecHeader * trec, 
+                     StgClosure * alt, StgClosure * continuation){
+    StgPTRecWithK * checkpoint = (StgPTRecWithK*)allocate(cap, sizeofW(StgPTRecWithK));
+    SET_HDR(checkpoint, &stg_PTREC_WITHK_info, CCS_SYSTEM);
+    checkpoint->tvar = &retryTV;
+    checkpoint->read_value = PASTM_SUCCESS;
+    checkpoint->write_set = trec->write_set;
+    checkpoint->next = trec->read_set;
+    checkpoint->continuation = continuation;
+    checkpoint->prev_k = trec->lastK;
+    checkpoint->is_retry = TRUE;
+    trec->read_set = TO_WITHOUTK(checkpoint);
+    trec->lastK = checkpoint;
+    //NOTE: don't update the continuation count or the capture frequency
+    
+    StgPTRecOrElse * orelse = (StgPTRecOrElse*)allocate(cap, sizeofW(StgPTRecOrElse));
+    SET_HDR(checkpoint, &stg_PTREC_OR_ELSE_info, CCS_SYSTEM);
+    orelse->alt = alt;
+    orelse->read_set = checkpoint;
+    orelse->next = trec->retry_stack;
+    trec->retry_stack = orelse;
+}

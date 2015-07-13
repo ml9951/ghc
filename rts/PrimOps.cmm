@@ -1661,8 +1661,13 @@ stg_pretryzh()
 }
 
 stg_pcatchRetryzh (P_ first_code, /* :: STM a */
-                   P_ alt_code    /* :: STM a */)
+                   P_ alt_code,   /* :: STM a */
+                   P_ continuation)
 {
+
+    W_ trec;
+    
+    MAYBE_GC_PPP(stg_pcatchRetryzh, first_code, alt_code, continuation);
 
     return();
 }

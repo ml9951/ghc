@@ -2004,7 +2004,7 @@ primop  PAtomicallyOp "patomically#" GenPrimOp
    has_side_effects = True
 
 primop  PReadTVarOp "preadTVar#" GenPrimOp
-       TVar# s a -> (State# s -> a -> (# State# s, b #))
+       TVar# s a -> (a -> State# s -> (# State# s, b #))
     -> State# s -> (# State# s, a #)
    {Read contents of {\tt TVar\#}.  Result is not yet evaluated.}
    with
@@ -2040,6 +2040,7 @@ primop  PRetryOp "pretry#" GenPrimOp
 primop  PCatchRetryOp "pcatchRetry#" GenPrimOp
       (State# RealWorld -> (# State# RealWorld, a #) )
    -> (State# RealWorld -> (# State# RealWorld, a #) )
+   -> (b -> State# RealWorld -> (# State# RealWorld, a #) )
    -> (State# RealWorld -> (# State# RealWorld, a #) )
    with
    strictness  = { \ _arity -> mkClosedStrictSig [apply1Dmd,apply1Dmd,topDmd] topRes }
