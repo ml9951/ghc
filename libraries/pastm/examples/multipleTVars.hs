@@ -88,9 +88,8 @@ main = do
      mvs <- mkThreads numCapabilities
      writes <- join mvs
      let freq = MS.toOccurList (MS.fromList writes)
-     putStrLn ("Frequency = " ++ show freq)
      failed <- atomically $ check freq
-     mapM_ (\(i,freq,actual) -> putStrLn(show i ++ ": Count should be " ++ show actual ++ ", but found " ++ show freq)) failed
+     mapM_ (\(i,freq,actual) -> putStrLn(show i ++ ": Count should be " ++ show freq ++ ", but found " ++ show actual)) failed
      return()
 
 

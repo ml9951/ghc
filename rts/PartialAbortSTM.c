@@ -334,3 +334,13 @@ void p_stmCatchRetry(Capability *cap, StgPTRecHeader * trec,
     orelse->next = trec->retry_stack;
     trec->retry_stack = orelse;
 }
+
+void dummy1(){
+    printf("dummy1\n");
+}
+
+void dummy2(){
+    printf("dummy2\n");
+}
+
+

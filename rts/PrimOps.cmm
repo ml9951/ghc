@@ -1488,6 +1488,12 @@ stg_patomicallyzh (P_ stm)
 
     STK_CHK_GEN();
 
+#ifdef CPP_TEST
+    ccall dummy1();
+#else
+    ccall dummy2();
+#endif
+
     old_trec = StgTSO_ptrec(CurrentTSO);
 
     /* Start the memory transcation */
@@ -1668,9 +1674,23 @@ stg_pretryzh()
     ("ptr" alt) = ccall p_stmRetry(trec "ptr");
     
     jump stg_ap_v_fast(alt);
-
 }
 
+/*
+ * Catch a retry.  The current implementation has a slightly
+ * different semantics in that orElse is dynamically scoped.
+ * We could match the static scoping semantics from the original
+ * implementation by removing the orElse entry from the read set
+ * after the orElse code finishes, by pushing a frame onto the stack
+ * that immediatly splices the entry out of the read set. 
+ *
+ * For example:
+ * 
+ * atomically $ (do t <- (return 1 `orElse` return 2); if t == 1 then retry else return t) `orElse` return 3
+ * 
+ * It would probably make more sense for this to return 3 than 2
+ *
+ */
 stg_pcatchRetryzh (P_ first_code,     /* :: STM a */
                    P_ alt_code,       /* :: STM a */
                    P_ continuation)
