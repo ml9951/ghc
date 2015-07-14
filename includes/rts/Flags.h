@@ -178,6 +178,7 @@ typedef struct _MISC_FLAGS {
     rtsBool machineReadable;
     StgWord linkerMemBase;       /* address to ask the OS for memory
                                   * for the linker, NULL ==> off */
+    StgInt  which_stm;
 } MISC_FLAGS;
 
 #ifdef THREADED_RTS

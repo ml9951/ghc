@@ -3,12 +3,12 @@
 
 name:                pastm
 version:             0.1.0.0
-synopsis:            Partial Abort Software Transactional Memory
+synopsis:            STM
 -- description:         
 homepage:            https://github.com/ml9951/ghc.git
 -- license:             
 license-file:        LICENSE
-author:              Matthew Le
+author:              Matt Le
 maintainer:          ml9951@rit.edu
 -- copyright:           
 category:            Concurrency
@@ -17,9 +17,11 @@ extra-source-files:  changelog.md, README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Control.Concurrent.PASTM, Control.Concurrent.PASTM.Core, Control.Concurrent.PASTM.TArray, Control.Concurrent.PASTM.TBQueue, Control.Concurrent.PASTM.TChan, Control.Concurrent.PASTM.TMVar, Control.Concurrent.PASTM.TQueue, Control.Concurrent.PASTM.TSem, Control.Concurrent.PASTM.TVar, Control.Sequential.PASTM
+  exposed-modules:     Control.Concurrent.PASTM, Control.Concurrent.PASTM.Core, Control.Concurrent.PASTM.TArray, Control.Concurrent.PASTM.TBQueue, Control.Concurrent.PASTM.TChan, Control.Concurrent.PASTM.TMVar, Control.Concurrent.PASTM.TQueue, Control.Concurrent.PASTM.TSem, Control.Concurrent.PASTM.TVar, Control.Full.STM, Control.Sequential.PASTM
   -- other-modules:       
-  other-extensions:    CPP, Safe, Trustworthy, MagicHash, UnboxedTuples, Rank2Types, DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances
-  build-depends:       base >=4.8 && <4.9, array >=0.5 && <0.6, stm >=2.4 && <2.5
+  other-extensions:    CPP, Safe, Trustworthy, MagicHash, UnboxedTuples, Rank2Types, DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes, UndecidableInstances
+  build-depends:       base >=4.8 && <4.9, array >=0.5 && <0.6, ghc-prim
   -- hs-source-dirs:      
   default-language:    Haskell2010
+  Include-Dirs: Control/Full
+  C-Sources: Control/Full/CmmHooks.cmm, Control/Full/CCode.c

@@ -219,6 +219,8 @@ void initRtsFlagsDefaults(void)
     RtsFlags.MiscFlags.install_signal_handlers = rtsTrue;
     RtsFlags.MiscFlags.machineReadable = rtsFalse;
     RtsFlags.MiscFlags.linkerMemBase    = 0;
+    
+    RtsFlags.MiscFlags.which_stm = 0;
 
 #ifdef THREADED_RTS
     RtsFlags.ParFlags.nNodes            = 1;

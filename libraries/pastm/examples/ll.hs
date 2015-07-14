@@ -1,11 +1,15 @@
 {-# LANGUAGE CPP #-} 
 
 --To build with full abort: ghc -threaded -DFULL_ABORT ll.hs
+{-
 #ifdef FULL_ABORT
 import Control.Concurrent.STM hiding(check)   --full abort STM
 #else
 import Control.Concurrent.PASTM hiding(check)           --partial abort STM
 #endif
+-}
+
+import Control.Full.STM
 
 import Prelude hiding (lookup)
 import GHC.Conc(numCapabilities, forkIO)
