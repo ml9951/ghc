@@ -17,11 +17,11 @@ extra-source-files:  changelog.md, README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Control.Concurrent.PASTM, Control.Concurrent.PASTM.Core, Control.Concurrent.PASTM.TArray, Control.Concurrent.PASTM.TBQueue, Control.Concurrent.PASTM.TChan, Control.Concurrent.PASTM.TMVar, Control.Concurrent.PASTM.TQueue, Control.Concurrent.PASTM.TSem, Control.Concurrent.PASTM.TVar, Control.Full.STM, Control.Sequential.PASTM
+  exposed-modules:     Control.Partial.STM, Control.Full.STM
   -- other-modules:       
   other-extensions:    CPP, Safe, Trustworthy, MagicHash, UnboxedTuples, Rank2Types, DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes, UndecidableInstances
   build-depends:       base >=4.8 && <4.9, array >=0.5 && <0.6, ghc-prim
   -- hs-source-dirs:      
   default-language:    Haskell2010
-  Include-Dirs: Control/Full
-  C-Sources: Control/Full/CmmHooks.cmm, Control/Full/CCode.c
+  Include-Dirs: /Users/ml9951/repositories/ghc/rts, /Users/ml9951/repositories/ghc/rts/sm, Control/Partial, Control/Full
+  C-Sources: Control/Partial/CmmHooks.cmm, Control/Partial/CCode.c, Control/Full/CmmHooks.cmm, Control/Full/CCode.c

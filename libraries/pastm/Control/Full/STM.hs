@@ -43,15 +43,13 @@ import GHC.Conc.Sync(TVar(..), readTVarIO, newTVarIO)
 import GHC.Base(State#, RealWorld, IO(..), ap, newTVar#, TVar#)
 import GHC.Prim(Any, unsafeCoerce# )
 
-newtype STM a = STM {unSTM :: forall r . --r is the type of the final result
-                                 (a -> State# RealWorld -> (# State# RealWorld, r #)) -> --Continuation
-                                 State# RealWorld ->                                     --Incoming State
-                                 (# State# RealWorld, r #)}                              --New state and result
+newtype STM a = STM {unSTM :: State# RealWorld ->                                     --Incoming State
+                              (# State# RealWorld, a #)}                              --New state and result
 
 instance Monad STM where
-    return a = STM $ \c -> \s -> c a s
-    m >>= k = STM $ \c -> \s -> unSTM m (\a -> \s' -> unSTM (k a) c s') s
-
+    return a = STM $ \s -> (# s, a #)
+    m >>= k = STM $ \s -> case unSTM m s of
+                             (# s', t #) -> unSTM (k t) s'
 instance Applicative STM where
     (<*>) = ap
     pure  = return
@@ -61,24 +59,19 @@ instance  Functor STM where
 
 
 readTVar :: TVar a -> STM a
-readTVar (TVar tv) = STM $ \c -> \s-> case unsafeCoerce# readTVar# tv c s of
-                                        (# s', t #) -> c t s'
-
+readTVar (TVar tv) = STM $ \s-> unsafeCoerce# readTVar# tv s 
 
 writeTVar :: TVar a -> a -> STM ()
-writeTVar (TVar tv) a = STM $ \c -> \s -> 
+writeTVar (TVar tv) a = STM $ \s -> 
           case unsafeCoerce# writeTVar# tv a s of
-               (# s', () #) -> c () s'
+               (# s', _ #) -> (# s', () #)
 
 newTVar :: a -> STM (TVar a)
-newTVar x = STM $ \c -> \s -> case newTVar# x s of
-                                (# s', tv #) -> c (TVar tv) s'
-
-initK :: a -> State# RealWorld -> (# State# RealWorld, a #)
-initK a s = (# s, a #)
+newTVar x = STM $ \s -> case newTVar# x s of
+                            (# s', tv #) -> (# s', TVar tv #)
 
 atomically :: STM a -> IO a
-atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c initK) s)
+atomically (STM c) = IO (\s -> unsafeCoerce# atomically# c s)
 
 {-
 -- |Retry execution of the current memory transaction because it has seen
@@ -100,8 +93,6 @@ orElse (STM m) e = STM $ \c -> \s ->
        in pcatchRetry# m' (unSTM e c) (\a -> m') s
 -}
 
-
-
 foreign import prim "stg_full_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
 {-         FFI won't accept this type...
@@ -109,12 +100,10 @@ foreign import prim "stg_full_atomicallyzh" atomically#
             -> State# RealWorld -> (# State# RealWorld, b #)
 -} 
 
-
 foreign import prim "stg_full_readTVarzh" readTVar#
-        :: TVar# s a -> Any()
-            -> State# s -> (# State# s, a #)
-        
+        :: TVar# s a -> State# s -> (# State# s, a #)
+
 foreign import prim "stg_full_writeTVarzh" writeTVar#
-        :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, () #)
+        :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
 
 

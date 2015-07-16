@@ -1,15 +1,15 @@
-{-# LANGUAGE CPP #-} 
+{-# LANGUAGE CPP, ForeignFunctionInterface #-} 
 
 --To build with full abort: ghc -threaded -DFULL_ABORT ll.hs
-{-
-#ifdef FULL_ABORT
-import Control.Concurrent.STM hiding(check)   --full abort STM
-#else
-import Control.Concurrent.PASTM hiding(check)           --partial abort STM
-#endif
--}
 
-import Control.Full.STM
+#ifdef STMHASKELL
+import Control.Concurrent.STM hiding(check)   --full abort STM
+#endif
+#ifdef FABORT
+import Control.Full.STM           --full abort STM (NoRec)
+#else
+import Control.Partial.STM
+#endif
 
 import Prelude hiding (lookup)
 import GHC.Conc(numCapabilities, forkIO)
@@ -17,9 +17,9 @@ import Control.Concurrent.MVar
 import Control.Exception
 import Dump
 import Data.Map(Map, empty)
-import System.CPUTime
-import Text.Printf
 import STMStats
+import Text.Printf
+
 
 data STMList a = Head (TVar (STMList a))
                | Null
@@ -138,17 +138,21 @@ toList l = do
                  tl' <- toList tl
                  return(hd : tl')
 
+llBench stmList = do
+        mvars <- mkThreads stmList numCapabilities
+        stats <- join mvars
+        return(stats)
+        
 main = do
      stmList <- newList
-     startTime <- getCPUTime
+     start <- getTime
      mvars <- mkThreads stmList numCapabilities
-     stats <- join mvars --wait for everyone to finish adding to list
-     endTime <- getCPUTime
-     let diff = (fromIntegral (endTime - startTime)) / (10^12)
-     printf "Computation time: %0.3f sec\n" (diff :: Double)
+     stats <- join mvars
+     end <- getTime
+     printf "Computation time: %0.3f sec\n" (end - start :: Double)
      printStats stats
      check stmList `catch` \ msg -> do raw <- toList stmList; putStrLn (show (msg::AssertionFailed) ++ show raw)
      return()
 
 
-
+foreign import ccall unsafe "hs_gettime" getTime :: IO Double

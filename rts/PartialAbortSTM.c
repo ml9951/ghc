@@ -210,6 +210,15 @@ void p_stmWriteTVar(Capability *cap,
     trec->write_set = newEntry;
 }
 
+void stmPushWriteSet(Capability * cap, StgWriteSet * write_set){
+    while(write_set != TO_WRITE_SET(NO_PTREC)){
+        StgTVar * tvar = write_set->tvar;
+        tvar->current_value = write_set->val;
+        dirty_TVAR(cap,tvar);
+        write_set = write_set->next;
+    }
+}
+
 /*
  * This function validates the log.  If validation succeeds, then 
  * it returns "(StgClosure*)0".  If it fails, but was unable to 
@@ -229,16 +238,10 @@ StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
         snapshot = trec->read_version;
     }
     
-    int i = 0;
     StgWriteSet * write_set = trec->write_set;
-    while(write_set != TO_WRITE_SET(NO_PTREC)){
-        StgTVar * tvar = write_set->tvar;
-        tvar->current_value = write_set->val;
-        dirty_TVAR(cap,tvar);
-        write_set = write_set->next;
-        i++;
-    }
-    TRACE("Committing transaction, version clock is currently %lu, soon to be %lu (must currently be odd), pushing %d writes\n", version_clock, snapshot+2, i);
+    stmPushWriteSet(cap, write_set);
+
+    TRACE("Committing transaction, version clock is currently %lu, soon to be %lu (must currently be odd)\n", version_clock, snapshot+2);
     version_clock = snapshot + 2;//unlock clock
     return (StgPTRecWithK *)PASTM_SUCCESS;
 }
