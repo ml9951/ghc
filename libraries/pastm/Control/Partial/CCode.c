@@ -56,26 +56,59 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
     return ptrec;
 }
 
-static StgClosure * pa_validate(StgPTRecHeader * trec){
+static StgPTRecWithK * pa_validate(StgPTRecHeader * trec){
     while(TRUE){
         unsigned long time = version_clock;
         if((time & 1) != 0){
             continue; //clock is locked
         }
-
         trec->read_version = time;
         //validate read set
         StgPTRecWithoutK * ptr = trec->read_set;
-
+        StgPTRecWithK *checkpoint = TO_WITHK(PASTM_SUCCESS);
+        StgInt kCount = 0;
         while(ptr != TO_WITHOUTK(NO_PTREC)){
-	  
-		    if(ptr->read_value != ptr->tvar->current_value){
-			    return PASTM_FAIL;
-			}
-			ptr = ptr->next;
-		}
+            if(ptr->header.info == WITHK_HEADER){ // this is a WithK entry
+                StgPTRecWithK * withK = TO_WITHK(ptr);
+                if(withK->read_value != withK->tvar->current_value){
+                    checkpoint = TO_WITHK(PASTM_FAIL);
+                    ptr = ptr->next;
+                    kCount = 0;
+                    continue;
+                }else if(checkpoint == TO_WITHK(PASTM_FAIL)){ //Valid and we need a checkpoint
+                    checkpoint = withK;
+                }
+                kCount++;
+            }else if(ptr->read_value != ptr->tvar->current_value){  //WithoutK entry
+                checkpoint = TO_WITHK(PASTM_FAIL);
+                kCount = 0;
+            }
+            ptr = ptr->next;
+        }
+        if(checkpoint == TO_WITHK(PASTM_FAIL)){ //no checkpoint found, but we need to abort
+            return checkpoint;
+        }
+        if(checkpoint != TO_WITHK(PASTM_SUCCESS)){ //validation failed, but we found a checkpoint
+            //try reading from this tvar
+            StgTVar * tvar = checkpoint->tvar;
+            StgClosure * val = tvar->current_value;
+            if(time == version_clock){
+                checkpoint->read_value = val; //apply the continuation to this in C--
+                trec->read_set = TO_WITHOUTK(checkpoint);
+                trec->write_set = checkpoint->write_set;
+                trec->lastK = checkpoint;
+                StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+                trec->capture_freq = capture_freq | (capture_freq >> 32);
+                trec->numK = kCount;
+                return checkpoint;
+            }else{
+                continue; //revalidate the whole log
+            }
+            
+        }
+
         if(time == version_clock){
-		    return PASTM_SUCCESS; //necessarily PASTM_SUCCESS
+            return checkpoint; //necessarily PASTM_SUCCESS
         }
         //Validation succeeded, but someone else committed in the meantime, loop back around...
     }
@@ -169,28 +202,25 @@ void pa_stmWriteTVar(Capability *cap,
     trec->write_set = newEntry;
 }
 
-StgClosure * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     unsigned long snapshot = trec->read_version;
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
-        StgClosure * res = pa_validate(trec);
-        if(res != PASTM_SUCCESS){
+        StgPTRecWithK * checkpoint = pa_validate(trec);
+        if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
             //The validate function sets up the trec with the appropriate read/write sets
-            return res;
+            return checkpoint;
         }
         snapshot = trec->read_version;
     }
-   
+    
     StgWriteSet * write_set = trec->write_set;
-    while(write_set != TO_WRITE_SET(NO_PTREC)){
+	while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;
         dirty_TVAR(cap,tvar);
         write_set = write_set->next;
     }
+
     version_clock = snapshot + 2;//unlock clock
-    return PASTM_SUCCESS;
+    return (StgPTRecWithK *)PASTM_SUCCESS;
 }
-
-
-
-

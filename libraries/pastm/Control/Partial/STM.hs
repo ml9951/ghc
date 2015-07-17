@@ -15,7 +15,7 @@
 -- Portability :  non-portable (requires PASTM)
 --
 -- Software Transactional Memory: a modular composable concurrency
--- abstraction.  See
+-- abstraction.  
 --
 --  * This contains the core STM operations
 --
@@ -63,7 +63,6 @@ readTVar :: TVar a -> STM a
 readTVar (TVar tv) = STM $ \c -> \s-> case unsafeCoerce# readTVar# tv c s of
                                         (# s', t #) -> c t s'
 
-
 writeTVar :: TVar a -> a -> STM ()
 writeTVar (TVar tv) a = STM $ \c -> \s -> 
           case unsafeCoerce# writeTVar# tv a s of
@@ -99,18 +98,18 @@ orElse (STM m) e = STM $ \c -> \s ->
        in pcatchRetry# m' (unSTM e c) (\a -> m') s
 -}
 
-foreign import prim "stg_partial_atomicallyzh" atomically# 
+foreign import prim safe "stg_partial_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
 {-         FFI won't accept this type...
         :: (State# RealWorld -> (# State# RealWorld , b #) )
             -> State# RealWorld -> (# State# RealWorld, b #)
 -} 
 
-foreign import prim "stg_partial_readTVarzh" readTVar#
+foreign import prim safe "stg_partial_readTVarzh" readTVar#
         :: TVar# s a -> Any()
             -> State# s -> (# State# s, a #)
 
-foreign import prim "stg_partial_writeTVarzh" writeTVar#
+foreign import prim safe "stg_partial_writeTVarzh" writeTVar#
         :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
 
 

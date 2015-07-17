@@ -46,7 +46,9 @@ INFO_TABLE_RET(stg_partial_atomically_frame, ATOMICALLY_FRAME,
         stat = stat + 1;
         StgPASTMStats_commitTimeFullAborts(stats) = stat;
 
-        ("ptr" trec) = ccall pa_stmStartTransaction(MyCapability() "ptr");
+		trec = StgTSO_ptrec(CurrentTSO);
+		
+        ("ptr" trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", trec "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
 
