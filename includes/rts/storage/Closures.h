@@ -446,6 +446,7 @@ typedef struct StgPTRecHeader_ {
     StgHeader                  header;
     StgPTRecWithoutK          *read_set;
     StgPTRecWithK             *lastK;
+    StgPTRecWithoutK          *tail; //last element of linked list
     StgWriteSet               *write_set;
     StgPTRecOrElse            *retry_stack;
     unsigned long              read_version;

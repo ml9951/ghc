@@ -530,7 +530,7 @@ CLOSURE(stg_NO_TREC_closure,stg_NO_TREC);
 /* -----------------------------------------------------------------------------
    Partial Abort STM
    -------------------------------------------------------------------------- */
-INFO_TABLE(stg_PTREC_HEADER, 4, 3, MUT_PRIM, "PTREC_HEADER", "PTREC_HEADER")
+INFO_TABLE(stg_PTREC_HEADER, 5, 3, MUT_PRIM, "PTREC_HEADER", "PTREC_HEADER")
 { foreign "C" barf("PTREC_HEADER object entered!") never returns; }
 
 INFO_TABLE(stg_WRITE_SET, 3, 0, CONSTR, "WRITE_SET", "WRITE_SET")
@@ -544,6 +544,13 @@ INFO_TABLE(stg_PTREC_WITHK, 6, 1, CONSTR, "PTREC_WITHK", "PTREC_WITHK")
 
 INFO_TABLE(stg_PTREC_OR_ELSE, 3, 0, CONSTR, "PTREC_OR_ELSE", "PTREC_OR_ELSE")
 { foreign "C" barf("PTREC_OR_ELSE object entered!") never returns; }
+
+//Mutable headers for read set elements
+INFO_TABLE(stg_PTREC_WITHOUTK_MUT, 3, 0, MUT_PRIM, "PTREC_WITHOUTK_MUT", "PTREC_WITHOUTK_MUT")
+{ foreign "C" barf("PTREC_WITHOUTK_MUT object entered!") never returns; }
+
+INFO_TABLE(stg_PTREC_WITHK_MUT, 6, 1, MUT_PRIM, "PTREC_WITHK_MUT", "PTREC_WITHK_MUT")
+{ foreign "C" barf("PTREC_WITHK_MUT object entered!") never returns; }
 
 INFO_TABLE_CONSTR(stg_NO_PTREC,0,0,0,CONSTR_NOCAF_STATIC,"NO_PTREC","NO_PTREC")
 { foreign "C" barf("NO_PTREC object entered!") never returns; }

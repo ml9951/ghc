@@ -17,7 +17,7 @@ extra-source-files:  changelog.md, README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Control.Partial.STM, Control.Full.STM
+  exposed-modules:     Control.Partial.STM, Control.Full.STM, Control.Concurrent.PASTM.Core
   -- other-modules:       
   other-extensions:    CPP, Safe, Trustworthy, MagicHash, UnboxedTuples, Rank2Types, DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes, UndecidableInstances
   build-depends:       base >=4.8 && <4.9, array >=0.5 && <0.6, ghc-prim

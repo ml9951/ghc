@@ -40,6 +40,8 @@ StgPTRecHeader * fa_stmStartTransaction(Capability *cap) {
     ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
 
+	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+
     ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
 
     //get a read version
@@ -66,20 +68,20 @@ static StgClosure * fa_validate(StgPTRecHeader * trec){
 
         while(ptr != TO_WITHOUTK(NO_PTREC)){
 	  
-	  if(ptr->read_value != ptr->tvar->current_value){
-	    return PASTM_FAIL;
-	  }
-	  ptr = ptr->next;
-	}
+		    if(ptr->read_value != ptr->tvar->current_value){
+			    return PASTM_FAIL;
+			}
+			ptr = ptr->next;
+		}
         if(time == version_clock){
-	  return PASTM_SUCCESS; //necessarily PASTM_SUCCESS
+		    return PASTM_SUCCESS; //necessarily PASTM_SUCCESS
         }
         //Validation succeeded, but someone else committed in the meantime, loop back around...
     }
 }
 
 StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
-			    StgTVar * tvar, StgClosure * k){
+							StgTVar * tvar){
     StgWriteSet * ws = trec->write_set;
 
     while(ws != TO_WRITE_SET(NO_PTREC)){
@@ -101,6 +103,7 @@ StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     
     StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
     SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
+
     entry->tvar = tvar;
     entry->read_value = val;
     entry->next = trec->read_set;
@@ -115,7 +118,7 @@ void fa_stmWriteTVar(Capability *cap,
                     StgClosure *new_value) {
     StgWriteSet * newEntry = (StgWriteSet *) allocate(cap, sizeofW(StgWriteSet));
     SET_HDR(newEntry , &stg_WRITE_SET_info, CCS_SYSTEM);
-    newEntry->tvar = tvar;
+	newEntry->tvar = tvar;
     newEntry->val = new_value;
     newEntry->next = trec->write_set;
     trec->write_set = newEntry;

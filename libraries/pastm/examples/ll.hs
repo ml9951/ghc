@@ -4,8 +4,7 @@
 
 #ifdef STMHASKELL
 import Control.Concurrent.STM hiding(check)   --full abort STM
-#endif
-#ifdef FABORT
+#elif defined(FABORT)
 import Control.Full.STM           --full abort STM (NoRec)
 #else
 import Control.Partial.STM

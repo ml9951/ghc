@@ -95,13 +95,8 @@ stg_partial_atomicallyzh (P_ stm)
     old_trec = StgTSO_ptrec(CurrentTSO);
 
     /* Start the memory transcation */
-    ("ptr" new_trec) = ccall pa_stmStartTransaction(MyCapability() "ptr");
+    ("ptr" new_trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
     StgTSO_ptrec(CurrentTSO) = new_trec;
-
-    /* Nested transactions are idempotent */ 
-    if (old_trec != NO_PTREC) {
-        jump stg_ap_v_fast(stm);
-    }
 
     code = stm;
     next_invariant = END_INVARIANT_CHECK_QUEUE;
@@ -214,11 +209,11 @@ stg_partial_readTVarzh (P_ tvar, P_ k)
     W_ header;
     
     // Call to stmReadTVar may allocate
-    MAYBE_GC_PP (stg_preadTVarzh, tvar, k);
+    MAYBE_GC_PP (stg_partial_readTVarzh, tvar, k);
 
     trec = StgTSO_ptrec(CurrentTSO);
-    ("ptr" result) = ccall p_stmReadTVar(MyCapability() "ptr", trec "ptr",
-                                         tvar "ptr", k "ptr");
+    ("ptr" result) = ccall pa_stmReadTVar(MyCapability() "ptr", trec "ptr",
+										  tvar "ptr", k "ptr");
 
     if(result == PASTM_FAIL){
         jump stg_partial_eagerFullAbort []; //full abort
@@ -241,11 +236,11 @@ stg_partial_writeTVarzh (P_ tvar,     /* :: TVar a */
     W_ trec;
 
     // Call to stmWriteTVar may allocate
-    MAYBE_GC_PP (stg_pwriteTVarzh, tvar, new_value);
+    MAYBE_GC_PP (stg_partial_writeTVarzh, tvar, new_value);
 
     trec = StgTSO_ptrec(CurrentTSO);
     ccall pa_stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
-			  new_value "ptr");
+						  new_value "ptr");
     return (tvar);
 }
 

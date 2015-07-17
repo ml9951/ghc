@@ -57,7 +57,6 @@ instance Applicative STM where
 instance  Functor STM where
     fmap f m = m >>= (return . f)
 
-
 readTVar :: TVar a -> STM a
 readTVar (TVar tv) = STM $ \s-> unsafeCoerce# readTVar# tv s 
 

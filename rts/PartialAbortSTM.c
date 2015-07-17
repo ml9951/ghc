@@ -43,6 +43,8 @@ StgPTRecHeader * p_stmStartTransaction(Capability *cap) {
     ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
 
+    ptrec->tail = TO_WITHOUTK(NO_PTREC);
+
     ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
 
     //get a read version
@@ -337,13 +339,4 @@ void p_stmCatchRetry(Capability *cap, StgPTRecHeader * trec,
     orelse->next = trec->retry_stack;
     trec->retry_stack = orelse;
 }
-
-void dummy1(){
-    printf("dummy1\n");
-}
-
-void dummy2(){
-    printf("dummy2\n");
-}
-
 

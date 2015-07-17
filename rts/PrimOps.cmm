@@ -1488,12 +1488,6 @@ stg_patomicallyzh (P_ stm)
 
     STK_CHK_GEN();
 
-#ifdef CPP_TEST
-    ccall dummy1();
-#else
-    ccall dummy2();
-#endif
-
     old_trec = StgTSO_ptrec(CurrentTSO);
 
     /* Start the memory transcation */
