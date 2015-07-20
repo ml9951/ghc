@@ -290,6 +290,15 @@ initCapability( Capability *cap, nat i )
     
     cap->free_ptrec_items = NO_PTREC;
 
+    StgPASTMStats * stats = (StgPASTMStats*)stgMallocBytes(sizeof(StgPASTMStats), "stm stats");
+    SET_HDR(stats, &stg_PASTM_STATS_info, cap->r.rCCCS);
+    stats->eagerPartialAborts = 0;
+    stats->eagerFullAborts = 0;
+    stats->commitTimePartialAborts = 0;
+    stats->commitTimeFullAborts = 0;
+    stats->numCommits = 0;
+    cap->pastmStats = stats;
+
     cap->transaction_tokens = 0;
     cap->context_switch = 0;
     cap->pinned_object_block = NULL;
