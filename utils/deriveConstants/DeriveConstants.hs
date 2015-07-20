@@ -427,7 +427,6 @@ wanteds = concat
           ,closureField  C    "StgTSO"      "saved_errno"
           ,closureField  C    "StgTSO"      "trec"
           ,closureField  C    "StgTSO"      "ptrec"
-          ,closureField  C    "StgTSO"      "pastmStats"
           ,closureField  C    "StgTSO"      "flags"
           ,closureField  C    "StgTSO"      "dirty"
           ,closureField  C    "StgTSO"      "bq"
