@@ -331,6 +331,7 @@ data GeneralFlag
    | Opt_PrintExplicitForalls
    | Opt_PrintExplicitKinds
    | Opt_PrintUnicodeSyntax
+   | Opt_PrintExpandedSynonyms
 
    -- optimisation opts
    | Opt_CallArity
@@ -408,7 +409,6 @@ data GeneralFlag
    | Opt_HelpfulErrors
    | Opt_DeferTypeErrors
    | Opt_DeferTypedHoles
-   | Opt_Parallel
    | Opt_PIC
    | Opt_SccProfilingOn
    | Opt_Ticky
@@ -524,6 +524,7 @@ data WarningFlag =
    | Opt_WarnMissingExportedSigs
    | Opt_WarnUntickedPromotedConstructors
    | Opt_WarnDerivingTypeable
+   | Opt_WarnDeferredTypeErrors
    deriving (Eq, Show, Enum)
 
 data Language = Haskell98 | Haskell2010
@@ -1196,7 +1197,6 @@ data Way
   | WayDebug
   | WayProf
   | WayEventLog
-  | WayPar
   | WayDyn
   deriving (Eq, Ord, Show)
 
@@ -1231,7 +1231,6 @@ wayTag WayDebug    = "debug"
 wayTag WayDyn      = "dyn"
 wayTag WayProf     = "p"
 wayTag WayEventLog = "l"
-wayTag WayPar      = "mp"
 
 wayRTSOnly :: Way -> Bool
 wayRTSOnly (WayCustom {}) = False
@@ -1240,7 +1239,6 @@ wayRTSOnly WayDebug    = True
 wayRTSOnly WayDyn      = False
 wayRTSOnly WayProf     = False
 wayRTSOnly WayEventLog = True
-wayRTSOnly WayPar      = False
 
 wayDesc :: Way -> String
 wayDesc (WayCustom xs) = xs
@@ -1249,7 +1247,6 @@ wayDesc WayDebug    = "Debug"
 wayDesc WayDyn      = "Dynamic"
 wayDesc WayProf     = "Profiling"
 wayDesc WayEventLog = "RTS Event Logging"
-wayDesc WayPar      = "Parallel"
 
 -- Turn these flags on when enabling this way
 wayGeneralFlags :: Platform -> Way -> [GeneralFlag]
@@ -1266,7 +1263,6 @@ wayGeneralFlags _ WayDyn      = [Opt_PIC]
     -- modules of the main program with -fPIC when using -dynamic.
 wayGeneralFlags _ WayProf     = [Opt_SccProfilingOn]
 wayGeneralFlags _ WayEventLog = []
-wayGeneralFlags _ WayPar      = [Opt_Parallel]
 
 -- Turn these flags off when enabling this way
 wayUnsetGeneralFlags :: Platform -> Way -> [GeneralFlag]
@@ -1280,7 +1276,6 @@ wayUnsetGeneralFlags _ WayDyn      = [-- There's no point splitting objects
                                       Opt_SplitObjs]
 wayUnsetGeneralFlags _ WayProf     = []
 wayUnsetGeneralFlags _ WayEventLog = []
-wayUnsetGeneralFlags _ WayPar      = []
 
 wayExtras :: Platform -> Way -> DynFlags -> DynFlags
 wayExtras _ (WayCustom {}) dflags = dflags
@@ -1289,7 +1284,6 @@ wayExtras _ WayDebug    dflags = dflags
 wayExtras _ WayDyn      dflags = dflags
 wayExtras _ WayProf     dflags = dflags
 wayExtras _ WayEventLog dflags = dflags
-wayExtras _ WayPar      dflags = exposePackage' "concurrent" dflags
 
 wayOptc :: Platform -> Way -> [String]
 wayOptc _ (WayCustom {}) = []
@@ -1301,7 +1295,6 @@ wayOptc _ WayDebug      = []
 wayOptc _ WayDyn        = []
 wayOptc _ WayProf       = ["-DPROFILING"]
 wayOptc _ WayEventLog   = ["-DTRACING"]
-wayOptc _ WayPar        = ["-DPAR", "-w"]
 
 wayOptl :: Platform -> Way -> [String]
 wayOptl _ (WayCustom {}) = []
@@ -1319,9 +1312,6 @@ wayOptl _ WayDebug      = []
 wayOptl _ WayDyn        = []
 wayOptl _ WayProf       = []
 wayOptl _ WayEventLog   = []
-wayOptl _ WayPar        = ["-L${PVM_ROOT}/lib/${PVM_ARCH}",
-                           "-lpvm3",
-                           "-lgpvm3"]
 
 wayOptP :: Platform -> Way -> [String]
 wayOptP _ (WayCustom {}) = []
@@ -1330,7 +1320,6 @@ wayOptP _ WayDebug    = []
 wayOptP _ WayDyn      = []
 wayOptP _ WayProf     = ["-DPROFILING"]
 wayOptP _ WayEventLog = ["-DTRACING"]
-wayOptP _ WayPar      = ["-D__PARALLEL_HASKELL__"]
 
 whenGeneratingDynamicToo :: MonadIO m => DynFlags -> m () -> m ()
 whenGeneratingDynamicToo dflags f = ifGeneratingDynamicToo dflags f (return ())
@@ -2245,7 +2234,6 @@ dynamic_flags = [
     ------- ways ---------------------------------------------------------------
   , defGhcFlag "prof"           (NoArg (addWay WayProf))
   , defGhcFlag "eventlog"       (NoArg (addWay WayEventLog))
-  , defGhcFlag "parallel"       (NoArg (addWay WayPar))
   , defGhcFlag "smp"
       (NoArg (addWay WayThreaded >> deprecate "Use -threaded instead"))
   , defGhcFlag "debug"          (NoArg (addWay WayDebug))
@@ -2848,6 +2836,7 @@ fWarningFlags = [
   flagSpec' "warn-amp"                        Opt_WarnAMP
     (\_ -> deprecate "it has no effect, and will be removed in GHC 7.12"),
   flagSpec "warn-auto-orphans"                Opt_WarnAutoOrphans,
+  flagSpec "warn-deferred-type-errors"        Opt_WarnDeferredTypeErrors,
   flagSpec "warn-deprecations"                Opt_WarnWarningsDeprecations,
   flagSpec "warn-deprecated-flags"            Opt_WarnDeprecatedFlags,
   flagSpec "warn-deriving-typeable"           Opt_WarnDerivingTypeable,
@@ -2980,6 +2969,7 @@ fFlags = [
   flagSpec "print-explicit-foralls"           Opt_PrintExplicitForalls,
   flagSpec "print-explicit-kinds"             Opt_PrintExplicitKinds,
   flagSpec "print-unicode-syntax"             Opt_PrintUnicodeSyntax,
+  flagSpec "print-expanded-synonyms"          Opt_PrintExpandedSynonyms,
   flagSpec "prof-cafs"                        Opt_AutoSccsOnIndividualCafs,
   flagSpec "prof-count-entries"               Opt_ProfCountEntries,
   flagSpec "regs-graph"                       Opt_RegsGraph,
@@ -3218,7 +3208,8 @@ defaultFlags settings
 
     ++ (if pc_DYNAMIC_BY_DEFAULT (sPlatformConstants settings)
         then wayGeneralFlags platform WayDyn
-        else [])
+        else [Opt_Static])
+        -- Opt_Static needs to be set if and only if WayDyn is not used (#7478)
 
     where platform = sTargetPlatform settings
 
@@ -3226,6 +3217,12 @@ default_PIC :: Platform -> [GeneralFlag]
 default_PIC platform =
   case (platformOS platform, platformArch platform) of
     (OSDarwin, ArchX86_64) -> [Opt_PIC]
+    (OSOpenBSD, ArchX86_64) -> [Opt_PIC] -- Due to PIE support in
+                                         -- OpenBSD since 5.3 release
+                                         -- (1 May 2013) we need to
+                                         -- always generate PIC. See
+                                         -- #10597 for more
+                                         -- information.
     _                      -> []
 
 impliedGFlags :: [(GeneralFlag, TurnOnFlag, GeneralFlag)]
@@ -3344,6 +3341,7 @@ standardWarnings -- see Note [Documenting warning flags]
     = [ Opt_WarnOverlappingPatterns,
         Opt_WarnWarningsDeprecations,
         Opt_WarnDeprecatedFlags,
+        Opt_WarnDeferredTypeErrors,
         Opt_WarnTypedHoles,
         Opt_WarnPartialTypeSignatures,
         Opt_WarnUnrecognisedPragmas,

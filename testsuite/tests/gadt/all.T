@@ -1,5 +1,3 @@
-setTestOpts(only_compiler_types(['ghc']))
-
 # setTestOpts(only_ways(['normal']));
 # Not only-normal: want optimisation too, to check coercion optimiser
 
@@ -72,7 +70,7 @@ test('karl2', normal, compile, [''])
 test('data1', normal, compile, [''])
 test('data2', normal, compile, [''])
 
-test('termination', normal, compile, [''])
+test('termination', expect_broken_for(10658, ['optasm', 'optllvm']), compile, [''])
 test('set', normal, compile, [''])
 test('scoped', normal, compile, [''])
 test('gadt-escape1', normal, compile_fail, [''])

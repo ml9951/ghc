@@ -85,6 +85,14 @@
                     This is similar to using <option>-ddump-to-file</option> with <option>-ddump-splices</option> but it always generates a file instead of being coupled to <option>-ddump-to-file</option> and only outputs code that does not exist in the .hs file and a comment for the splice location in the original file.
                 </para>
            </listitem>
+           <listitem>
+               <para>
+                   Added the option <option>-fprint-expanded-types</option>.
+
+                   When enabled, GHC also prints type-synonym-expanded types in
+                   type errors.
+               </para>
+           </listitem>
        </itemizedlist>
     </sect3>
 
@@ -100,6 +108,11 @@
                     The <literal>:back</literal> and <literal>:forward</literal>
                     commands now take an optional count allowing the user to move forward or
                     backward in history several steps at a time.
+               </para>
+               <para>
+                    Added commands <literal>:load!</literal> and <literal>:reload!</literal>,
+                    effectively setting "-fdefer-type-errors" before loading a module and
+                    unsetting it after loading if it has not been set before (#8353).
                </para>
            </listitem>
        </itemizedlist>
@@ -117,7 +130,12 @@
                     Splices and quasi-quotes continue to only be supported by a
                     stage 2 compiler.
                </para>
-           </listitem>
+            </listitem>
+            <listitem>
+                <para>
+                    Partial type signatures can now be used in splices, see <xref linkend="pts-where"/>.
+                </para>
+            </listitem>
        </itemizedlist>
     </sect3>
 

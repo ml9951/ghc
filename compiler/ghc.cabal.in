@@ -259,6 +259,8 @@ Library
         CoreTidy
         CoreUnfold
         CoreUtils
+        CoreSeq
+        CoreStats
         MkCore
         PprCore
         Check
@@ -506,7 +508,7 @@ Library
             TargetReg
             NCGMonad
             Instruction
-            Size
+            Format
             Reg
             RegClass
             PIC

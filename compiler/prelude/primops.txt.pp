@@ -2501,7 +2501,11 @@ primop  TagToEnumOp "tagToEnum#" GenPrimOp
 
 ------------------------------------------------------------------------
 section "Bytecode operations"
-        {Support for the bytecode interpreter and linker.}
+        {Support for manipulating bytecode objects used by the interpreter and
+        linker.
+
+        Bytecode objects are heap objects which represent top-level bindings and
+        contain a list of instructions and data needed by these instructions.}
 ------------------------------------------------------------------------
 
 primtype BCO#
@@ -2515,11 +2519,17 @@ primop   AddrToAnyOp "addrToAny#" GenPrimOp
 
 primop   MkApUpd0_Op "mkApUpd0#" GenPrimOp
    BCO# -> (# a #)
+   {Wrap a BCO in a {\tt AP_UPD} thunk which will be updated with the vaule of
+   the BCO when evaluated.}
    with
    out_of_line = True
 
 primop  NewBCOOp "newBCO#" GenPrimOp
    ByteArray# -> ByteArray# -> Array# a -> Int# -> ByteArray# -> State# s -> (# State# s, BCO# #)
+   {{\tt newBCO\#} instrs lits ptrs arity bitmap} creates a new bytecode object. The
+   resulting object encodes a function of the given arity with the instructions
+   encoded in {\tt instrs}, and a static reference table usage bitmap given by
+   {\tt bitmap}.}
    with
    has_side_effects = True
    out_of_line      = True

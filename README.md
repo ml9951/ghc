@@ -35,8 +35,8 @@ you to join!
   [4]:  http://www.haskell.org/happy/          "www.haskell.org/happy/"
   [5]:  http://www.haskell.org/alex/           "www.haskell.org/alex/"
   [6]:  http://www.haskell.org/haddock/        "www.haskell.org/haddock/"
-  [7]:  http://ghc.haskell.org/trac/ghc/wiki/Building/SyncAll
-          "http://ghc.haskell.org/trac/ghc/wiki/Building/SyncAll"
+  [7]: https://ghc.haskell.org/trac/ghc/wiki/Building/GettingTheSources#GettingaGHCrepositoryfromGitHub
+          "https://ghc.haskell.org/trac/ghc/wiki/Building/GettingTheSources#GettingaGHCrepositoryfromGitHub"
   [8]:  http://ghc.haskell.org/trac/ghc/wiki/Building/Preparation
           "http://ghc.haskell.org/trac/ghc/wiki/Building/Preparation"
   [9]:  http://www.haskell.org/cabal/          "http://www.haskell.org/cabal/"

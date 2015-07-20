@@ -1230,6 +1230,7 @@ data Lit = CharL Char
          | FloatPrimL Rational
          | DoublePrimL Rational
          | StringPrimL [Word8]  -- ^ A primitive C-style string, type Addr#
+         | CharPrimL Char
     deriving( Show, Eq, Ord, Data, Typeable, Generic )
 
     -- We could add Int, Float, Double etc, as we do in HsLit,
@@ -1480,6 +1481,7 @@ data Type = ForallT [TyVarBndr] Cxt Type  -- ^ @forall \<vars\>. \<ctxt\> -> \<t
           | StarT                         -- ^ @*@
           | ConstraintT                   -- ^ @Constraint@
           | LitT TyLit                    -- ^ @0,1,2, etc.@
+          | WildCardT (Maybe Name)        -- ^ @_, _a, etc.@
       deriving( Show, Eq, Ord, Data, Typeable, Generic )
 
 data TyVarBndr = PlainTV  Name            -- ^ @a@
