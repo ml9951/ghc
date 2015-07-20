@@ -5,20 +5,18 @@ partially abort transactions.  Below are the steps necessary to
 get everything checked out and built:
 
 
-    git clone https://github.com/ml9951/ghc.git
+    git clone git://git.haskell.org/ghc.git
     cd ghc
-    git remote set-url origin git://git.haskell.org/ghc.git   # so submodules work
-    git submodule update --init
-    git remote set-url origin https://github.com/ml9951/ghc.git #change it back
+    git add remote pastm-remote https://github.com/ml9951/ghc.git
+    ./sync-all get
+    git fetch pastm-remote
+    git checkout pastm
+    cp mk/build.mk.sample mk/build.mk #Uncomment the following line: "BuildFlavour = quick"
     perl boot
-    cp mk/build.mk.sample mk/build.mk  #Uncomment the following line: "BuildFlavour = quick"
     ./configure
     make         # can also say 'make -jX' for X number of jobs
-    make install
-
-Instructions for getting the submodules to work in a forked version of GHC
-where shamelessly ripped off from: https://github.com/goldfirere/ghc/blob/nokinds/README.md
-
+    make install	 
+    
 Contributors & Acknowledgements
 ===============================
 
