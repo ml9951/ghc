@@ -145,7 +145,7 @@ struct Capability_ {
 
     StgPTRecWithoutK * free_ptrec_items;
 
-    StgPASTMStats * pastmStats;
+    StgPASTMStats pastmStats;
 
 } // typedef Capability is defined in RtsAPI.h
   // We never want a Capability to overlap a cache line with anything

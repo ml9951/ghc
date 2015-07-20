@@ -755,8 +755,6 @@ scavenge_block (bdescr *bd)
 
         gct->eager_promotion = rtsFalse;
 
-        StgClosure * orig = (StgClosure*)p;
-
         end = (P_)((StgClosure *)p)->payload + info->layout.payload.ptrs;
         for (p = (P_)((StgClosure *)p)->payload; p < end; p++) {
             evacuate((StgClosure **)p);

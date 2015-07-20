@@ -2047,12 +2047,6 @@ primop  PCatchRetryOp "pcatchRetry#" GenPrimOp
    out_of_line = True
    has_side_effects = True
 
-primop GetStatsOp "getStats#" GenPrimOp
-       State# s -> (# State# s, Int#, Int#, Int#, Int#, Int# #)
-       {Return a struct containing various statistics regarding transactional memory}
-       with
-       out_of_line = True
-
 ------------------------------------------------------------------------
 section "STM-accessible Mutable Variables"
 ------------------------------------------------------------------------

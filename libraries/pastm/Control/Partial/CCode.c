@@ -130,6 +130,9 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     while(trec->read_version != version_clock){
         StgPTRecWithK * checkpoint = pa_validate(trec);
         if(checkpoint != TO_WITHK(PASTM_SUCCESS)){
+		    if(checkpoint == TO_WITHK(PASTM_FAIL)){
+			  cap->pastmStats->
+			}
             return TO_CLOSURE(checkpoint);
         }
         val = tvar->current_value;
