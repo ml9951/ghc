@@ -25,3 +25,5 @@ library
   default-language:    Haskell2010
   Include-Dirs: /Users/ml9951/repositories/ghc/rts, /Users/ml9951/repositories/ghc/rts/sm, Control/Partial, Control/Full
   C-Sources: Control/Partial/CmmHooks.cmm, Control/Partial/CCode.c, Control/Full/CmmHooks.cmm, Control/Full/CCode.c
+  ghc-options:     -optc-g3 -debug -threaded
+  cc-options: -g3 -DTHREADED_RTS

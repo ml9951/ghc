@@ -13,9 +13,12 @@ llFull:	ll.hs cbits/gettime.c
 	$(GHC) $(THREADED) $(DEBUG) -DFABORT -fforce-recomp cbits/gettime.c ll.hs -o llFull
 
 llPartial:	ll.hs cbits/gettime.c
-	$(GHC) $(THREADED) $(DEBUG) -fforce-recomp cbits/gettime.c ll.hs -o llPartial
+	$(GHC) $(THREADED) $(DEBUG) -optc-g3 -fforce-recomp cbits/gettime.c ll.hs -o llPartial
 
-counter:	counterFull counterPartial
+counter:	counterFull counterPartial counterSTMHaskell
+
+counterSTMHaskell:	counter.hs
+	$(GHC) $(THREADED) $(DEBUG) -DSTMHASKELL -fforce-recomp counter.hs -o counterSTMHaskell
 
 counterFull:	counter.hs 
 	$(GHC) $(THREADED) $(DEBUG) -DFABORT -fforce-recomp counter.hs -o counterFull
@@ -26,7 +29,7 @@ counterPartial:	counter.hs
 full:	llFull counterFull
 
 clean:
-	rm *.hi *.o llSTMHaskell llFull llPartial counterFull counterPartial 
+	rm *.hi *.o llSTMHaskell llFull llPartial counterFull counterPartial counterSTMHaskell
 
 
 

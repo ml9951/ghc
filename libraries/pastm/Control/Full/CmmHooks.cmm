@@ -27,25 +27,11 @@ INFO_TABLE_RET(stg_full_atomically_frame, ATOMICALLY_FRAME,
     ("ptr" res) = ccall fa_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
 
     if(res == PASTM_SUCCESS){ //Validation succeeded
-        P_ stats;
-        W_ stat;
-        stats = StgTSO_pastmStats(CurrentTSO);
-        stat = StgPASTMStats_numCommits(stats);
-        stat = stat + 1;
-        StgPASTMStats_numCommits(stats) = stat;
-
         StgTSO_ptrec(CurrentTSO) = NO_PTREC;
         frame_result = result;
         return(frame_result);
     }
     if(res == PASTM_FAIL){ //Validation failed 
-        P_ stats;
-        W_ stat;
-        stats = StgTSO_pastmStats(CurrentTSO);
-        stat = StgPASTMStats_commitTimeFullAborts(stats);
-        stat = stat + 1;
-        StgPASTMStats_commitTimeFullAborts(stats) = stat;
-
         ("ptr" trec) = ccall fa_stmStartTransaction(MyCapability() "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
@@ -95,13 +81,6 @@ stg_full_eagerFullAbort
 {
     W_ frame;
     P_ code; 
-
-    P_ stats;
-    W_ stat;
-    stats = StgTSO_pastmStats(CurrentTSO);
-    stat = StgPASTMStats_eagerFullAborts(stats);
-    stat = stat + 1;
-    StgPASTMStats_eagerFullAborts(stats) = stat;
 
     //fully abort -- p_setAtomicallyFrameHelper will unwind the stack to the nearest atomic frame
     //According to StgCmmForeign.hs, SAVE_THREAD_STATE() gets compiled to:

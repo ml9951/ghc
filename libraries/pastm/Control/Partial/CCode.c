@@ -1,7 +1,7 @@
 #include "Rts.h"
 
 //#include "PartialAbortSTM.h"
-//#include "Trace.h"
+#include "Trace.h"
 #include "rts/Threads.h"
 #include "sm/Storage.h"
 #include <stdio.h>
@@ -27,6 +27,10 @@
 #define WITHK_HEADER               &stg_PTREC_WITHK_info
 #define WITHOUTK_HEADER            &stg_PTREC_WITHOUTK_info
 #define WRITESET_HEADER            &stg_WRITE_SET_info
+
+#define TRACE(_x...) printf(_x)
+//debugTrace(DEBUG_stm, "STM: " _x) //supply "+RTS -Dm" for STM trace output 
+
 
 static volatile unsigned long version_clock = 0;
 
@@ -56,7 +60,7 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
     return ptrec;
 }
 
-static StgPTRecWithK * pa_validate(StgPTRecHeader * trec){
+static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
     while(TRUE){
         unsigned long time = version_clock;
         if((time & 1) != 0){
@@ -108,10 +112,17 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec){
         }
 
         if(time == version_clock){
+		  TRACE("%d: Committing transaction, Started at time %lu, version_clock = %lu\n", cap->no, time, version_clock);
             return checkpoint; //necessarily PASTM_SUCCESS
         }
         //Validation succeeded, but someone else committed in the meantime, loop back around...
     }
+}
+
+void printStats(Capability * cap){
+  printf("%d: eager partial = %lu, eager full = %lu, commit time partial = %lu, commit time full = %lu\n", 
+		 cap->no, cap->pastmStats.eagerPartialAborts, cap->pastmStats.eagerFullAborts,
+		 cap->pastmStats.commitTimePartialAborts, cap->pastmStats.commitTimeFullAborts);
 }
 
 StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
@@ -128,12 +139,20 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     //Not found in write set
     StgClosure * val = tvar->current_value;
     while(trec->read_version != version_clock){
-        StgPTRecWithK * checkpoint = pa_validate(trec);
+	  StgPTRecWithK * checkpoint = pa_validate(trec, cap);
         if(checkpoint != TO_WITHK(PASTM_SUCCESS)){
 		    if(checkpoint == TO_WITHK(PASTM_FAIL)){
-			  cap->pastmStats->
+#ifdef STATS
+			  cap->pastmStats.eagerFullAborts++;
+			  printStats(cap);
+#endif
+			  return TO_CLOSURE(checkpoint);
 			}
-            return TO_CLOSURE(checkpoint);
+#ifdef STATS
+			cap->pastmStats.eagerPartialAborts++;
+            printStats(cap);
+#endif 
+			return TO_CLOSURE(checkpoint);
         }
         val = tvar->current_value;
     }
@@ -208,14 +227,26 @@ void pa_stmWriteTVar(Capability *cap,
 StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     unsigned long snapshot = trec->read_version;
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
-        StgPTRecWithK * checkpoint = pa_validate(trec);
+	    StgPTRecWithK * checkpoint = pa_validate(trec, cap);
         if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
-            //The validate function sets up the trec with the appropriate read/write sets
-            return checkpoint;
+		    if(checkpoint == TO_WITHK(PASTM_FAIL)){
+#ifdef STATS
+			  printStats(cap);
+			    cap->pastmStats.commitTimeFullAborts++;
+#endif
+				return checkpoint;
+			} 
+#ifdef STATS
+			cap->pastmStats.commitTimePartialAborts++;
+			printStats(cap);
+#endif
+			return checkpoint;
         }
         snapshot = trec->read_version;
     }
     
+	TRACE("%d: Locked clock, currently value is %lu\n", cap->no, version_clock);
+
     StgWriteSet * write_set = trec->write_set;
 	while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
@@ -223,7 +254,10 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
         dirty_TVAR(cap,tvar);
         write_set = write_set->next;
     }
-
+#ifdef STATS
+	cap->pastmStats.numCommits++;
+	printStats(cap);
+#endif
     version_clock = snapshot + 2;//unlock clock
     return (StgPTRecWithK *)PASTM_SUCCESS;
 }

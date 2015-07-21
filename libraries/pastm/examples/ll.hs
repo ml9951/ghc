@@ -17,7 +17,7 @@ import Control.Concurrent.MVar
 import Control.Exception
 import Dump
 import Data.Map(Map, empty)
-import STMStats
+--import STMStats
 import Text.Printf
 
 
@@ -101,21 +101,20 @@ remove l (hd:tl) = do
             remove l tl 
             return()
        
-mkThreads :: TVar (STMList Int) -> Int -> IO [MVar (Map String [Int])]
+mkThreads :: TVar (STMList Int) -> Int -> IO [MVar ()]
 mkThreads l 0 = return []
 mkThreads l i = do
           mv <- newEmptyMVar
           opList <- return [0..500]
-          forkIO (do threadLoop l opList; remove l opList; stats <- getStats; putMVar mv stats)
+          forkIO (do threadLoop l opList; remove l opList; putMVar mv ())
           mvs <- mkThreads l (i-1)
           return(mv:mvs)
 
-join :: [MVar(Map String [Int])] -> IO (Map String [Int])
-join [] = return(empty)
+join :: [MVar()] -> IO ()
+join [] = return()
 join (mv:mvs) = do
-     stats <- takeMVar mv
-     allStats <- join mvs
-     return(mergeStats stats allStats)
+     takeMVar mv
+     join mvs
 
 check :: TVar (STMList a) -> IO ()
 check l = do
@@ -138,19 +137,13 @@ toList l = do
                  tl' <- toList tl
                  return(hd : tl')
 
-llBench stmList = do
-        mvars <- mkThreads stmList numCapabilities
-        stats <- join mvars
-        return(stats)
-        
 main = do
      stmList <- newList
      start <- getTime
      mvars <- mkThreads stmList numCapabilities
-     stats <- join mvars
+     join mvars
      end <- getTime
      printf "Computation time: %0.3f sec\n" (end - start :: Double)
-     printStats stats
      check stmList `catch` \ msg -> do raw <- toList stmList; putStrLn (show (msg::AssertionFailed) ++ show raw)
      return()
 

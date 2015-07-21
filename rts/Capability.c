@@ -294,7 +294,7 @@ initCapability( Capability *cap, nat i )
     cap->pastmStats.commitTimePartialAborts = 0;
     cap->pastmStats.eagerFullAborts = 0;
     cap->pastmStats.commitTimeFullAborts = 0;
-
+    cap->pastmStats.numCommits = 0;
 
     cap->transaction_tokens = 0;
     cap->context_switch = 0;

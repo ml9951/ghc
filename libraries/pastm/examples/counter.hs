@@ -1,11 +1,12 @@
 {-# LANGUAGE CPP #-} 
 
---To build with full abort: ghc -threaded -DFULL_ABORT ll.hs
-#ifdef FABORT
-import Control.Full.STM   --full abort STM
+#ifdef STMHASKELL
+import Control.Concurrent.STM hiding(check)   --full abort STM
+#elif defined(FABORT)
+import Control.Full.STM           --full abort STM (NoRec)
 #else
---import Control.Partial.STM           --partial abort STM
-import Control.Concurrent.PASTM.Core
+--import Control.Concurrent.PASTM.Core
+import Control.Partial.STM
 #endif
 
 import Prelude hiding (lookup)
