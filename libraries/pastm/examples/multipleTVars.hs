@@ -1,28 +1,68 @@
-{-# LANGUAGE CPP #-} 
+{-# LANGUAGE CPP, FlexibleInstances, MultiParamTypeClasses, BangPatterns #-} 
 
---To build with full abort: ghc -threaded -DFULL_ABORT ll.hs
-#ifdef FULL_ABORT
-import Control.Concurrent.STM hiding (check)   --full abort STM
+#ifdef STMHASKELL
+import Control.STMHaskell.STM     --full abort STM (STM Haskell)
+#elif defined(FABORT)
+import Control.Full.STM           --full abort STM (NoRec)
 #else
-import Control.Concurrent.PASTM hiding (check) --partial abort STM
+import Control.Partial.STM
 #endif
 
 import Prelude hiding (lookup)
 import GHC.Conc(numCapabilities, forkIO)
 import Control.Concurrent.MVar
-import STMStats
-import Data.Array
 import System.Random
 import Control.Monad.Random
 import qualified Data.MultiSet as MS
 import Data.Array.MArray
 import Dump
 
-numTVars :: Int
+import Data.Array (Array, bounds)
+import Data.Array.Base (listArray, arrEleBottom, unsafeAt, MArray(..),
+                        IArray(numElements))
+import Data.Ix (rangeSize)
+import Data.Typeable (Typeable)
+
+#ifdef STMHASKELL
+whichSTM = "STM Haskell"
+#elif defined(FABORT)
+whichSTM = "Full Abort NoRec"
+#else
+whichSTM = "Partial Abort NoRec"
+#endif
+
 numTVars = 100
 numSamples = 10
 numWrites = 10 
 numIters = 200 --1000
+
+newtype TArray i e = TArray (Array i (TVar e)) deriving (Eq, Typeable)
+
+globalTV = newTVar 0
+
+instance MArray TArray e STM where
+    getBounds (TArray a) = return (bounds a)
+    newArray b e = do
+        a <- rep (rangeSize b) (newTVar e)
+        return $ TArray (listArray b a)
+    newArray_ b = do
+        a <- rep (rangeSize b) (newTVar arrEleBottom)
+        return $ TArray (listArray b a)
+    unsafeRead (TArray a) i = readTVar $ unsafeAt a i
+    unsafeWrite (TArray a) i e = writeTVar (unsafeAt a i) e
+    getNumElements (TArray a) = return (numElements a)
+
+-- | Like 'replicateM' but uses an accumulator to prevent stack overflows.
+-- Unlike 'replicateM' the returned list is in reversed order.
+-- This doesn't matter though since this function is only used to create
+-- arrays with identical elements.
+rep :: Monad m => Int -> m a -> m [a]
+rep n m = go n []
+    where
+      go 0 xs = return xs
+      go i xs = do
+          !x <- m
+          go (i-1) (x:xs)
 
 type TVars = TArray Int Int
 
@@ -47,7 +87,12 @@ write i = do
       lift $ do
            tvars <- tvars
            temp <- readArray tvars rn
-           writeArray tvars rn (temp + 1)
+           let !new = temp + 1
+           traceM ("Updating position " ++ show rn ++ " to " ++ show new)
+           writeArray tvars rn new
+           t <- globalTV
+           x <- readTVar t
+           writeTVar t (x+1)
            return $ rn : rands
 
 threadLoop :: StdGen -> Int -> IO [Int]
@@ -85,11 +130,14 @@ check ((i, freq):rest) = do
            return((i, freq, actual):failed)
 
 main = do
+     putStrLn("Executing benchmark with " ++ whichSTM)
      mvs <- mkThreads numCapabilities
      writes <- join mvs
      let freq = MS.toOccurList (MS.fromList writes)
      failed <- atomically $ check freq
      mapM_ (\(i,freq,actual) -> putStrLn(show i ++ ": Count should be " ++ show freq ++ ", but found " ++ show actual)) failed
+     x <- atomically $ do t <- globalTV; readTVar t
+     putStrLn("x = " ++ show x)
      return()
 
 

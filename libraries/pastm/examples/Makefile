@@ -4,14 +4,22 @@ THREADED = -threaded
 GHC = ghc
 DEBUG = 
 
-all:	llSTMHaskell llFull llPartial
+all:	ll counter
 
+ll:	llSTMHaskell llFull llPartial llOrdered
+
+.PHONY:	llOrdered
+llOrdered:	ll.hs cbits/gettime.c 
+	$(GHC) $(THREADED) $(DEBUG) -DORDERED -optl-g -optc-g -fforce-recomp cbits/gettime.c ll.hs -o llOrdered
+
+.PHONY:	llSTMHaskell
 llSTMHaskell:	ll.hs cbits/gettime.c 
 	$(GHC) $(THREADED) $(DEBUG) -DSTMHASKELL -fforce-recomp cbits/gettime.c ll.hs -o llSTMHaskell
 
 llFull:	ll.hs cbits/gettime.c
 	$(GHC) $(THREADED) $(DEBUG) -DFABORT -fforce-recomp cbits/gettime.c ll.hs -o llFull
 
+.PHONY:	llPartial
 llPartial:	ll.hs cbits/gettime.c
 	$(GHC) $(THREADED) $(DEBUG) -optc-g3 -fforce-recomp cbits/gettime.c ll.hs -o llPartial
 

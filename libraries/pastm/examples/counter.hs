@@ -1,11 +1,10 @@
 {-# LANGUAGE CPP #-} 
 
 #ifdef STMHASKELL
-import Control.Concurrent.STM hiding(check)   --full abort STM
+import Control.STMHaskell.STM     --full abort STM haskell
 #elif defined(FABORT)
 import Control.Full.STM           --full abort STM (NoRec)
 #else
---import Control.Concurrent.PASTM.Core
 import Control.Partial.STM
 #endif
 
@@ -38,7 +37,7 @@ join (mv:mvs) = do
      return()
 
 parser :: Parser Int
-parser = option auto (long "iters" <> short 'n' <> metavar "K" <> help "Number of iterations to perform") 
+parser = option auto (long "iters" <> short 'n' <> metavar "K" <> help "Number of iterations to perform" <> value 5000) 
 
 opts = info (helper  <*> parser) fullDesc
 

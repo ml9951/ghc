@@ -27,6 +27,7 @@ module Control.Partial.STM
     writeTVar,
     atomically,
     STM(..),
+    printStats,
   --  retry,
   --  orElse,
     --The following are just re-exporting from the original STM
@@ -36,7 +37,6 @@ module Control.Partial.STM
     newTVar       
 )
 where
-
 
 
 import GHC.Conc.Sync(TVar(..), readTVarIO, newTVarIO)
@@ -112,4 +112,5 @@ foreign import prim safe "stg_partial_readTVarzh" readTVar#
 foreign import prim safe "stg_partial_writeTVarzh" writeTVar#
         :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
 
+foreign import ccall "pa_printSTMStats" printStats :: IO ()
 

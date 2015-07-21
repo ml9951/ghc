@@ -17,13 +17,18 @@ extra-source-files:  changelog.md, README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Control.Partial.STM, Control.Full.STM, Control.Concurrent.PASTM.Core
+  exposed-modules:     Control.Partial.STM, Control.Full.STM, Control.Concurrent.PASTM.Core Control.STMHaskell.STM Control.Ordered.STM
   -- other-modules:       
   other-extensions:    CPP, Safe, Trustworthy, MagicHash, UnboxedTuples, Rank2Types, DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes, UndecidableInstances
   build-depends:       base >=4.8 && <4.9, array >=0.5 && <0.6, ghc-prim
   -- hs-source-dirs:      
   default-language:    Haskell2010
-  Include-Dirs: /Users/ml9951/repositories/ghc/rts, /Users/ml9951/repositories/ghc/rts/sm, Control/Partial, Control/Full
-  C-Sources: Control/Partial/CmmHooks.cmm, Control/Partial/CCode.c, Control/Full/CmmHooks.cmm, Control/Full/CCode.c
-  ghc-options:     -optc-g3 -debug -threaded
-  cc-options: -g3 -DTHREADED_RTS
+  Include-Dirs: /Users/ml9951/repositories/ghc/rts, /Users/ml9951/repositories/ghc/rts/sm
+  C-Sources: Control/Partial/CmmHooks.cmm, Control/Partial/CCode.c, Control/Full/CmmHooks.cmm, Control/Full/CCode.c, Control/Ordered/CmmHooks.cmm, Control/Ordered/CCode.c
+  ghc-options:     -optc-g -debug -threaded -rtsopts
+  cc-options: -g -DTHREADED_RTS 
+  ld-options: -g
+
+Flag Debug
+     Description:	Enable debug support
+     Default:		True

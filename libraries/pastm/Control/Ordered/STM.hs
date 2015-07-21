@@ -15,18 +15,19 @@
 -- Portability :  non-portable (requires PASTM)
 --
 -- Software Transactional Memory: a modular composable concurrency
--- abstraction.  See
+-- abstraction.  
 --
 --  * This contains the core STM operations
 --
 -----------------------------------------------------------------------------
 
-module Control.Partial.STM
+module Control.Ordered.STM
 (
     readTVar,
     writeTVar,
     atomically,
     STM(..),
+    printStats,
   --  retry,
   --  orElse,
     --The following are just re-exporting from the original STM
@@ -36,7 +37,6 @@ module Control.Partial.STM
     newTVar       
 )
 where
-
 
 
 import GHC.Conc.Sync(TVar(..), readTVarIO, newTVarIO)
@@ -63,7 +63,6 @@ readTVar :: TVar a -> STM a
 readTVar (TVar tv) = STM $ \c -> \s-> case unsafeCoerce# readTVar# tv c s of
                                         (# s', t #) -> c t s'
 
-
 writeTVar :: TVar a -> a -> STM ()
 writeTVar (TVar tv) a = STM $ \c -> \s -> 
           case unsafeCoerce# writeTVar# tv a s of
@@ -79,38 +78,19 @@ initK a s = (# s, a #)
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c initK) s)
 
-{-
--- |Retry execution of the current memory transaction because it has seen
--- values in TVars which mean that it should not continue (e.g. the TVars
--- represent a shared buffer that is now empty).  The implementation may
--- block the thread until one of the TVars that it has read from has been
--- udpated. (GHC only)
-retry :: STM a
-retry = STM $ \c -> \s# -> pretry# s#
-
--- |Compose two alternative STM actions (GHC only).  If the first action
--- completes without retrying then it forms the result of the orElse.
--- Otherwise, if the first action retries, then the second action is
--- tried in its place.  If both actions retry then the orElse as a
--- whole retries.
-orElse :: STM a -> STM a -> STM a
-orElse (STM m) e = STM $ \c -> \s -> 
-       let m' = m c -- :: State# RealWorld -> (# State$ RealWorld, r #)
-       in pcatchRetry# m' (unSTM e c) (\a -> m') s
--}
-
-foreign import prim "stg_partial_atomicallyzh" atomically# 
+foreign import prim safe "stg_ordered_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
 {-         FFI won't accept this type...
         :: (State# RealWorld -> (# State# RealWorld , b #) )
             -> State# RealWorld -> (# State# RealWorld, b #)
 -} 
 
-foreign import prim "stg_partial_readTVarzh" readTVar#
+foreign import prim safe "stg_ordered_readTVarzh" readTVar#
         :: TVar# s a -> Any()
             -> State# s -> (# State# s, a #)
 
-foreign import prim "stg_partial_writeTVarzh" writeTVar#
+foreign import prim safe "stg_ordered_writeTVarzh" writeTVar#
         :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
 
+foreign import ccall "ord_printSTMStats" printStats :: IO ()
 

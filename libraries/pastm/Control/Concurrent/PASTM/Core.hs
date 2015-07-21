@@ -29,6 +29,7 @@ module Control.Concurrent.PASTM.Core
     STM(..),
     retry,
     orElse,
+    printStats,
     --The following are just re-exporting from the original STM
     newTVarIO,   
     readTVarIO, 
@@ -91,6 +92,7 @@ orElse (STM m) e = STM $ \c -> \s ->
        let m' = m c -- :: State# RealWorld -> (# State$ RealWorld, r #)
        in pcatchRetry# m' (unSTM e c) (\a -> m') s
 
-
+printStats :: IO()
+printStats = return()
 
 

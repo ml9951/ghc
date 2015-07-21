@@ -27,6 +27,7 @@ module Control.Full.STM
     writeTVar,
     atomically,
     STM(..),
+    printStats,
   --  retry,
   --  orElse,
     --The following are just re-exporting from the original STM
@@ -106,3 +107,4 @@ foreign import prim "stg_full_writeTVarzh" writeTVar#
         :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
 
 
+foreign import ccall "fa_printSTMStats" printStats :: IO()

@@ -30,6 +30,12 @@
 
 static volatile unsigned long version_clock = 0;
 
+#define STATS
+
+#ifdef STATS
+static StgPASTMStats stats = {0, 0, 0, 0, 0};
+#endif
+
 StgPTRecHeader * fa_stmStartTransaction(Capability *cap) {
   
     StgPTRecHeader * ptrec;
@@ -96,6 +102,9 @@ StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     while(trec->read_version != version_clock){
         StgClosure * res = fa_validate(trec);
         if(res == PASTM_FAIL){
+#ifdef STATS
+	    cap->pastmStats.eagerFullAborts++;
+#endif
             return PASTM_FAIL;
         }
         val = tvar->current_value;
@@ -129,6 +138,9 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
         StgClosure * res = fa_validate(trec);
         if(res != PASTM_SUCCESS){
+#ifdef STATS
+	    cap->pastmStats.commitTimeFullAborts++;
+#endif
             //The validate function sets up the trec with the appropriate read/write sets
             return res;
         }
@@ -142,10 +154,26 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
         dirty_TVAR(cap,tvar);
         write_set = write_set->next;
     }
+
+#ifdef STATS
+    stats.commitTimeFullAborts += cap->pastmStats.commitTimeFullAborts;
+    stats.eagerFullAborts += cap->pastmStats.eagerFullAborts;
+    stats.numCommits++;
+    cap->pastmStats.commitTimeFullAborts = 0;
+    cap->pastmStats.eagerFullAborts = 0;
+#endif
+
     version_clock = snapshot + 2;//unlock clock
     return PASTM_SUCCESS;
 }
 
+void fa_printSTMStats(){
+#ifdef STATS
+    printf("Commit Full Aborts   : %lu\n", stats.commitTimeFullAborts);
+    printf("Eager Full Aborts    : %lu\n", stats.eagerFullAborts);
+    printf("Number of Commits    : %lu\n", stats.numCommits);
+#endif
+}
 
 
 

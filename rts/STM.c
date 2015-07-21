@@ -109,6 +109,8 @@
 #define NACQ_ASSERT(_X) ASSERT(_X)
 #endif
 
+static volatile StgPASTMStats stats = {0, 0, 0, 0, 0};
+
 /*......................................................................*/
 
 // If SHAKE is defined then validation will sometime spuriously fail.  They helps test
@@ -1460,6 +1462,12 @@ StgBool stmCommitTransaction(Capability *cap, StgTRecHeader *trec) {
 
   TRACE("%p : stmCommitTransaction()=%d", trec, result);
 
+  if(result){
+      atomic_inc(&(stats.numCommits), 1);
+  }else{
+      atomic_inc(&(stats.commitTimeFullAborts), 1);
+  }
+
   return result;
 }
 
@@ -1511,6 +1519,10 @@ StgBool stmCommitNestedTransaction(Capability *cap, StgTRecHeader *trec) {
   free_stg_trec_header(cap, trec);
 
   TRACE("%p : stmCommitNestedTransaction()=%d", trec, result);
+
+  if(!result){
+      atomic_inc(&(stats.eagerFullAborts), 1);
+  }
 
   return result;
 }
@@ -1632,9 +1644,11 @@ StgClosure *stmReadTVar(Capability *cap,
 
   if (entry != NULL) {
     if (entry_in == trec) {
+        TRACE("Read found in our trec\n");
       // Entry found in our trec
       result = entry -> new_value;
     } else {
+        TRACE("Read found in another trec\n");
       // Entry found in another trec
       TRecEntry *new_entry = get_new_entry(cap, trec);
       new_entry -> tvar = tvar;
@@ -1644,6 +1658,7 @@ StgClosure *stmReadTVar(Capability *cap,
     }
   } else {
     // No entry found
+      TRACE("Read not found in trec\n");
     StgClosure *current_value = read_current_value(trec, tvar);
     TRecEntry *new_entry = get_new_entry(cap, trec);
     new_entry -> tvar = tvar;
@@ -1695,4 +1710,9 @@ void stmWriteTVar(Capability *cap,
   TRACE("%p : stmWriteTVar done", trec);
 }
 
+void stmPrintStats(){
+    printf("Commit Full Aborts   : %lu\n", stats.commitTimeFullAborts);
+    printf("Eager Full Aborts    : %lu\n", stats.eagerFullAborts);
+    printf("Number of Commits    : %lu\n", stats.numCommits);
+}
 /*......................................................................*/

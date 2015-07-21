@@ -1,11 +1,11 @@
 {-# LANGUAGE CPP, ForeignFunctionInterface #-} 
 
---To build with full abort: ghc -threaded -DFULL_ABORT ll.hs
-
 #ifdef STMHASKELL
-import Control.Concurrent.STM hiding(check)   --full abort STM
+import Control.STMHaskell.STM     --full abort STM (STM Haskell)
 #elif defined(FABORT)
 import Control.Full.STM           --full abort STM (NoRec)
+#elif defined(ORDERED)
+import Control.Ordered.STM
 #else
 import Control.Partial.STM
 --import Control.Concurrent.PASTM.Core
@@ -17,7 +17,6 @@ import Control.Concurrent.MVar
 import Control.Exception
 import Dump
 import Data.Map(Map, empty)
---import STMStats
 import Text.Printf
 
 
@@ -144,6 +143,7 @@ main = do
      join mvars
      end <- getTime
      printf "Computation time: %0.3f sec\n" (end - start :: Double)
+     printStats
      check stmList `catch` \ msg -> do raw <- toList stmList; putStrLn (show (msg::AssertionFailed) ++ show raw)
      return()
 
