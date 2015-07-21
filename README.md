@@ -7,10 +7,10 @@ get everything checked out and built:
 
     git clone git://git.haskell.org/ghc.git
     cd ghc
-    git add remote pastm-remote https://github.com/ml9951/ghc.git
+    git remote add pstm-remote https://github.com/ml9951/ghc.git
     ./sync-all get
-    git fetch pastm-remote
-    git checkout pastm
+    git fetch pstm-remote
+    git checkout pstm
     cp mk/build.mk.sample mk/build.mk #Uncomment the following line: "BuildFlavour = quick"
     perl boot
     ./configure
