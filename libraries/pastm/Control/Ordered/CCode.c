@@ -33,20 +33,21 @@ static volatile unsigned long version_clock = 0;
 static StgPASTMStats stats = {0, 0, 0, 0, 0};
 #endif
 
-//I think the header can be clean, since it isn't going to be pointing
-//to anything in a younger generation
 static StgTVar dummyTV = {.header = {.info = &stg_NO_PTREC_info /*, TODO: add profiling field*/}, 
                           .current_value = PASTM_SUCCESS, //dummy value
                           .first_watch_queue_entry = ((StgTVarWatchQueue *)(void *)&stg_END_STM_WATCH_QUEUE_closure),
                           .num_updates = 0};
 
 StgPTRecHeader * ord_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
-  
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+	cap->pastmStats.commitTimeFullAborts = 0;
+	cap->pastmStats.commitTimePartialAborts = 0;
+	cap->pastmStats.eagerFullAborts = 0;
+	cap->pastmStats.eagerPartialAborts = 0;
     }
-	
+    
     StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
     SET_HDR(entry, &stg_PTREC_WITHOUTK_MUT_info, CCS_SYSTEM);
 
@@ -86,25 +87,27 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
 	
 	while(ptr != TO_WITHOUTK(NO_PTREC)){
 	    if(ptr->read_value != ptr->tvar->current_value){
-		//abort
-		if(checkpoint == TO_WITHK(PASTM_FAIL))
-		    return checkpoint;
-		
-		//try reading from this tvar
-		StgTVar * tvar = checkpoint->tvar;
-		StgClosure * val = tvar->current_value;
-		if(time == version_clock){
-		    checkpoint->read_value = val; //apply the continuation to this in C--
-		    trec->read_set = TO_WITHOUTK(checkpoint);
-		    trec->write_set = checkpoint->write_set;
-		    trec->lastK = checkpoint;
-		    StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
-		    trec->capture_freq = capture_freq | (capture_freq >> 32);
-		    trec->numK = kCount;
-		    return checkpoint;
+		if(checkpoint->header.info == WITHK_HEADER){ //we have a checkpoint
+		    //try reading from this tvar
+		    StgTVar * tvar = checkpoint->tvar;
+		    StgClosure * val = tvar->current_value;
+		    if(time == version_clock){
+			checkpoint->read_value = val; //apply the continuation to this in C--
+			checkpoint->next = TO_WITHOUTK(NO_PTREC);
+			
+			trec->tail = TO_WITHOUTK(checkpoint);
+			trec->write_set = checkpoint->write_set;
+			trec->lastK = checkpoint;
+			StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+			trec->capture_freq = capture_freq | (capture_freq >> 32);
+			trec->numK = kCount;
+			return checkpoint;
+		    }else{
+			goto RETRY;
+		    }
 		}else{
-		    goto RETRY;
-		}
+		    return checkpoint;
+		}	    
 	    }
 	    if(ptr->header.info == WITHK_HEADER){
 		checkpoint = TO_WITHK(ptr);
@@ -247,7 +250,7 @@ StgPTRecWithK * ord_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
         dirty_TVAR(cap,tvar);
         write_set = write_set->next;
     }
-
+    
 #ifdef STATS
     //Since version clock is locked, these don't need to be atomic
     stats.commitTimeFullAborts += cap->pastmStats.commitTimeFullAborts;
@@ -260,10 +263,11 @@ StgPTRecWithK * ord_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
     cap->pastmStats.eagerFullAborts = 0;
     cap->pastmStats.eagerPartialAborts = 0;
 #endif
-
     version_clock = snapshot + 2;//unlock clock
     return (StgPTRecWithK *)PASTM_SUCCESS;
 }
+
+
 
 void ord_printSTMStats(){
 #ifdef STATS

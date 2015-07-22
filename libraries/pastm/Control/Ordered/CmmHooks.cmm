@@ -183,7 +183,7 @@ stg_ordered_readTVarzh (P_ tvar, P_ k)
 
     trec = StgTSO_ptrec(CurrentTSO);
     ("ptr" result) = ccall ord_stmReadTVar(MyCapability() "ptr", trec "ptr",
-										  tvar "ptr", k "ptr");
+					   tvar "ptr", k "ptr");
 
     if(result == PASTM_FAIL){
         jump stg_ordered_eagerFullAbort []; //full abort
@@ -191,7 +191,7 @@ stg_ordered_readTVarzh (P_ tvar, P_ k)
     
     header = StgHeader_info(result);
 
-    if(header == stg_PTREC_WITHK_info){
+    if(header == stg_PTREC_WITHK_MUT_info){
         jump stg_ordered_eagerPartialAbort(result);
     }
 
