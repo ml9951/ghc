@@ -23,7 +23,7 @@
 #define WITHOUTK_HEADER            &stg_PTREC_WITHOUTK_MUT_info
 #define WRITESET_HEADER            &stg_WRITE_SET_info
 
-#define TRACE(_x...) printf(_x)
+#define TRACE(_x...) debugTrace(DEBUG_stm, "STM: " _x)
 
 static volatile unsigned long version_clock = 0;
 
@@ -81,16 +81,15 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
         }
         trec->read_version = time;
         //validate read set
-        StgPTRecWithoutK * ptr = trec->read_set;
-        StgPTRecWithK *checkpoint = TO_WITHK(PASTM_SUCCESS);
+        StgPTRecWithoutK * ptr = trec->read_set; //first element is the dummy
+        StgPTRecWithK *checkpoint = NULL;
         StgInt kCount = 0;
 	
 	while(ptr != TO_WITHOUTK(NO_PTREC)){
 	    if(ptr->read_value != ptr->tvar->current_value){
-		if(checkpoint->header.info == WITHK_HEADER){ //we have a checkpoint
+		if(checkpoint != NULL){ //we have a checkpoint
 		    //try reading from this tvar
-		    StgTVar * tvar = checkpoint->tvar;
-		    StgClosure * val = tvar->current_value;
+		    StgClosure * val = checkpoint->tvar->current_value;
 		    if(time == version_clock){
 			checkpoint->read_value = val; //apply the continuation to this in C--
 			checkpoint->next = TO_WITHOUTK(NO_PTREC);
@@ -103,13 +102,14 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
 			trec->numK = kCount;
 			return checkpoint;
 		    }else{
+			printf("Had checkpoint, but has since gone out of date!\n");
 			goto RETRY;
 		    }
-		}else{
-		    return checkpoint;
+		}else{//checkpoint == NULL
+		    return TO_WITHK(PASTM_FAIL);
 		}	    
 	    }
-	    if(ptr->header.info == WITHK_HEADER){
+	    if(ptr->header.info == WITHK_HEADER){//entry is valid and we have a checkpoint
 		checkpoint = TO_WITHK(ptr);
 		kCount++;
 	    }
@@ -117,7 +117,7 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
 	}
 	
         if(time == version_clock){
-            return checkpoint; //necessarily PASTM_SUCCESS
+            return TO_WITHK(PASTM_SUCCESS);
         }
         //Validation succeeded, but someone else committed in the meantime, loop back around...
     }
@@ -186,6 +186,12 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     }else{//filter the read set
         StgPTRecWithK * ptr = trec->lastK;
         int numK = trec->numK;
+	/* Note that we are mutating the prev_k field here, however, there
+	 * is no need to mess with dirty/clean headers or make these have a 
+	 * mutable header type.  Since we update prev_k to always point to
+	 * somthing deeper in the list, we know that we will never end up with
+	 * a pointer from an older generation to a younger one. 
+	 */
         while(ptr != TO_WITHK(NO_PTREC)){
             if(ptr->prev_k != TO_WITHK(NO_PTREC)){
                 StgPTRecWithK * dropped = ptr->prev_k;

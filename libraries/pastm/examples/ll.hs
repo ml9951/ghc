@@ -12,7 +12,7 @@ import Control.Partial.STM
 #endif
 
 import Prelude hiding (lookup)
-import GHC.Conc(numCapabilities, forkIO)
+import GHC.Conc(numCapabilities, forkOn)
 import Control.Concurrent.MVar
 import Control.Exception
 import Dump
@@ -105,7 +105,7 @@ mkThreads l 0 = return []
 mkThreads l i = do
           mv <- newEmptyMVar
           opList <- return [0..500]
-          forkIO (do threadLoop l opList; remove l opList; putMVar mv ())
+          forkOn (i-1) (do threadLoop l opList; remove l opList; putMVar mv ())
           mvs <- mkThreads l (i-1)
           return(mv:mvs)
 

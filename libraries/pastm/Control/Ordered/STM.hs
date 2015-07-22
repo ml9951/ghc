@@ -6,7 +6,7 @@
 
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Control.Full.STM
+-- Module      :  Control.Ordered.STM
 -- Copyright   :  (c) The University of Glasgow 2004
 -- License     :  BSD-style (see the file libraries/base/LICENSE)
 --
