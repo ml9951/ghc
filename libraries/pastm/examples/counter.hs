@@ -4,6 +4,8 @@
 import Control.STMHaskell.STM     --full abort STM haskell
 #elif defined(FABORT)
 import Control.Full.STM           --full abort STM (NoRec)
+#elif defined(ORDERED)
+import Control.Ordered.STM
 #else
 import Control.Partial.STM
 #endif
