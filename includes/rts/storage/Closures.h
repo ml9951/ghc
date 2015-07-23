@@ -464,6 +464,13 @@ typedef struct StgPASTMStats_{
     StgInt64  numCommits;
 } StgPASTMStats;
 
+typedef struct {
+    StgHeader                  header;
+    StgClosure                *volatile current_value;
+    StgInt64                   stamp;
+    StgInt64                   lock;
+} StgTL2TVar;
+
 
 /* ----------------------------------------------------------------------------
    Messages

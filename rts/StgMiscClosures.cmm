@@ -572,7 +572,11 @@ CLOSURE(stg_PA_STM_FAIL_closure,stg_PA_STM_FAIL);
 INFO_TABLE(stg_PASTM_STATS, 0, 5, CONSTR, "PASTM_STATS", "PASTM_STATS")
 { foreign "C" barf("WRITE_SET object entered!") never returns; }
 
+INFO_TABLE(stg_TL2_TVAR_CLEAN, 1, 2, TVAR, "TVAR", "TVAR")
+{ foreign "C" barf("TL2_TVAR_CLEAN object entered!") never returns; }
 
+INFO_TABLE(stg_TL2_TVAR_DIRTY, 1, 2, TVAR, "TVAR", "TVAR")
+{ foreign "C" barf("TL2_TVAR_DIRTY object entered!") never returns; }
 
 /* ----------------------------------------------------------------------------
    Messages

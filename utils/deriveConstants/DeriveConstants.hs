@@ -486,6 +486,12 @@ wanteds = concat
           ,closureField C "StgPTRecWithK" "read_value"
           ,closureField C "StgPTRecHeader" "retry_stack"
 
+          ,closureSize  C "StgTL2TVar"
+
+          ,closureField C "StgTL2TVar" "current_value"
+          ,closureField C "StgTL2TVar" "stamp"
+          ,closureField C "StgTL2TVar" "lock"
+          
           ,closureField C "StgPASTMStats" "eagerPartialAborts"
           ,closureField C "StgPASTMStats" "eagerFullAborts"
           ,closureField C "StgPASTMStats" "commitTimePartialAborts"
