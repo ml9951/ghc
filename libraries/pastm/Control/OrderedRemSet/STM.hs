@@ -80,10 +80,6 @@ atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c initK) s)
 
 foreign import prim safe "stg_ordered_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
-{-         FFI won't accept this type...
-        :: (State# RealWorld -> (# State# RealWorld , b #) )
-            -> State# RealWorld -> (# State# RealWorld, b #)
--} 
 
 foreign import prim safe "stg_ordered_readTVarzh" readTVar#
         :: TVar# s a -> Any()

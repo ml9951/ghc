@@ -169,9 +169,9 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
 void fa_printSTMStats(){
 #ifdef STATS
-    printf("Commit Full Aborts   : %lu\n", stats.commitTimeFullAborts);
-    printf("Eager Full Aborts    : %lu\n", stats.eagerFullAborts);
-    printf("Number of Commits    : %lu\n", stats.numCommits);
+    printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
+    printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
+    printf("Number of Commits = %lu\n", stats.numCommits);
 #endif
 }
 

@@ -1711,8 +1711,8 @@ void stmWriteTVar(Capability *cap,
 }
 
 void stmPrintStats(){
-    printf("Commit Full Aborts   : %lu\n", stats.commitTimeFullAborts);
-    printf("Eager Full Aborts    : %lu\n", stats.eagerFullAborts);
-    printf("Number of Commits    : %lu\n", stats.numCommits);
+    printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
+    printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
+    printf("Number of Commits = %lu\n", stats.numCommits);
 }
 /*......................................................................*/

@@ -35,9 +35,7 @@ INFO_TABLE_RET(stg_ordered_atomically_frame, ATOMICALLY_FRAME,
         frame_result = result;
         return(frame_result);
     }
-    if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint
-		trec = StgTSO_ptrec(CurrentTSO);
-		
+    if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint		
         ("ptr" trec) = ccall ord_stmStartTransaction(MyCapability() "ptr", trec "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
@@ -169,7 +167,6 @@ stg_ordered_eagerPartialAbort
     val = StgPTRecWithK_read_value(R1);
     
     jump stg_ap_pv_fast(k, val);
-
 }
 
 stg_ordered_readTVarzh (P_ tvar, P_ k)
@@ -197,8 +194,6 @@ stg_ordered_readTVarzh (P_ tvar, P_ k)
 
     return (result);
 }
-
-
 
 stg_ordered_writeTVarzh (P_ tvar,     /* :: TVar a */
 		      P_ new_value /* :: a      */)

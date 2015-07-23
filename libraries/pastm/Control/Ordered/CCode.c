@@ -102,7 +102,6 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
 			trec->numK = kCount;
 			return checkpoint;
 		    }else{
-			printf("Had checkpoint, but has since gone out of date!\n");
 			goto RETRY;
 		    }
 		}else{//checkpoint == NULL
@@ -277,16 +276,16 @@ StgPTRecWithK * ord_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
 
 void ord_printSTMStats(){
 #ifdef STATS
-    printf("Commit Full Aborts       : %lu\n", stats.commitTimeFullAborts);
-    printf("Commit Partial Aborts    : %lu\n", stats.commitTimePartialAborts);
-    printf("Eager Full Aborts        : %lu\n", stats.eagerFullAborts);
-    printf("Eager Partial Aborts     : %lu\n", stats.eagerPartialAborts);
-    printf("Total Commit Time Aborts : %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts);
-    printf("Total Eager Aborts       : %lu\n", stats.eagerFullAborts + stats.eagerPartialAborts);
-    printf("Total Full Aborts        : %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
-    printf("Total Partial Aborts     : %lu\n", stats.commitTimePartialAborts + stats.eagerPartialAborts);
-    printf("Total Aborts             : %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
+    printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
+    printf("Commit Partial Aborts = %lu\n", stats.commitTimePartialAborts);
+    printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
+    printf("Eager Partial Aborts = %lu\n", stats.eagerPartialAborts);
+    printf("Total Commit Time Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts);
+    printf("Total Eager Aborts = %lu\n", stats.eagerFullAborts + stats.eagerPartialAborts);
+    printf("Total Full Aborts = %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
+    printf("Total Partial Aborts = %lu\n", stats.commitTimePartialAborts + stats.eagerPartialAborts);
+    printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
-    printf("Number of Commits        : %lu\n", stats.numCommits);
+    printf("Number of Commits = %lu\n", stats.numCommits);
 #endif
 }

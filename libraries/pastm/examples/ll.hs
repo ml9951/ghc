@@ -6,6 +6,8 @@ import Control.STMHaskell.STM     --full abort STM (STM Haskell)
 import Control.Full.STM           --full abort STM (NoRec)
 #elif defined(ORDERED)
 import Control.Ordered.STM
+#elif defined(CPSFULL)
+import Control.CPSFull.STM
 #else
 import Control.Partial.STM
 --import Control.Concurrent.PASTM.Core
@@ -142,7 +144,7 @@ main = do
      mvars <- mkThreads stmList numCapabilities
      join mvars
      end <- getTime
-     printf "Computation time: %0.3f sec\n" (end - start :: Double)
+     printf "Time = %0.3f\n" (end - start :: Double)
      printStats
      check stmList `catch` \ msg -> do raw <- toList stmList; putStrLn (show (msg::AssertionFailed) ++ show raw)
      return()

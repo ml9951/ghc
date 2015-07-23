@@ -1,62 +1,67 @@
 
 
-THREADED = -threaded
+THREADED = -threaded -optc-DTHREADED_RTS
 GHC = ghc
+
 DEBUG = 
 
 all:	ll counter
 
-ll:	llSTMHaskell llFull llPartial llOrdered
+ll:	llSTMHaskell llFull llPartial llOrdered llOrderedRemSet llCPSFull
 
 ORDERED_FILES = ../Control/Ordered/CmmHooks.cmm ../Control/Ordered/CCode.c ../Control/Ordered/STM.hs -I../../../rts
-ORDEREDDC_FILES = ../Control/Ordered_Dirty_Clean/CmmHooks.cmm ../Control/Ordered_Dirty_Clean/CCode.c ../Control/Ordered_Dirty_Clean/STM.hs -I../../../rts
+ORDEREDREMSET_FILES = ../Control/OrderedRemSet/CmmHooks.cmm ../Control/OrderedRemSet/CCode.c ../Control/OrderedRemSet/STM.hs -I../../../rts
 FULL_FILES = ../Control/Full/CmmHooks.cmm ../Control/Full/CCode.c ../Control/Full/STM.hs -I../../../rts
 PARTIAL_FILES = ../Control/Partial/CmmHooks.cmm ../Control/Partial/CCode.c ../Control/Partial/STM.hs -I../../../rts
-
+CPSFULL_FILES = ../Control/CPSFull/CmmHooks.cmm ../Control/CPSFull/CCode.c ../Control/CPSFull/STM.hs -I../../../rts
 
 OPT =
 
 .PHONY:	llOrdered
 llOrdered:	ll.hs cbits/gettime.c 
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DORDERED -optc-g $(ORDERED_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llOrdered
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DORDERED -optc-g $(ORDERED_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llOrdered$(OPT)
 
 .PHONY:	llSTMHaskell
 llSTMHaskell:	ll.hs cbits/gettime.c 
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DSTMHASKELL ../Control/STMHaskell/STM.hs -fforce-recomp cbits/gettime.c ll.hs -o llSTMHaskell
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DSTMHASKELL ../Control/STMHaskell/STM.hs -fforce-recomp cbits/gettime.c ll.hs -o llSTMHaskell$(OPT)
 
 .PHONY:	llFull
 llFull:	ll.hs cbits/gettime.c
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DFABORT $(FULL_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llFull
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DFABORT -optc-g $(FULL_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llFull$(OPT)
 
 .PHONY:	llPartial
 llPartial:	ll.hs cbits/gettime.c
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llPartial
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llPartial$(OPT)
 
-.PHONY:	llOrderedDC
-llOrderedDC:	ll.hs cbits/gettime.c 
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DORDERED -optc-g $(ORDEREDDC_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llOrderedDC
+.PHONY:	llOrderedRemSet
+llOrderedRemSet:	ll.hs cbits/gettime.c 
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DORDERED -optc-g $(ORDEREDREMSET_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llOrderedRemSet$(OPT)
+
+.PHONY:	llCPSFull
+llCPSFull:	ll.hs cbits/gettime.c
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DCPSFULL -optc-g $(CPSFULL_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llCPSFull$(OPT)
 
 
 counter:	counterFull counterPartial counterSTMHaskell counterOrdered
 
 counterSTMHaskell:	counter.hs
-	$(GHC) $(THREADED) $(DEBUG) -DSTMHASKELL ../Control/STMHaskell/STM.hs -fforce-recomp counter.hs -o counterSTMHaskell
+	$(GHC) $(THREADED) $(DEBUG) -DSTMHASKELL ../Control/STMHaskell/STM.hs -fforce-recomp counter.hs -o counterSTMHaskell$(OPT)
 
 counterFull:	counter.hs 
-	$(GHC) $(THREADED) $(DEBUG) -DFABORT $(FULL_FILES) -fforce-recomp counter.hs -o counterFull
+	$(GHC) $(THREADED) $(DEBUG) -DFABORT $(FULL_FILES) -fforce-recomp counter.hs -o counterFull$(OPT)
 
 counterPartial:	counter.hs
-	$(GHC) $(THREADED) $(DEBUG) $(PARTIAL_FILES) -fforce-recomp counter.hs -o counterPartial
+	$(GHC) $(THREADED) $(DEBUG) $(PARTIAL_FILES) -fforce-recomp counter.hs -o counterPartial$(OPT)
 
 .PHONY:	counterOrdered
 counterOrdered:	counter.hs cbits/gettime.c 
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DORDERED $(ORDERED_FILES) -optc-g -fforce-recomp cbits/gettime.c counter.hs -o counterOrdered
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DORDERED $(ORDERED_FILES) -optc-g -fforce-recomp cbits/gettime.c counter.hs -o counterOrdered$(OPT)
 
 
 full:	llFull counterFull
 
 clean:
-	rm *.hi *.o llSTMHaskell llFull llPartial counterFull counterPartial counterSTMHaskell llOrdered
+	rm -f *.hi *.o *-O*
 
 
 
