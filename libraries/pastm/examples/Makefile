@@ -14,6 +14,7 @@ ORDEREDREMSET_FILES = ../Control/OrderedRemSet/CmmHooks.cmm ../Control/OrderedRe
 FULL_FILES = ../Control/Full/CmmHooks.cmm ../Control/Full/CCode.c ../Control/Full/STM.hs -I../../../rts
 PARTIAL_FILES = ../Control/Partial/CmmHooks.cmm ../Control/Partial/CCode.c ../Control/Partial/STM.hs -I../../../rts
 CPSFULL_FILES = ../Control/CPSFull/CmmHooks.cmm ../Control/CPSFull/CCode.c ../Control/CPSFull/STM.hs -I../../../rts
+TL2_FILES = ../Control/PartialTL2/CmmHooks.cmm ../Control/PartialTL2/CCode.c ../Control/PartialTL2/STM.hs -I../../../rts
 
 OPT =
 
@@ -41,6 +42,9 @@ llOrderedRemSet:	ll.hs cbits/gettime.c
 llCPSFull:	ll.hs cbits/gettime.c
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DCPSFULL -optc-g $(CPSFULL_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llCPSFull$(OPT)
 
+.PHONY:	llTL2
+llTL2:	ll.hs cbits/gettime.c
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DTL2 -optc-g $(TL2_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llTL2$(OPT)
 
 counter:	counterFull counterPartial counterSTMHaskell counterOrdered
 
@@ -56,6 +60,11 @@ counterPartial:	counter.hs
 .PHONY:	counterOrdered
 counterOrdered:	counter.hs cbits/gettime.c 
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DORDERED $(ORDERED_FILES) -optc-g -fforce-recomp cbits/gettime.c counter.hs -o counterOrdered$(OPT)
+
+.PHONY:	counterTL2
+counterTL2:	counter.hs cbits/gettime.c 
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DTL2 $(TL2_FILES) -optc-g -fforce-recomp cbits/gettime.c counter.hs -o counterTL2$(OPT)
+
 
 
 full:	llFull counterFull

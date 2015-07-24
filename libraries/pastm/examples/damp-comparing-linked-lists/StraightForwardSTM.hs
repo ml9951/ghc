@@ -11,9 +11,10 @@ import Control.Full.STM           --full abort STM (NoRec)
 import Control.Ordered.STM
 #elif defined(CPSFULL)
 import Control.CPSFull.STM
-#else
+#elif defined(PABORT)
 import Control.Partial.STM
---import Control.Concurrent.PASTM.Core
+#else
+#error NO STM SPECIFIED
 #endif
 
 data List a = Node { val :: a,

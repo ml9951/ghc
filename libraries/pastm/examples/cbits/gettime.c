@@ -33,3 +33,5 @@ double hs_gettime(){
     
 }
 
+//useful for setting breakpoints
+void dummy(){}

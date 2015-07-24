@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-} 
+{-# LANGUAGE CPP, BangPatterns #-} 
 
 #ifdef STMHASKELL
 import Control.STMHaskell.STM     --full abort STM haskell
@@ -6,6 +6,8 @@ import Control.STMHaskell.STM     --full abort STM haskell
 import Control.Full.STM           --full abort STM (NoRec)
 #elif defined(ORDERED)
 import Control.Ordered.STM
+#elif defined(TL2)
+import Control.PartialTL2.STM
 #else
 import Control.Partial.STM
 #endif
@@ -20,8 +22,13 @@ import Options.Applicative
 threadLoop :: Int -> TVar Int -> IO()
 threadLoop 0 c = return()
 threadLoop i c = do
-           atomically $ do t <- readTVar c; writeTVar c (t+1)
+           atomically $ do 
+                      t <- readTVar c; 
+                      let !n = t+1; 
+                      writeTVar c n
            threadLoop (i-1) c
+
+
 
 mkThreads :: TVar Int -> Int -> Int -> IO [MVar ()]
 mkThreads c 0 iters = return []
@@ -52,3 +59,4 @@ main = do
      count <- readTVarIO counter
      putStrLn("Count is " ++ show count)
      return()
+

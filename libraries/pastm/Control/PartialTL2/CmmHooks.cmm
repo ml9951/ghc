@@ -183,7 +183,7 @@ stg_partial_readTVarzh (P_ tvar, P_ k)
 
     trec = StgTSO_ptrec(CurrentTSO);
     ("ptr" result) = ccall pa_stmReadTVar(MyCapability() "ptr", trec "ptr",
-										  tvar "ptr", k "ptr");
+					  tvar "ptr", k "ptr");
 
     if(result == PASTM_FAIL){
         jump stg_partial_eagerFullAbort []; //full abort
@@ -198,10 +198,8 @@ stg_partial_readTVarzh (P_ tvar, P_ k)
     return (result);
 }
 
-
-
 stg_partial_writeTVarzh (P_ tvar,     /* :: TVar a */
-		      P_ new_value /* :: a      */)
+			 P_ new_value /* :: a      */)
 {
     W_ trec;
 

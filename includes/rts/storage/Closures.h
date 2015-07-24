@@ -468,7 +468,7 @@ typedef struct {
     StgHeader                  header;
     StgClosure                *volatile current_value;
     StgInt64                   stamp;
-    StgInt64                   lock;
+    volatile StgInt64          lock;
 } StgTL2TVar;
 
 

@@ -74,6 +74,7 @@ extern Mutex sm_mutex;
 
 void dirty_MVAR(StgRegTable *reg, StgClosure *p);
 void dirty_TVAR(Capability *cap, StgTVar *p);
+void dirty_TL2_TVAR(Capability * cap, StgTL2TVar *p);
 
 /* -----------------------------------------------------------------------------
    Nursery manipulation

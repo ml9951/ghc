@@ -449,15 +449,29 @@ scavenge_block (bdescr *bd)
         StgTVar *tvar = ((StgTVar *)p);
         gct->eager_promotion = rtsFalse;
         evacuate((StgClosure **)&tvar->current_value);
-        evacuate((StgClosure **)&tvar->first_watch_queue_entry);
-        gct->eager_promotion = saved_eager_promotion;
+        if(((StgClosure*)p)->header.info == &stg_TVAR_DIRTY_info || 
+           ((StgClosure*)p)->header.info == &stg_TVAR_CLEAN_info){
+            //don't evacuate if this is a TL2 tvar
+            evacuate((StgClosure **)&tvar->first_watch_queue_entry);
+            gct->eager_promotion = saved_eager_promotion;
 
-        if (gct->failed_to_evac) {
-            tvar->header.info = &stg_TVAR_DIRTY_info;
-        } else {
-            tvar->header.info = &stg_TVAR_CLEAN_info;
+            if (gct->failed_to_evac) {
+                tvar->header.info = &stg_TVAR_DIRTY_info;
+            } else {
+                tvar->header.info = &stg_TVAR_CLEAN_info;
+            }
+            p += sizeofW(StgTVar);
+        }else{
+            gct->eager_promotion = saved_eager_promotion;
+
+            if (gct->failed_to_evac) {
+                tvar->header.info = &stg_TL2_TVAR_DIRTY_info;
+            } else {
+                tvar->header.info = &stg_TL2_TVAR_CLEAN_info;
+            }
+            p += sizeofW(StgTL2TVar);
         }
-        p += sizeofW(StgTVar);
+        
         break;
     }
 
@@ -873,15 +887,28 @@ scavenge_mark_stack(void)
             StgTVar *tvar = ((StgTVar *)p);
             gct->eager_promotion = rtsFalse;
             evacuate((StgClosure **)&tvar->current_value);
-            evacuate((StgClosure **)&tvar->first_watch_queue_entry);
-            gct->eager_promotion = saved_eager_promotion;
-
-            if (gct->failed_to_evac) {
-                tvar->header.info = &stg_TVAR_DIRTY_info;
-            } else {
-                tvar->header.info = &stg_TVAR_CLEAN_info;
+            
+            if(((StgClosure*)p)->header.info == &stg_TVAR_DIRTY_info || 
+               ((StgClosure*)p)->header.info == &stg_TVAR_CLEAN_info){
+                evacuate((StgClosure **)&tvar->first_watch_queue_entry);
+                gct->eager_promotion = saved_eager_promotion;
+                
+                if (gct->failed_to_evac) {
+                    tvar->header.info = &stg_TVAR_DIRTY_info;
+                } else {
+                    tvar->header.info = &stg_TVAR_CLEAN_info;
+                }
+                break;
+            }else{
+                gct->eager_promotion = saved_eager_promotion;
+                
+                if (gct->failed_to_evac) {
+                    tvar->header.info = &stg_TL2_TVAR_DIRTY_info;
+                } else {
+                    tvar->header.info = &stg_TL2_TVAR_CLEAN_info;
+                }
+                break;
             }
-            break;
         }
 
         case FUN_2_0:
@@ -1244,15 +1271,27 @@ scavenge_one(StgPtr p)
         StgTVar *tvar = ((StgTVar *)p);
         gct->eager_promotion = rtsFalse;
         evacuate((StgClosure **)&tvar->current_value);
-        evacuate((StgClosure **)&tvar->first_watch_queue_entry);
-        gct->eager_promotion = saved_eager_promotion;
+        
+        if(((StgClosure*)p)->header.info == &stg_TVAR_DIRTY_info || 
+           ((StgClosure*)p)->header.info == &stg_TVAR_CLEAN_info){
+            evacuate((StgClosure **)&tvar->first_watch_queue_entry);
+            gct->eager_promotion = saved_eager_promotion;
 
-        if (gct->failed_to_evac) {
-            tvar->header.info = &stg_TVAR_DIRTY_info;
-        } else {
-            tvar->header.info = &stg_TVAR_CLEAN_info;
+            if (gct->failed_to_evac) {
+                tvar->header.info = &stg_TVAR_DIRTY_info;
+            } else {
+                tvar->header.info = &stg_TVAR_CLEAN_info;
+            }
+            break;
+        }else{
+            gct->eager_promotion = saved_eager_promotion;
+            if (gct->failed_to_evac) {
+                tvar->header.info = &stg_TL2_TVAR_DIRTY_info;
+            } else {
+                tvar->header.info = &stg_TL2_TVAR_CLEAN_info;
+            }
+            break;
         }
-        break;
     }
 
     case THUNK:
