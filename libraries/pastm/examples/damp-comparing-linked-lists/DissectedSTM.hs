@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, ForeignFunctionInterface #-} 
 
-module DissectedSTM(newList, addToTail, find, delete, List)
+module DissectedSTM(newList, addToTail, find, delete, List, printStats)
 where
 
 #ifdef STMHASKELL
@@ -44,16 +44,16 @@ newList = do
         return (ListHandle {headList = hdPtr,
                             tailList = tailPtr})
 
-addToTail :: ListHandle a -> a -> IO (TVar (List a))
+addToTail :: ListHandle a -> a -> IO ()
 addToTail (ListHandle {tailList = tailPtrPtr}) x = do
-          tPtr <- atomically ( do
-               null <- newTVar Null
-               tailPtr <- readTVar tailPtrPtr
-               writeTVar tailPtr (Node {val = x, next = null})
-               writeTVar tailPtrPtr null
-               return tailPtr
-               )
-          return tPtr
+          atomically ( do
+                     null <- newTVar Null
+                     tailPtr <- readTVar tailPtrPtr
+                     writeTVar tailPtr (Node {val = x, next = null})
+                     writeTVar tailPtrPtr null
+                     return()
+                     )
+          return()
 
 searchAndExecute
     :: Eq a

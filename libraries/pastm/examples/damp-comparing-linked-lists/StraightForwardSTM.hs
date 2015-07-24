@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, ForeignFunctionInterface #-} 
 
-module StraightForwardSTM(newList, addToTail, find, delete, List)
+module StraightForwardSTM(newList, addToTail, find, delete, List, printStats)
 where
 
 #ifdef STMHASKELL
@@ -31,7 +31,7 @@ newList =
     tailPtr <- atomically (newTVar null)
     return (ListHandle {headList = hdPtr,
                         tailList = tailPtr})
-addToTail :: ListHandle a -> a -> IO (TVar (List a))
+addToTail :: ListHandle a -> a -> IO ()
 addToTail (ListHandle {tailList = tailPtrPtr}) x = do
   tPtr <- atomically ( do
             null <- newTVar Null
@@ -39,9 +39,10 @@ addToTail (ListHandle {tailList = tailPtrPtr}) x = do
             writeTVar tailPtr
                       (Node {val = x, next = null})
             writeTVar tailPtrPtr null
-            return tailPtr
+            return()
            )
   return tPtr
+
 find :: Eq a => ListHandle a -> a -> IO Bool 
 find (ListHandle {headList = ptrPtr}) i =
   atomically (

@@ -1,7 +1,8 @@
-module CASLL(List, find, delete)
+module CASLL(List, find, delete, addToTail, newList)
 where
 
 import Data.IORef
+import Dump
 
 data List a = Node { val :: a
                    , next :: IORef (List a) }
@@ -9,6 +10,12 @@ data List a = Node { val :: a
             | Null
             | Head { next :: IORef (List a) }
             deriving Eq
+
+instance Show (List a) where
+         show (Node _ _) = "Node"
+         show (DelNode _) = "DelNode"
+         show Null = "Null"
+         show (Head _) = "Head"
 
 data ListHandle a
      = ListHandle { headList :: IORef (IORef (List a)),
@@ -30,18 +37,21 @@ newList =
       tailPtr <- newIORef nullPtr
       return (ListHandle {headList = hdPtr, tailList = tailPtr})
 
+atomicWrite :: IORef a -> a -> IO ()
+atomicWrite ptr x =
+   atomicModifyIORef ptr (\ _ -> (x,()))
 
 -- we add a new node, by overwriting the null tail node
 -- we only need to adjust tailList but not headList because
 -- of the static Head
 -- we return the location of the newly added node
-addToTail :: Eq a => ListHandle a -> a -> IO (IORef (List a))
+addToTail :: Eq a => ListHandle a -> a -> IO ()
 addToTail handle@(ListHandle {tailList = tailPtrPtr}) x = do 
           nullPtr <- newIORef Null
           tailPtr <- readIORef tailPtrPtr
           b <- atomCAS tailPtr Null (Node{val = x, next = nullPtr})
           if b
-          then return tailPtr
+          then atomicWrite tailPtrPtr nullPtr
           else addToTail handle x
 
 

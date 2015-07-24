@@ -1,5 +1,5 @@
 
-module LockCoupling(find, delete, newList, List)
+module LockCoupling(find, delete, newList, List, addToTail, size)
 where
 
 import Control.Concurrent.MVar
@@ -12,22 +12,35 @@ data List a = Node { val :: a
 
 data ListHandle a
      = ListHandle { headList :: IORef (MVar (List a)),
-                    tailList :: IORef (MVar (List a)) }
+                    tailList :: MVar (MVar (List a)) }
 
-addToTail :: ListHandle a -> a -> IO (MVar (List a))
+size :: ListHandle a -> IO Int
+size (ListHandle{headList = head}) = do
+     startPtr <- readIORef head
+     go startPtr 0
+        where
+        go ptr i = do
+           curNode <- takeMVar ptr
+           case curNode of
+                Head{next = nextNode} -> go nextNode i
+                Node{next = nextNode} -> go nextNode (i+1)
+                Null -> return i
+
+addToTail :: ListHandle a -> a -> IO ()
 addToTail (ListHandle{tailList = tailPtrPtr}) x = do
+          tailPtr <- takeMVar tailPtrPtr 
+          tail <- takeMVar tailPtr
           null <- newMVar Null
-          tailPtr <- readIORef tailPtrPtr
           putMVar tailPtr (Node {val = x, next = null})
-          writeIORef tailPtrPtr null
-          return tailPtr
+          putMVar tailPtrPtr null
+          return ()
 
 newList :: IO (ListHandle a)
 newList = do 
         null <- newMVar Null
         hd <- newMVar(Head{next = null})
         hdPtr <- newIORef hd    
-        tailPtr <- newIORef null
+        tailPtr <- newMVar null
         return(ListHandle {headList = hdPtr, tailList = tailPtr})
 
 find :: Eq a => ListHandle a -> a -> IO Bool
