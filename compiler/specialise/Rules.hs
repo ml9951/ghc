@@ -45,7 +45,7 @@ import Id
 import IdInfo           ( SpecInfo( SpecInfo ) )
 import VarEnv
 import VarSet
-import Name             ( Name, NamedThing(..), nameIsLocalOrFrom, nameOccName )
+import Name             ( Name, NamedThing(..), nameIsLocalOrFrom )
 import NameSet
 import NameEnv
 import Unify            ( ruleMatchTyX, MatchEnv(..) )
@@ -185,10 +185,7 @@ mkRule this_mod is_auto is_local name act fn bndrs args rhs
         -- it deterministic. This chooses the one with minimal OccName
         -- as opposed to uniq value.
     local_lhs_names = filter (nameIsLocalOrFrom this_mod) lhs_names
-    anchor = minimum $ map nameOccName local_lhs_names
-    orph = case local_lhs_names of
-             (_ : _) -> NotOrphan anchor
-             []      -> IsOrphan
+    orph = chooseOrphanAnchor local_lhs_names
 
 --------------
 roughTopNames :: [CoreExpr] -> [Maybe Name]
@@ -483,7 +480,7 @@ matchRule :: DynFlags -> InScopeEnv -> (Activation -> Bool)
 -- then (f args) matches the rule, and the corresponding
 -- rewritten RHS is rhs
 --
--- The bndrs and rhs is occurrence-analysed
+-- The returned expression is occurrence-analysed
 --
 --      Example
 --
@@ -505,8 +502,9 @@ matchRule dflags rule_env _is_active fn args _rough_args
           (BuiltinRule { ru_try = match_fn })
 -- Built-in rules can't be switched off, it seems
   = case match_fn dflags rule_env fn args of
-        Just expr -> Just expr
         Nothing   -> Nothing
+        Just expr -> Just (occurAnalyseExpr expr)
+        -- We could do this when putting things into the rulebase, I guess
 
 matchRule _ in_scope is_active _ args rough_args
           (Rule { ru_act = act, ru_rough = tpl_tops

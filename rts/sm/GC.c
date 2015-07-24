@@ -135,6 +135,9 @@ long copied;        // *words* copied & scavenged during this GC
 
 rtsBool work_stealing;
 
+nat static_flag = STATIC_FLAG_B;
+nat prev_static_flag = STATIC_FLAG_A;
+
 DECLARE_GCT
 
 /* -----------------------------------------------------------------------------
@@ -142,7 +145,6 @@ DECLARE_GCT
    -------------------------------------------------------------------------- */
 
 static void mark_root               (void *user, StgClosure **root);
-static void zero_static_object_list (StgClosure* first_static);
 static void prepare_collected_gen   (generation *gen);
 static void prepare_uncollected_gen (generation *gen);
 static void init_gc_thread          (gc_thread *t);
@@ -247,6 +249,12 @@ GarbageCollect (nat collect_gen,
    */
   N = collect_gen;
   major_gc = (N == RtsFlags.GcFlags.generations-1);
+
+  if (major_gc) {
+      prev_static_flag = static_flag;
+      static_flag =
+          static_flag == STATIC_FLAG_A ? STATIC_FLAG_B : STATIC_FLAG_A;
+  }
 
 #if defined(THREADED_RTS)
   work_stealing = RtsFlags.ParFlags.parGcLoadBalancingEnabled &&
@@ -674,20 +682,6 @@ GarbageCollect (nat collect_gen,
   // ToDo: fix the gct->scavenged_static_objects below
   resetStaticObjectForRetainerProfiling(gct->scavenged_static_objects);
 #endif
-
-  // zero the scavenged static object list
-  if (major_gc) {
-      nat i;
-      if (n_gc_threads == 1) {
-          zero_static_object_list(gct->scavenged_static_objects);
-      } else {
-          for (i = 0; i < n_gc_threads; i++) {
-              if (!gc_threads[i]->idle) {
-                  zero_static_object_list(gc_threads[i]->scavenged_static_objects);
-              }
-          }
-      }
-  }
 
   // Start any pending finalizers.  Must be after
   // updateStableTables() and stableUnlock() (see #4221).
@@ -1430,8 +1424,8 @@ collect_pinned_object_blocks (void)
 static void
 init_gc_thread (gc_thread *t)
 {
-    t->static_objects = END_OF_STATIC_LIST;
-    t->scavenged_static_objects = END_OF_STATIC_LIST;
+    t->static_objects = END_OF_STATIC_OBJECT_LIST;
+    t->scavenged_static_objects = END_OF_STATIC_OBJECT_LIST;
     t->scan_bd = NULL;
     t->mut_lists = t->cap->mut_lists;
     t->evac_gen_no = 0;
@@ -1466,24 +1460,6 @@ mark_root(void *user USED_IF_THREADS, StgClosure **root)
     evacuate(root);
 
     SET_GCT(saved_gct);
-}
-
-/* -----------------------------------------------------------------------------
-   Initialising the static object & mutable lists
-   -------------------------------------------------------------------------- */
-
-static void
-zero_static_object_list(StgClosure* first_static)
-{
-  StgClosure* p;
-  StgClosure* link;
-  const StgInfoTable *info;
-
-  for (p = first_static; p != END_OF_STATIC_LIST; p = link) {
-    info = get_itbl(p);
-    link = *STATIC_LINK(info, p);
-    *STATIC_LINK(info,p) = NULL;
-  }
 }
 
 /* ----------------------------------------------------------------------------
@@ -1731,7 +1707,7 @@ static void gcCAFs(void)
     p = debug_caf_list;
     prev = NULL;
 
-    for (p = debug_caf_list; p != (StgIndStatic*)END_OF_STATIC_LIST;
+    for (p = debug_caf_list; p != (StgIndStatic*)END_OF_CAF_LIST;
          p = (StgIndStatic*)p->saved_info) {
 
         info = get_itbl((StgClosure*)p);
