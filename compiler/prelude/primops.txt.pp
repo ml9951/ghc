@@ -2072,10 +2072,9 @@ primop  PCatchRetryOp "pcatchRetry#" GenPrimOp
    -> (b -> State# RealWorld -> (# State# RealWorld, a #) )
    -> (State# RealWorld -> (# State# RealWorld, a #) )
    with
-   strictness  = { \ _arity -> mkClosedStrictSig [apply1Dmd,apply1Dmd,topDmd] topRes }
+   strictness  = { \ _arity -> mkClosedStrictSig [strictApply1Dmd,lazyApply1Dmd,topDmd] topRes }
    out_of_line = True
    has_side_effects = True
-
 ------------------------------------------------------------------------
 section "STM-accessible Mutable Variables"
 ------------------------------------------------------------------------
