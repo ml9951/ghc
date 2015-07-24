@@ -2028,7 +2028,7 @@ primop  PAtomicallyOp "patomically#" GenPrimOp
       (State# RealWorld -> (# State# RealWorld , b #) )
    -> State# RealWorld -> (# State# RealWorld, b #)
    with
-   strictness  = { \ _arity -> mkClosedStrictSig [apply1Dmd,topDmd] topRes }
+   strictness  = { \ _arity -> mkClosedStrictSig [strictApply1Dmd,topDmd] topRes }
    out_of_line = True
    has_side_effects = True
 
