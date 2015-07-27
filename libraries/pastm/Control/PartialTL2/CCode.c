@@ -59,7 +59,7 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
 	ptrec->tail = TO_WITHOUTK(NO_PTREC);
     }
-	
+    
     ptrec->read_set = TO_WITHOUTK(NO_PTREC);
     ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
@@ -123,6 +123,13 @@ static StgPTRecWithK * eagerValidate(StgPTRecHeader * trec){
 	    trec->capture_freq = capture_freq | (capture_freq >> 32);
 	    trec->numK = kCount;
 	    return checkpoint;
+	}else if(checkpoint == TO_WITHK(PASTM_FAIL)){
+	    trec->read_set = TO_WITHOUTK(NO_PTREC);
+	    trec->lastK = TO_WITHK(NO_PTREC);
+	    trec->write_set = TO_WRITE_SET(NO_PTREC);
+	    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+	    trec->capture_freq &= 0xFFFFFFFF00000000;
+	    return checkpoint;
 	}else{
 	    return checkpoint;
 	}
@@ -161,7 +168,6 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 	}
 	
 	if(checkpoint->header.info == WITHK_HEADER){
-	    /*
 	    StgClosure * val;
 	    unsigned long tvStamp;
 	    StgTL2TVar * tvar = TO_TL2(checkpoint->tvar);
@@ -178,7 +184,14 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 	    trec->lastK = checkpoint;
 	    StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
 	    trec->capture_freq = capture_freq | (capture_freq >> 32);
-	    trec->numK = kCount;*/
+	    trec->numK = kCount;
+	    return checkpoint;
+	}else if(checkpoint == TO_WITHK(PASTM_FAIL)){
+	    trec->read_set = TO_WITHOUTK(NO_PTREC);
+	    trec->lastK = TO_WITHK(NO_PTREC);
+	    trec->write_set = TO_WRITE_SET(NO_PTREC);
+	    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+	    trec->capture_freq &= 0xFFFFFFFF00000000;
 	    return checkpoint;
 	}else{
 	    return checkpoint;
@@ -199,17 +212,21 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     }
     
     StgClosure * val; 
-    unsigned long stamp;
-
+    unsigned long stamp1, stamp2;
+    
+ retry:
     do{
+	stamp1 = tvar->stamp;
 	val = tvar->current_value;
-	stamp = tvar->stamp;
+	stamp2 = tvar->stamp;
     }while(tvar->lock);
 
-    while(stamp > trec->read_version){
-	trec->read_version = atomic_inc(&version_clock, 1);
-	return PASTM_FAIL;
-	/*
+    if(stamp2 > trec->read_version || stamp1 != stamp2){
+
+	if(stamp2 < trec->read_version && stamp1 != stamp2){
+	    printf("stamp1 = %lu, stamp2 = %lu, lock = %lu\n", stamp1, stamp2, tvar->lock);
+	}
+
 	unsigned long newStamp = atomic_inc(&version_clock, 1);
 	StgPTRecWithK * res = eagerValidate(trec);
 	trec->read_version = newStamp;
@@ -223,7 +240,7 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 #endif
 	    return TO_CLOSURE(res);
 	}
-	*/
+	goto retry;
     }
     
     if(trec->numK < KBOUND){//Still room for more
@@ -319,7 +336,7 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 		    continue;
 		}else{//someone else locked this
 		    //validate read set
-		    releaseLocks(trec->write_set, *trailer);
+		    releaseLocks(trec->write_set, ptr);
 		    unsigned long newStamp = atomic_inc((StgVolatilePtr)&version_clock, 1);
 		    StgPTRecWithK * res = commitValidate(trec);
 		    if(res != TO_WITHK(PASTM_SUCCESS)){
@@ -336,9 +353,10 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	unsigned long write_version = atomic_inc(&version_clock, 1);
 
 	//validate read set
+	ptr = trec->write_set;
 	StgPTRecWithK * res = commitValidate(trec);
 	if(res != TO_WITHK(PASTM_SUCCESS)){
-	    releaseLocks(trec->write_set, TO_WRITE_SET(NO_PTREC));
+	    releaseLocks(ptr, TO_WRITE_SET(NO_PTREC));
 	    trec->read_version = write_version;
 	    return res;
 	}
@@ -347,15 +365,6 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	ptr = trec->write_set;
 	while(ptr != TO_WRITE_SET(NO_PTREC)){
 	    StgTL2TVar * tvar = TO_TL2(ptr->tvar);
-
-	    long * current = (long*)(((unsigned long) tvar->current_value) & 0xFFFFFFFFFFFFFFF8);
-	    long * newPtr = (long*)(((unsigned long) ptr->val) & 0xFFFFFFFFFFFFFFF8);
-
-	    if(current[1] != newPtr[1] - 1){
-		printf("Incorrect! current = %lu, new = %lu\n", current[1], newPtr[1]);
-	    }
-
-
 	    tvar->current_value = ptr->val;
 	    tvar->stamp = write_version;
 	    tvar->lock = 0;

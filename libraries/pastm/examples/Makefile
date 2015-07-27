@@ -63,7 +63,7 @@ counterOrdered:	counter.hs cbits/gettime.c
 
 .PHONY:	counterTL2
 counterTL2:	counter.hs cbits/gettime.c 
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DTL2 $(TL2_FILES) -optc-g -fforce-recomp cbits/gettime.c counter.hs -o counterTL2$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DTL2 $(TL2_FILES) -optc-g -optc-O0 -fforce-recomp cbits/gettime.c counter.hs -o counterTL2$(OPT)
 
 
 
