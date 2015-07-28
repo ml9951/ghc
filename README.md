@@ -5,10 +5,9 @@ partially abort transactions.  Below are the steps necessary to
 get everything checked out and built:
 
 
-    git clone git://git.haskell.org/ghc.git
+    git clone --recursive git://git.haskell.org/ghc.git
     cd ghc
     git remote add pstm-remote https://github.com/ml9951/ghc.git
-    ./sync-all get
     git fetch pstm-remote
     git checkout pstm
     cp mk/build.mk.sample mk/build.mk #Uncomment the following line: "BuildFlavour = quick"
