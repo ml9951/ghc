@@ -4,23 +4,6 @@
 #include "sm/Storage.h"
 #include <stdio.h>
 
-
-#if SIZEOF_VOID_P == 4
-#define TAG_BITS                2
-#elif SIZEOF_VOID_P == 8
-#define TAG_BITS                3
-#else
-#error Unknown word size
-#endif
-
-/*
- * The RTS must sometimes UNTAG a pointer before dereferencing it.
- * See the wiki page Commentary/Rts/HaskellExecution/PointerTagging
- */
-#define TAG_MASK ((1 << TAG_BITS) - 1)
-#define UNTAG(p) (p & ~TAG_MASK)
-#define GETTAG(p) (p & TAG_MASK)
-
 #define TRUE 1
 #define FALSE 0
 #define KBOUND 20
@@ -42,8 +25,6 @@
 #define WITHOUTK_HEADER            &stg_PTREC_WITHOUTK_info
 #define WRITESET_HEADER            &stg_WRITE_SET_info
 
-#define TRACE(_x...) printf(_x)
-
 static volatile unsigned long version_clock = 0;
 
 #define STATS
@@ -53,7 +34,6 @@ static StgPASTMStats stats = {0, 0, 0, 0, 0};
 #endif
 
 StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
-  
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
@@ -73,48 +53,78 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
     return ptrec;
 }
 
-static StgPTRecWithK * eagerValidate(StgPTRecHeader * trec){
-    unsigned long stamp = trec->read_version;
+static void clearTRec(StgPTRecHeader * trec){
+    trec->read_set = TO_WITHOUTK(NO_PTREC);
+    trec->lastK = TO_WITHK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+    trec->capture_freq = capture_freq | (capture_freq >> 32);
+    trec->numK = 0;
+}
 
+static StgPTRecWithK * extendTS(StgPTRecHeader * trec){
  RETRY: 
-    {
+    { 
+	unsigned long newStamp = atomic_inc(&(version_clock), 1);
+	unsigned long stamp = trec->read_version;
 	StgPTRecWithoutK * ptr = trec->read_set;
 	StgPTRecWithK * checkpoint = TO_WITHK(PASTM_SUCCESS);
 	StgInt kCount = 0;
 	
 	while(ptr != TO_WITHOUTK(NO_PTREC)){
+	    StgTL2TVar * tvar = TO_TL2(ptr->tvar);
+	    unsigned long v1, v2;
 	    if(ptr->header.info == WITHOUTK_HEADER){
-		StgTL2TVar * tvar = TO_TL2(ptr->tvar);
 		if(tvar->lock || tvar->stamp > stamp){
 		    checkpoint = TO_WITHK(PASTM_FAIL);
 		    kCount = 0;
-		}else{
-		    StgPTRecWithK * withK = TO_WITHK(ptr);
-		    if(tvar->lock || tvar->stamp > stamp){
-			checkpoint = withK;
-			ptr = ptr->next;
-			kCount = 1;
-			continue;
-		    }else if(checkpoint == TO_WITHK(PASTM_FAIL)){
-			checkpoint = withK;
-		    }
-		    kCount++;
 		}
-		ptr = ptr->next;
+	    }else{
+		StgPTRecWithK * withK = TO_WITHK(ptr);
+		if(tvar->lock || tvar->stamp > stamp){
+		    checkpoint = withK;
+		    ptr = ptr->next;
+		    kCount = 1;
+		    continue;
+		}else if(checkpoint == TO_WITHK(PASTM_FAIL)){
+		    checkpoint = withK;
+		}
+		kCount++;
 	    }
+	    ptr = ptr->next;
 	}
-    
+	
+	trec->read_version = newStamp;
 	if(checkpoint->header.info == WITHK_HEADER){
 	    StgClosure * val;
-	    unsigned long tvStamp;
 	    StgTL2TVar * tvar = TO_TL2(checkpoint->tvar);
+	    unsigned long stamp1, stamp2;
+	    
+	    /*
 	    do{
+		stamp1 = tvar->stamp;
 		val = tvar->current_value;
-		tvStamp = tvar->stamp;
+		stamp2 = tvar->stamp;
 	    }while(tvar->lock);
-	    if(tvStamp > stamp)
-		goto RETRY;
-	
+	    
+	    if(stamp2 > trec->read_version || stamp1 != stamp2){
+		clearTRec(trec);
+		return TO_WITHK(PASTM_FAIL);
+	    }
+	    */
+	    
+	    while(cas((StgVolatilePtr)&(tvar->lock), 0, trec->read_version) && tvar->lock != stamp);
+	    val = tvar->current_value;
+	    stamp2 = tvar->stamp;
+	    tvar->lock = 0;
+	    
+	    if(stamp2 > trec->read_version){
+		clearTRec(trec);
+		trec->read_version = atomic_inc(&version_clock, 1);
+		return PASTM_FAIL;
+	    }
+	    
 	    checkpoint->read_value = val;
 	    trec->read_set = TO_WITHOUTK(checkpoint);
 	    trec->write_set = checkpoint->write_set;
@@ -124,11 +134,7 @@ static StgPTRecWithK * eagerValidate(StgPTRecHeader * trec){
 	    trec->numK = kCount;
 	    return checkpoint;
 	}else if(checkpoint == TO_WITHK(PASTM_FAIL)){
-	    trec->read_set = TO_WITHOUTK(NO_PTREC);
-	    trec->lastK = TO_WITHK(NO_PTREC);
-	    trec->write_set = TO_WRITE_SET(NO_PTREC);
-	    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
-	    trec->capture_freq &= 0xFFFFFFFF00000000;
+	    clearTRec(trec);
 	    return checkpoint;
 	}else{
 	    return checkpoint;
@@ -137,10 +143,9 @@ static StgPTRecWithK * eagerValidate(StgPTRecHeader * trec){
 }
 
 static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
-    unsigned long stamp = trec->read_version;
-
  RETRY: 
     {
+	unsigned long stamp = trec->read_version;
 	StgPTRecWithoutK * ptr = trec->read_set;
 	StgPTRecWithK * checkpoint = TO_WITHK(PASTM_SUCCESS);
 	StgInt kCount = 0;
@@ -163,21 +168,41 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 		}else if(checkpoint == TO_WITHK(PASTM_FAIL)){
 		    checkpoint = withK;
 		}
+		ptr = ptr->next;
 		kCount++;
 	    }
 	}
 	
 	if(checkpoint->header.info == WITHK_HEADER){
 	    StgClosure * val;
-	    unsigned long tvStamp;
 	    StgTL2TVar * tvar = TO_TL2(checkpoint->tvar);
+
+	    
+	    unsigned long stamp1, stamp2;
+	    /*
 	    do{
+		stamp1 = tvar->stamp;
 		val = tvar->current_value;
-		tvStamp = tvar->stamp;
-	    }while(tvar->lock);
-	    if(tvStamp > stamp)
-		goto RETRY;
-	
+		stamp2 = tvar->stamp;
+	    }while(tvar->lock && tvar->lock != stamp);
+	    
+	    if(stamp2 > trec->read_version || stamp1 != stamp2){
+		clearTRec(trec);
+		return TO_WITHK(PASTM_FAIL);
+	    }
+	    */
+
+	    while(cas((StgVolatilePtr)&(tvar->lock), 0, trec->read_version) && tvar->lock != stamp);
+	    val = tvar->current_value;
+	    stamp2 = tvar->stamp;
+	    tvar->lock = 0;
+	    
+	    if(stamp2 > trec->read_version){
+		clearTRec(trec);
+		trec->read_version = atomic_inc(&version_clock, 1);
+		return TO_WITHK(PASTM_FAIL);
+	    }
+	    
 	    checkpoint->read_value = val;
 	    trec->read_set = TO_WITHOUTK(checkpoint);
 	    trec->write_set = checkpoint->write_set;
@@ -187,11 +212,7 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 	    trec->numK = kCount;
 	    return checkpoint;
 	}else if(checkpoint == TO_WITHK(PASTM_FAIL)){
-	    trec->read_set = TO_WITHOUTK(NO_PTREC);
-	    trec->lastK = TO_WITHK(NO_PTREC);
-	    trec->write_set = TO_WRITE_SET(NO_PTREC);
-	    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
-	    trec->capture_freq &= 0xFFFFFFFF00000000;
+	    clearTRec(trec);
 	    return checkpoint;
 	}else{
 	    return checkpoint;
@@ -214,35 +235,34 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     StgClosure * val; 
     unsigned long stamp1, stamp2;
     
+
  retry:
+    /*
     do{
 	stamp1 = tvar->stamp;
 	val = tvar->current_value;
 	stamp2 = tvar->stamp;
     }while(tvar->lock);
-
+    
     if(stamp2 > trec->read_version || stamp1 != stamp2){
+	clearTRec(trec);
+	trec->read_version = atomic_inc(&version_clock, 1);
+	return PASTM_FAIL;
+    }
+    */
+    
+    while(cas((StgVolatilePtr)&(tvar->lock), 0, trec->read_version));
+    val = tvar->current_value;
+    stamp2 = tvar->stamp;
+    tvar->lock = 0;
 
-	if(stamp2 < trec->read_version && stamp1 != stamp2){
-	    printf("stamp1 = %lu, stamp2 = %lu, lock = %lu\n", stamp1, stamp2, tvar->lock);
-	}
-
-	unsigned long newStamp = atomic_inc(&version_clock, 1);
-	StgPTRecWithK * res = eagerValidate(trec);
-	trec->read_version = newStamp;
-	if(res != TO_WITHK(PASTM_SUCCESS)){
-#ifdef STATS
-	    if(res == TO_WITHK(PASTM_FAIL)){
-		cap->pastmStats.eagerFullAborts++;
-		return TO_CLOSURE(res);
-	    }
-	    cap->pastmStats.eagerPartialAborts++;
-#endif
-	    return TO_CLOSURE(res);
-	}
-	goto retry;
+    if(stamp2 > trec->read_version){
+	clearTRec(trec);
+	trec->read_version = atomic_inc(&version_clock, 1);
+	return PASTM_FAIL;
     }
     
+
     if(trec->numK < KBOUND){//Still room for more
         if((trec->capture_freq & 0xFFFFFFFF) == 0){//Store the continuation
             StgPTRecWithK * entry = (StgPTRecWithK *)allocate(cap, sizeofW(StgPTRecWithK));
@@ -319,10 +339,9 @@ void releaseLocks(StgWriteSet * ws, StgWriteSet * sentinel){
 }
 
 StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
-    unsigned long stamp = trec->read_version;
-    
  RETRY:
     {
+	unsigned long stamp = trec->read_version;
 	//Acquire locks
 	StgWriteSet * ptr = trec->write_set;
 	StgWriteSet ** trailer = &(trec->write_set);
@@ -337,10 +356,8 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 		}else{//someone else locked this
 		    //validate read set
 		    releaseLocks(trec->write_set, ptr);
-		    unsigned long newStamp = atomic_inc((StgVolatilePtr)&version_clock, 1);
-		    StgPTRecWithK * res = commitValidate(trec);
+		    StgPTRecWithK * res = extendTS(trec);
 		    if(res != TO_WITHK(PASTM_SUCCESS)){
-			trec->read_version = newStamp;
 			return res;
 		    }
 		    goto RETRY;
@@ -365,6 +382,16 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	ptr = trec->write_set;
 	while(ptr != TO_WRITE_SET(NO_PTREC)){
 	    StgTL2TVar * tvar = TO_TL2(ptr->tvar);
+
+	    /*
+	    long * current = (long*)(((unsigned long) tvar->current_value) & 0xFFFFFFFFFFFFFFF8);
+	    long * newPtr = (long*)(((unsigned long) ptr->val) & 0xFFFFFFFFFFFFFFF8);
+
+	    if(current[1] != newPtr[1] - 1){
+		printf("Incorrect! current = %lu, new = %lu\n", current[1], newPtr[1]);
+	    }
+	    */
+
 	    tvar->current_value = ptr->val;
 	    tvar->stamp = write_version;
 	    tvar->lock = 0;
@@ -372,6 +399,7 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	    ptr = ptr->next;
 	}
     }
+
 #ifdef STATS
     //Since version clock is locked, these don't need to be atomic
     stats.commitTimeFullAborts += cap->pastmStats.commitTimeFullAborts;
@@ -385,7 +413,7 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     cap->pastmStats.eagerPartialAborts = 0;
 #endif
 
-    return (StgPTRecWithK *)PASTM_SUCCESS;
+    return TO_WITHK(PASTM_SUCCESS);
 }
 
 void pa_printSTMStats(){

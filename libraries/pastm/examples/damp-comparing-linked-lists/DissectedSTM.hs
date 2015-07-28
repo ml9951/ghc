@@ -11,6 +11,8 @@ import Control.Full.STM           --full abort STM (NoRec)
 import Control.Ordered.STM
 #elif defined(CPSFULL)
 import Control.CPSFull.STM
+#elif define(TL2)
+import Control.PartialTL2.STM
 #else
 import Control.Partial.STM
 --import Control.Concurrent.PASTM.Core

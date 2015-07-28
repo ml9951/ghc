@@ -56,6 +56,56 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
 
     return ptrec;
 }
+/*
+static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
+ RETRY:
+    while(TRUE){
+        unsigned long time = version_clock;
+        if((time & 1) != 0){
+            continue; //clock is locked
+        }
+        trec->read_version = time;
+        //validate read set
+        StgPTRecWithoutK * ptr = trec->read_set; //first element is the dummy
+        StgPTRecWithK *checkpoint = NULL;
+        StgInt kCount = 0;
+	
+	while(ptr != TO_WITHOUTK(NO_PTREC)){
+	    if(ptr->read_value != ptr->tvar->current_value){
+		if(checkpoint != NULL){ //we have a checkpoint
+		    //try reading from this tvar
+		    StgClosure * val = checkpoint->tvar->current_value;
+		    if(time == version_clock){
+			checkpoint->read_value = val; //apply the continuation to this in C--
+			checkpoint->next = TO_WITHOUTK(NO_PTREC);
+			
+			trec->tail = TO_WITHOUTK(checkpoint);
+			trec->write_set = checkpoint->write_set;
+			trec->lastK = checkpoint;
+			StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+			trec->capture_freq = capture_freq | (capture_freq >> 32);
+			trec->numK = kCount;
+			return checkpoint;
+		    }else{
+			goto RETRY;
+		    }
+		}else{//checkpoint == NULL
+		    return TO_WITHK(PASTM_FAIL);
+		}	    
+	    }
+	    if(ptr->header.info == WITHK_HEADER){//entry is valid and we have a checkpoint
+		checkpoint = TO_WITHK(ptr);
+		kCount++;
+	    }
+	    ptr = ptr->next;
+	}
+	
+        if(time == version_clock){
+            return TO_WITHK(PASTM_SUCCESS);
+        }
+        //Validation succeeded, but someone else committed in the meantime, loop back around...
+    }
+}*/
 
 static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
     while(TRUE){
@@ -68,7 +118,41 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
         StgPTRecWithoutK * ptr = trec->read_set;
         StgPTRecWithK *checkpoint = TO_WITHK(PASTM_SUCCESS);
         StgInt kCount = 0;
+	/*
+	//this loop assumes that we do not need a checkpoint
+    NOCHKPNT:
         while(ptr != TO_WITHOUTK(NO_PTREC)){
+	    if(ptr->read_value != ptr->tvar->current_value){
+		if(ptr->header.info == WITHK_HEADER){
+		    checkpoint = TO_WITHK(ptr);
+		}else{
+		    checkpoint = TO_WITHK(PASTM_FAIL);
+		    ptr = ptr->next;
+		    goto CHKPNT;  //look for a checkpoint
+		}
+	    }
+	    ptr = ptr->next;
+	}
+
+    CHKPNT:
+	while(ptr != TO_WITHOUTK(NO_PTREC)){
+	    if(ptr->read_value != ptr->tvar->current_value){
+		if(ptr->header.info == WITHK_HEADER){
+		    checkpoint = TO_WITHK(ptr);
+		    ptr = ptr->next;
+		    goto NOCHKPNT;
+		}
+	    }else if(ptr->header.info == WITHK_HEADER){  //valid and checkpointed
+		checkpoint = TO_WITHK(ptr);
+		ptr = ptr->next;
+		goto NOCHKPNT;
+	    }
+	    ptr = ptr->next;
+	}
+	*/
+	
+	
+	while(ptr != TO_WITHOUTK(NO_PTREC)){
 	    if(ptr->header.info == WITHOUTK_HEADER){
 		if(ptr->read_value != ptr->tvar->current_value){
 		    checkpoint = TO_WITHK(PASTM_FAIL);
@@ -88,9 +172,12 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
 	    }
             ptr = ptr->next;
         }
+	
+
         if(checkpoint == TO_WITHK(PASTM_FAIL)){ //no checkpoint found, but we need to abort
             return checkpoint;
         }
+
         if(checkpoint != TO_WITHK(PASTM_SUCCESS)){ //validation failed, but we found a checkpoint
             //try reading from this tvar
             StgTVar * tvar = checkpoint->tvar;

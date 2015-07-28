@@ -3,7 +3,7 @@
 THREADED = -threaded -optc-DTHREADED_RTS
 GHC = ghc
 
-DEBUG = 
+DEBUG = -rtsopts
 
 all:	ll counter
 

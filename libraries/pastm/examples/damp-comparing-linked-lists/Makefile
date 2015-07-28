@@ -10,6 +10,8 @@ FULL_FILES = ../../Control/Full/CmmHooks.cmm ../../Control/Full/CCode.c ../../Co
 PARTIAL_FILES = ../../Control/Partial/CmmHooks.cmm ../../Control/Partial/CCode.c ../../Control/Partial/STM.hs -I../../../../rts
 CPSFULL_FILES = ../../Control/CPSFull/CmmHooks.cmm ../../Control/CPSFull/CCode.c ../../Control/CPSFull/STM.hs -I../../../../rts
 STMHASKELL_FILES = ../../Control/STMHaskell/STM.hs -I../../../../rts
+TL2_FILES = ../../Control/PartialTL2/CmmHooks.cmm ../../Control/PartialTL2/CCode.c ../../Control/PartialTL2/STM.hs -I../../../../rts
+
 
 OPT =
 
@@ -32,6 +34,11 @@ ordered:
 stmHaskell:	
 	$(eval FILES := ../../Control/STMHaskell/STM.hs -I../../../../rts)
 	$(eval WHICHSTM := -DSTMHASKELL)
+
+.PHONY:	TL2
+TL2:	
+	$(eval FILES := ../../Control/PartialTL2/CmmHooks.cmm ../../Control/PartialTL2/CCode.c ../../Control/PartialTL2/STM.hs -I../../../../rts)
+	$(eval WHICHSTM := -DTL2)
 
 LockCoupling:	LockCoupling.hs Main.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) ../cbits/gettime.c -DLOCKCOUPLING -fforce-recomp LockCoupling.hs Main.hs -o lockCoupling

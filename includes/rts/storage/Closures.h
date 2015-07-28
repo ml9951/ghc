@@ -467,7 +467,7 @@ typedef struct StgPASTMStats_{
 typedef struct {
     StgHeader                  header;
     StgClosure                *volatile current_value;
-    volatile StgInt64                   stamp;
+    volatile StgInt64          stamp;
     volatile StgInt64          lock;
 } StgTL2TVar;
 

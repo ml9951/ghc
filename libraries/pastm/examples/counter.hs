@@ -58,5 +58,6 @@ main = do
      join mvars --wait for everyone to finish adding to list
      count <- readTVarIO counter
      putStrLn("Count is " ++ show count)
+   --  printStats
      return()
 

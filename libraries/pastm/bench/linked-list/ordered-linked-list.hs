@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-} 
-module LinkedList(newList, add, find, delete, deleteIndex, ListHandle, getSize, printStats)
+module LinkedList(newList, add, find, delete, deleteIndex, ListHandle, getSize, printStats, getSizeIO)
 where
 
 #ifdef STMHASKELL
@@ -21,6 +21,8 @@ data List a = Node {val :: a, next :: (TVar (List a))}
 data ListHandle a = ListHandle{hd :: TVar (List a), size :: TVar Int}
 
 getSize (ListHandle{hd=hd,size=size}) = atomically $ readTVar size
+
+getSizeIO (ListHandle{hd=hd,size=size}) = readTVarIO size
 
 newList = atomically $ do
         l <- newTVar Null

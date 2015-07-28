@@ -149,17 +149,6 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         }
         val = tvar->current_value;
     }
-
-    /*
-     void
-     dirty_TVAR(Capability *cap, StgTVar *p)
-     {
-     if (p->header.info == &stg_TVAR_CLEAN_info) {
-     p->header.info = &stg_TVAR_DIRTY_info;
-     recordClosureMutated(cap,(StgClosure*)p);
-     }
-     }
-    */
     
     if(trec->numK < KBOUND){//Still room for more
         if((trec->capture_freq & 0xFFFFFFFF) == 0){//Store the continuation

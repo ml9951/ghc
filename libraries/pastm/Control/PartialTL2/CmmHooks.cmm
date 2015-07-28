@@ -198,6 +198,47 @@ stg_partial_readTVarzh (P_ tvar, P_ k)
     return (result);
 }
 
+/*
+counterTL2`stg_partial_readTVarzh:
+    0x100004510 <+0>:   movq   0x378(%r13), %rax
+    0x100004517 <+7>:   cmpq   $0x0, 0x10(%rax)
+    0x10000451c <+12>:  je     0x100004587               ; <+119>
+    0x10000451e <+14>:  leaq   0x52988b(%rip), %rax      ; g0
+    0x100004525 <+21>:  movq   (%rax), %rax
+    0x100004528 <+24>:  movq   0x38(%rax), %rax
+    0x10000452c <+28>:  leaq   0x52989d(%rip), %rcx      ; large_alloc_lim
+    0x100004533 <+35>:  cmpq   (%rcx), %rax
+    0x100004536 <+38>:  jae    0x100004587               ; <+119>
+    0x100004538 <+40>:  movq   0x368(%r13), %rax
+    0x10000453f <+47>:  movq   0x58(%rax), %rax
+    0x100004543 <+51>:  leaq   0x236(%rip), %rcx         ; pa_stmReadTVar at CCode.c:133
+    0x10000454a <+58>:  leaq   -0x18(%r13), %rdx
+    0x10000454e <+62>:  movq   %rdx, %rdi
+    0x100004551 <+65>:  movq   %rax, %rsi
+    0x100004554 <+68>:  movq   %rbx, %rdx
+    0x100004557 <+71>:  movq   %rcx, %rax
+    0x10000455a <+74>:  movq   %r14, %rcx
+    0x10000455d <+77>:  subq   $0x8, %rsp
+    0x100004561 <+81>:  movq   %rax, %rbx
+    0x100004564 <+84>:  xorl   %eax, %eax
+    0x100004566 <+86>:  callq  *%rbx
+->  0x100004568 <+88>:  addq   $0x8, %rsp
+    0x10000456c <+92>:  cmpq   0x4a4b45(%rip), %rax      ; (void *)0x00000001005219b0: stg_PA_STM_FAIL_closure
+    0x100004573 <+99>:  je     0x10000459f               ; <+143>
+    0x100004575 <+101>: movq   (%rax), %rbx
+    0x100004578 <+104>: cmpq   0x4a4b49(%rip), %rbx      ; (void *)0x000000010047a500: stg_PTREC_WITHK_info
+    0x10000457f <+111>: je     0x1000045a5               ; <+149>
+    0x100004581 <+113>: movq   %rax, %rbx
+    0x100004584 <+116>: jmpq   *(%rbp)
+    0x100004587 <+119>: movq   $0x0, 0x388(%r13)
+    0x100004592 <+130>: leaq   -0x89(%rip), %rsi         ; <+0>
+    0x100004599 <+137>: jmpq   *0x4a4cd1(%rip)           ; (void *)0x0000000100474348: stg_gc_prim_pp
+    0x10000459f <+143>: jmpq   *0x4a4d43(%rip)           ; (void *)0x0000000100004388: stg_partial_eagerFullAbort
+    0x1000045a5 <+149>: movq   %rax, %rbx
+    0x1000045a8 <+152>: jmpq   *0x4a4d42(%rip)           ; (void *)0x0000000100004448: stg_partial_eagerPartialAbort
+    0x1000045ae <+158>: nop 
+*/
+
 stg_partial_writeTVarzh (P_ tvar,     /* :: TVar a */
 			 P_ new_value /* :: a      */)
 {

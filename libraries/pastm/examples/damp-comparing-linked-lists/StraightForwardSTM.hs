@@ -13,6 +13,8 @@ import Control.Ordered.STM
 import Control.CPSFull.STM
 #elif defined(PABORT)
 import Control.Partial.STM
+#elif defined(TL2)
+import Control.PartialTL2.STM
 #else
 #error NO STM SPECIFIED
 #endif
