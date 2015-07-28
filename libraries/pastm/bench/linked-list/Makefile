@@ -13,8 +13,17 @@ CPSFULL_FILES = ../../Control/CPSFull/CmmHooks.cmm ../../Control/CPSFull/CCode.c
 TL2_FILES = ../../Control/PartialTL2/CmmHooks.cmm ../../Control/PartialTL2/CCode.c ../../Control/PartialTL2/STM.hs -I../../../../rts
 
 
+all:	llPartial llFull llSTMHaskell
+
 llPartial:	ordered-linked-list.hs Main.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -optc-g $(PARTIAL_FILES) -fforce-recomp ordered-linked-list.hs Main.hs -o partial
 
 llFull:	ordered-linked-list.hs Main.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -optc-g $(FULL_FILES) -DFABORT -fforce-recomp ordered-linked-list.hs Main.hs -o full
+
+llSTMHaskell:	ordered-linked-list.hs Main.hs
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -optc-g ../../Control/STMHaskell/STM.hs -DSTMHASKELL -fforce-recomp ordered-linked-list.hs Main.hs -o stmHaskell
+
+llOrdered:	ordered-linked-list.hs Main.hs
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -optc-g $(ORDEREDREMSET_FILES) -DORDERED -fforce-recomp ordered-linked-list.hs Main.hs -o ordered
+

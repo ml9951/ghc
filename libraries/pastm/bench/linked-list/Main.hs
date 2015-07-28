@@ -68,8 +68,6 @@ threadLoop l opts i (r:rands)=
                         delete l (r `mod` size)
                         threadLoop l opts (i-1) rands
 
-
-
 mkThreads 0 l opts = return[]
 mkThreads i l opts = do
           mv <- newEmptyMVar
