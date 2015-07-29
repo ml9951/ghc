@@ -431,13 +431,12 @@ typedef struct StgPTRecWithK_{
     StgWriteSet           *write_set;
     StgClosure            *continuation;
     struct StgPTRecWithK_ *prev_k;
-    StgBool                is_retry; //used for or else/retry, don't drop these when filtering read set!
 } StgPTRecWithK;
 
 typedef struct StgPTRecOrElse_{
     StgHeader               header;
     StgClosure *            alt;
-    StgPTRecWithK *         read_set;
+    StgWriteSet *      write_set;
     struct StgPTRecOrElse_ *next;
 } StgPTRecOrElse;
 

@@ -56,56 +56,16 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
 
     return ptrec;
 }
-/*
-static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
- RETRY:
-    while(TRUE){
-        unsigned long time = version_clock;
-        if((time & 1) != 0){
-            continue; //clock is locked
-        }
-        trec->read_version = time;
-        //validate read set
-        StgPTRecWithoutK * ptr = trec->read_set; //first element is the dummy
-        StgPTRecWithK *checkpoint = NULL;
-        StgInt kCount = 0;
-	
-	while(ptr != TO_WITHOUTK(NO_PTREC)){
-	    if(ptr->read_value != ptr->tvar->current_value){
-		if(checkpoint != NULL){ //we have a checkpoint
-		    //try reading from this tvar
-		    StgClosure * val = checkpoint->tvar->current_value;
-		    if(time == version_clock){
-			checkpoint->read_value = val; //apply the continuation to this in C--
-			checkpoint->next = TO_WITHOUTK(NO_PTREC);
-			
-			trec->tail = TO_WITHOUTK(checkpoint);
-			trec->write_set = checkpoint->write_set;
-			trec->lastK = checkpoint;
-			StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
-			trec->capture_freq = capture_freq | (capture_freq >> 32);
-			trec->numK = kCount;
-			return checkpoint;
-		    }else{
-			goto RETRY;
-		    }
-		}else{//checkpoint == NULL
-		    return TO_WITHK(PASTM_FAIL);
-		}	    
-	    }
-	    if(ptr->header.info == WITHK_HEADER){//entry is valid and we have a checkpoint
-		checkpoint = TO_WITHK(ptr);
-		kCount++;
-	    }
-	    ptr = ptr->next;
-	}
-	
-        if(time == version_clock){
-            return TO_WITHK(PASTM_SUCCESS);
-        }
-        //Validation succeeded, but someone else committed in the meantime, loop back around...
-    }
-}*/
+
+static inline void clearTRec(StgPTRecHeader * trec){
+    trec->read_set = TO_WITHOUTK(NO_PTREC);
+    trec->lastK = TO_WITHK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+    trec->capture_freq = capture_freq | (capture_freq >> 32);
+    trec->numK = 0;
+}
 
 static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
     while(TRUE){
@@ -118,6 +78,7 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
         StgPTRecWithoutK * ptr = trec->read_set;
         StgPTRecWithK *checkpoint = TO_WITHK(PASTM_SUCCESS);
         StgInt kCount = 0;
+
 	/*
 	//this loop assumes that we do not need a checkpoint
     NOCHKPNT:
@@ -151,7 +112,6 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
 	}
 	*/
 	
-	
 	while(ptr != TO_WITHOUTK(NO_PTREC)){
 	    if(ptr->header.info == WITHOUTK_HEADER){
 		if(ptr->read_value != ptr->tvar->current_value){
@@ -175,6 +135,7 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
 	
 
         if(checkpoint == TO_WITHK(PASTM_FAIL)){ //no checkpoint found, but we need to abort
+	    clearTRec(trec);
             return checkpoint;
         }
 
@@ -242,7 +203,6 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->write_set = trec->write_set;
             entry->continuation = k;
             entry->prev_k = trec->lastK;
-            entry->is_retry = FALSE;
             trec->read_set = TO_WITHOUTK(entry);
 			
             trec->lastK = entry;
@@ -357,4 +317,73 @@ void pa_printSTMStats(){
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);
 #endif
+}
+
+/*
+ * Retry the transaction, we check to see that we 
+ * have something on our retry stack before entering
+ * this function.  This will return the alternative
+ * branch of the orElse and set the read set/write set
+ * appropriately.  
+ */
+StgClosure * pa_stmRetry(StgPTRecHeader * trec){
+
+    StgPTRecOrElse * x = trec->retry_stack;
+    int i = 0;
+    while(x != NO_PTREC){
+	x =x->next;
+	i++;
+    }
+    printf("Retry stack size = %d\n", i);
+
+
+    trec->write_set = trec->retry_stack->write_set;
+    StgClosure * alt = trec->retry_stack->alt;
+    trec->retry_stack = trec->retry_stack->next;
+    return alt;
+}
+
+//I think the header can be clean, since it isn't going to be pointing
+//to anything in a younger generation
+static StgTVar retryTV = {.header = {.info = &stg_TVAR_CLEAN_info /*, TODO: add profiling field*/}, 
+                          .current_value = PASTM_SUCCESS, //dummy value
+                          .first_watch_queue_entry = ((StgTVarWatchQueue *)(void *)&stg_END_STM_WATCH_QUEUE_closure),
+                          .num_updates = 0};
+
+void pa_stmCatchRetry(Capability *cap, StgPTRecHeader * trec, 
+		      StgClosure * alt){
+    StgPTRecOrElse * orelse = (StgPTRecOrElse*)allocate(cap, sizeofW(StgPTRecOrElse));
+    SET_HDR(orelse, &stg_PTREC_OR_ELSE_info, CCS_SYSTEM);
+    orelse->alt = alt;
+    orelse->write_set = trec->write_set;
+    orelse->next = trec->retry_stack;
+    trec->retry_stack = orelse;
+    
+    int i = 0;
+    while(orelse != NO_PTREC){
+	i++;
+	orelse = orelse->next;
+    }
+    printf("Retry stack size is now %d\n", i);
+
+}
+
+void dummy1(StgPTRecHeader * trec){
+    StgPTRecOrElse * ptr = trec->retry_stack;
+    int i = 0;
+    while(ptr != NO_PTREC){
+	ptr = ptr->next;
+	i++;
+    }
+    printf("Prior to popping stack, retry stack size is %d\n", i);
+}
+
+void dummy2(StgPTRecHeader * trec){
+    StgPTRecOrElse * ptr = trec->retry_stack;
+    int i = 0;
+    while(ptr != NO_PTREC){
+	ptr = ptr->next;
+	i++;
+    }
+    printf("After popping stack, retry stack size is %d\n", i);
 }

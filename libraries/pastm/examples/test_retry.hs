@@ -1,27 +1,11 @@
 
-import Control.Concurrent.PASTM
+import Control.Partial.STM
+import Dump
 
-
-alt1 x = do
-     t <- readTVar x
-     writeTVar x (t + 12)
-     retry
-
-alt2 x = do
-     t <- readTVar x
-     writeTVar x (t + 1)     
-
-retryTest = do
-          x <- newTVar 0
-          y <- newTVar 0
-          alt1 x `orElse` alt2 y
-          tx <- readTVar x
-          ty <- readTVar y
-          return(tx, ty)
 
 main = do
-     (x, y) <- atomically $ retryTest 
-     putStrLn("x = " ++ show x ++ ", y = " ++ show y)
+     x <- atomically $ (((traceM "returning 1" >>= \_ -> return 1) `orElse` (traceM "returning 2" >>= \_ -> return 2)) >>= \t -> if t == 1 then (traceM ("retrying, t = " ++ show t) >>= \_ -> retry) else return t) `orElse` return 3
+     putStrLn("Result = " ++ show x ++ ", should be 3")
      return()
 
 

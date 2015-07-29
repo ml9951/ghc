@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-iters", type=int, help="Number of iterations for each STM implementation", default="10")
 args = parser.parse_args()
 
-stms = ["Ordered", "STMHaskell", "Full", "Partial", "OrderedRemSet", "CPSFull"]
+stms = ["STMHaskell", "Full", "Partial", "OrderedRemSet", "CPSFull"]
 
 prog = "ll"
 

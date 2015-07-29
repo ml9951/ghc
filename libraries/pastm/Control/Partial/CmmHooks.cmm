@@ -215,4 +215,83 @@ stg_partial_writeTVarzh (P_ tvar,     /* :: TVar a */
 }
 
 
+/*
+ * Bail on a transaction, execution should continue with the alternative
+ * branch of the nearest orElse.  We currently are not supporting the 
+ * blocking semantics of retry if it propogates all the way up to the 
+ * top of the transaction.  Instead, we simply immediatly retry.
+ */
+stg_partial_retryzh()
+{
 
+    W_ trec;
+    W_ alt;
+    W_ retry_stack;
+
+    MAYBE_GC_ (stg_pretryzh);
+     
+    trec = StgTSO_ptrec(CurrentTSO);
+
+    retry_stack = StgPTRecHeader_retry_stack(trec);
+    
+    if(retry_stack == NO_PTREC){
+        jump stg_eagerFullAbort []; //retry from beginning
+    }
+
+    //Have at least one catchRetry on our retry_stack
+    ("ptr" alt) = ccall pa_stmRetry(trec "ptr");
+    
+    jump stg_ap_v_fast(alt);
+}
+
+/*
+INFO_TABLE_RET ( label, FRAME_TYPE, info_ptr, field1, ..., fieldN )
+               return ( arg1, ..., argM )
+{
+  ... code ...
+}
+*/
+
+ // INFO_TABLE_RET(stg_partial_popRetry, CATCH_FRAME)
+ //     return () // value returned to the frame
+stg_partial_popRetry(P_ x)
+{
+    W_ trec;
+    W_ retry_stack;
+ 
+    trec = StgTSO_ptrec(CurrentTSO);
+
+    ccall dummy1(trec);
+
+    retry_stack = StgPTRecHeader_retry_stack(trec);
+    StgPTRecHeader_retry_stack(trec) = StgPTRecOrElse_next(retry_stack);
+
+    ccall dummy2(trec);
+
+    return(x);
+}
+
+/*
+ * atomically $ (do t <- (return 1 `orElse` return 2); if t == 1 then retry else return t) `orElse` return 3
+ * 
+ * It would probably make more sense for this to return 3 than 2
+ */
+stg_partial_catchRetryzh (P_ first_code,     /* :: STM a */
+			  P_ alt_code       /* :: STM a */)
+{
+
+    W_ trec;
+    W_ retry_stack;
+
+    MAYBE_GC_PP(stg_pcatchRetryzh, first_code, alt_code);
+
+    trec = StgTSO_ptrec(CurrentTSO);
+    ccall pa_stmCatchRetry(MyCapability() "ptr", trec "ptr", 
+			   alt_code "ptr");
+    
+    jump stg_ap_v_fast (first_code);
+}
+
+
+
+//jump f (info_ptr, field1,..,fieldN) (arg1,..,argN)

@@ -72,6 +72,25 @@ StgPTRecHeader * ord_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec
     return ptrec;
 }
 
+int rsSize(StgPTRecWithoutK * rs){
+    int i = 0;
+    while(rs != TO_WITHOUTK(NO_PTREC)){
+	rs = rs->next;
+	i++;
+    }
+    return i;
+}
+
+static inline void clearTRec(StgPTRecHeader * trec){
+    trec->read_set = TO_WITHOUTK(NO_PTREC);
+    trec->lastK = TO_WITHK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+    trec->capture_freq = capture_freq | (capture_freq >> 32);
+    trec->numK = 0;
+}
+
 static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
  RETRY:
     while(TRUE){
@@ -85,6 +104,7 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
         StgPTRecWithK *checkpoint = NULL;
         StgInt kCount = 0;
 	
+	int i = 0;
 	while(ptr != TO_WITHOUTK(NO_PTREC)){
 	    if(ptr->read_value != ptr->tvar->current_value){
 		if(checkpoint != NULL){ //we have a checkpoint
@@ -105,13 +125,15 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
 			goto RETRY;
 		    }
 		}else{//checkpoint == NULL
+		    clearTRec(trec);
 		    return TO_WITHK(PASTM_FAIL);
-		}	    
+		}
 	    }
 	    if(ptr->header.info == WITHK_HEADER){//entry is valid and we have a checkpoint
 		checkpoint = TO_WITHK(ptr);
 		kCount++;
 	    }
+	    i++;
 	    ptr = ptr->next;
 	}
 	
@@ -184,8 +206,6 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->next = TO_WITHOUTK(NO_PTREC);
 	    
 	    trec->tail->next = entry; //append to end
-
-	    trec->tail->next = TO_WITHOUTK(entry); //append to end
 	    bdescr * desc = Bdescr((StgPtr)trec->tail);
 	    if(desc->gen_no > 0){
 		recordClosureMutated(cap, (StgClosure*)trec->tail);
@@ -221,8 +241,6 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         entry->tvar = tvar;
         entry->read_value = val;
         entry->next = TO_WITHOUTK(NO_PTREC);
-
-	trec->tail->next = entry;
 
 	trec->tail->next = TO_WITHOUTK(entry); //append to end
 	bdescr * desc = Bdescr((StgPtr)trec->tail);

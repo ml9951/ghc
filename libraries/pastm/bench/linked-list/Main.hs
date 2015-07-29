@@ -21,32 +21,12 @@ data Opts = Opts
      , deletes   :: Int
      } deriving Show
 
-{-
-parser :: String -> Opts
-parser prog = Opts
-       { iters      = 3000
-                   &= help "Number of operations performed by each thread"
-       , threads    = getNumCapabilities
-                   &= help "Number of threads"
-       , maxVal     = 100000
-                   &= help "Largest value to be added to the list"
-       , initSize   = 4000
-                   &= help "Initial size of the linked list"
-       , reads      = 2
-                   &= help "Read proportion"
-       , writes     = 4
-                   &= help "Write proportion"
-       , deletes    = 1
-                   &= help "Delete proportion"
-       }
-       &= program prog
--}
 parser :: Parser Opts
 parser = Opts
       <$> option auto (short 'i' <> help "Number of operations performed by each thread" <> value 3000)
       <*> option auto (short 't' <> help "Number of threads" <> value numCapabilities)
       <*> option auto (long "maxVal" <> help "Max value to be added to the list" <> value 10000000)
-      <*> option auto (long "initSize" <> help "Initial size of the linked list" <> value 4000)
+      <*> option auto (long "initSize" <> help "Initial size of the linked list" <> value 3000)
       <*> option auto (long "reads" <> help "Read proportion" <> value 2)
       <*> option auto (long "writes" <> help "Write proportion" <> value 4)
       <*> option auto (long "deletes" <> help "Delete proportion" <> value 1)
@@ -100,12 +80,18 @@ join (mv:mvs) = do
 
 formatTimes [] = ""
 formatTimes ((typ, n, s, t):rest) = show typ ++ ", " ++ show n ++ ", " ++ show s ++ ", " ++ show (t * 1000) ++ "\n" ++ formatTimes rest
+           
 
 main = do
      name <- getProgName
      opts <- execParser opts
      print opts
      l <- newList
+
+     mapM_ (\x -> add l (x::Word)) (take (initSize opts) (randoms (mkStdGen $ numCapabilities+1)))
+     s <- getSizeIO l
+     putStrLn("Starting with list at size " ++ show s)
+
      start <- getTime
      mvars <- mkThreads (threads opts) l opts
      times <- join mvars
@@ -114,6 +100,8 @@ main = do
      printStats
      let strings = foldl (++) "" (map formatTimes times)
      writeFile (name ++ "Times.txt") strings
+     s <- getSizeIO l
+     putStrLn ("List size is " ++ show s)
      return()
 
 foreign import ccall unsafe "hs_gettime" getTime :: IO Double

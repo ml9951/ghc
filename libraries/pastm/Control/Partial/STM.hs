@@ -28,8 +28,8 @@ module Control.Partial.STM
     atomically,
     STM(..),
     printStats,
-  --  retry,
-  --  orElse,
+    retry,
+    orElse,
     --The following are just re-exporting from the original STM
     newTVarIO,   
     readTVarIO, 
@@ -78,7 +78,7 @@ initK a s = (# s, a #)
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c initK) s)
 
-{-
+
 -- |Retry execution of the current memory transaction because it has seen
 -- values in TVars which mean that it should not continue (e.g. the TVars
 -- represent a shared buffer that is now empty).  The implementation may
@@ -93,17 +93,17 @@ retry = STM $ \c -> \s# -> pretry# s#
 -- tried in its place.  If both actions retry then the orElse as a
 -- whole retries.
 orElse :: STM a -> STM a -> STM a
-orElse (STM m) e = STM $ \c -> \s -> 
-       let m' = m c -- :: State# RealWorld -> (# State$ RealWorld, r #)
-       in pcatchRetry# m' (unSTM e c) (\a -> m') s
+orElse (STM m) e = STM $ \c -> \s ->    
+        case unsafeCoerce# pcatchRetry# (m (unsafeCoerce# popRetry#)) (unSTM e initK) s of
+               (# s', t #) -> c t s'
+
+{-
+orElse :: STM a -> STM a -> STM a
+orElse first second = orElse' (first >>= unsafeCoerce# popRetry#) (second >>= unsafeCoerce# popRetry#)
 -}
 
 foreign import prim safe "stg_partial_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
-{-         FFI won't accept this type...
-        :: (State# RealWorld -> (# State# RealWorld , b #) )
-            -> State# RealWorld -> (# State# RealWorld, b #)
--} 
 
 foreign import prim safe "stg_partial_readTVarzh" readTVar#
         :: TVar# s a -> Any()
@@ -114,3 +114,12 @@ foreign import prim safe "stg_partial_writeTVarzh" writeTVar#
 
 foreign import ccall "pa_printSTMStats" printStats :: IO ()
 
+foreign import prim safe "stg_partial_retryzh" pretry#
+        :: State# RealWorld -> (# State# RealWorld, a #)
+
+foreign import prim safe "stg_partial_catchRetryzh" pcatchRetry#
+        :: Any() -> Any() -> State# RealWorld -> (# State# RealWorld, a #)
+
+
+foreign import prim safe "stg_partial_popRetry" popRetry#
+        :: Any() -> State# RealWorld -> (# State# RealWorld, a #)

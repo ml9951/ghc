@@ -101,19 +101,6 @@ static StgPTRecWithK * extendTS(StgPTRecHeader * trec){
 	    StgTL2TVar * tvar = TO_TL2(checkpoint->tvar);
 	    unsigned long stamp1, stamp2;
 	    
-	    /*
-	    do{
-		stamp1 = tvar->stamp;
-		val = tvar->current_value;
-		stamp2 = tvar->stamp;
-	    }while(tvar->lock);
-	    
-	    if(stamp2 > trec->read_version || stamp1 != stamp2){
-		clearTRec(trec);
-		return TO_WITHK(PASTM_FAIL);
-	    }
-	    */
-	    
 	    while(cas((StgVolatilePtr)&(tvar->lock), 0, trec->read_version) && tvar->lock != stamp);
 	    val = tvar->current_value;
 	    stamp2 = tvar->stamp;
@@ -176,21 +163,8 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 	if(checkpoint->header.info == WITHK_HEADER){
 	    StgClosure * val;
 	    StgTL2TVar * tvar = TO_TL2(checkpoint->tvar);
-
 	    
 	    unsigned long stamp1, stamp2;
-	    /*
-	    do{
-		stamp1 = tvar->stamp;
-		val = tvar->current_value;
-		stamp2 = tvar->stamp;
-	    }while(tvar->lock && tvar->lock != stamp);
-	    
-	    if(stamp2 > trec->read_version || stamp1 != stamp2){
-		clearTRec(trec);
-		return TO_WITHK(PASTM_FAIL);
-	    }
-	    */
 
 	    while(cas((StgVolatilePtr)&(tvar->lock), 0, trec->read_version) && tvar->lock != stamp);
 	    val = tvar->current_value;
@@ -202,7 +176,7 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 		trec->read_version = atomic_inc(&version_clock, 1);
 		return TO_WITHK(PASTM_FAIL);
 	    }
-	    
+
 	    checkpoint->read_value = val;
 	    trec->read_set = TO_WITHOUTK(checkpoint);
 	    trec->write_set = checkpoint->write_set;
@@ -234,22 +208,6 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     
     StgClosure * val; 
     unsigned long stamp1, stamp2;
-    
-
- retry:
-    /*
-    do{
-	stamp1 = tvar->stamp;
-	val = tvar->current_value;
-	stamp2 = tvar->stamp;
-    }while(tvar->lock);
-    
-    if(stamp2 > trec->read_version || stamp1 != stamp2){
-	clearTRec(trec);
-	trec->read_version = atomic_inc(&version_clock, 1);
-	return PASTM_FAIL;
-    }
-    */
     
     while(cas((StgVolatilePtr)&(tvar->lock), 0, trec->read_version));
     val = tvar->current_value;
@@ -382,16 +340,6 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	ptr = trec->write_set;
 	while(ptr != TO_WRITE_SET(NO_PTREC)){
 	    StgTL2TVar * tvar = TO_TL2(ptr->tvar);
-
-	    /*
-	    long * current = (long*)(((unsigned long) tvar->current_value) & 0xFFFFFFFFFFFFFFF8);
-	    long * newPtr = (long*)(((unsigned long) ptr->val) & 0xFFFFFFFFFFFFFFF8);
-
-	    if(current[1] != newPtr[1] - 1){
-		printf("Incorrect! current = %lu, new = %lu\n", current[1], newPtr[1]);
-	    }
-	    */
-
 	    tvar->current_value = ptr->val;
 	    tvar->stamp = write_version;
 	    tvar->lock = 0;
@@ -401,12 +349,11 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     }
 
 #ifdef STATS
-    //Since version clock is locked, these don't need to be atomic
-    stats.commitTimeFullAborts += cap->pastmStats.commitTimeFullAborts;
-    stats.commitTimePartialAborts += cap->pastmStats.commitTimePartialAborts;
-    stats.eagerFullAborts += cap->pastmStats.eagerFullAborts;
-    stats.eagerPartialAborts += cap->pastmStats.eagerPartialAborts;
-    stats.numCommits++;
+    atomic_inc((StgVolatilePtr)&(stats.commitTimeFullAborts), cap->pastmStats.commitTimeFullAborts);
+    atomic_inc((StgVolatilePtr)&(stats.commitTimePartialAborts), cap->pastmStats.commitTimePartialAborts);
+    atomic_inc((StgVolatilePtr)&(stats.eagerFullAborts), cap->pastmStats.eagerFullAborts);
+    atomic_inc((StgVolatilePtr)&(stats.eagerPartialAborts), cap->pastmStats.eagerPartialAborts);
+    atomic_inc((StgVolatilePtr)&(stats.numCommits), 1);
     cap->pastmStats.commitTimeFullAborts = 0;
     cap->pastmStats.commitTimePartialAborts = 0;
     cap->pastmStats.eagerFullAborts = 0;
