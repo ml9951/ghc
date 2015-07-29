@@ -182,7 +182,6 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->write_set = trec->write_set;
             entry->continuation = k;
             entry->prev_k = trec->lastK;
-            entry->is_retry = FALSE;
 	    
 	    trec->tail->next = TO_WITHOUTK(entry); //append to end
 	    bdescr * desc = Bdescr((StgPtr)trec->tail);

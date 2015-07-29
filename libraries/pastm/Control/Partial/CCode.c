@@ -334,8 +334,6 @@ StgClosure * pa_stmRetry(StgPTRecHeader * trec){
 	x =x->next;
 	i++;
     }
-    printf("Retry stack size = %d\n", i);
-
 
     trec->write_set = trec->retry_stack->write_set;
     StgClosure * alt = trec->retry_stack->alt;
@@ -364,26 +362,4 @@ void pa_stmCatchRetry(Capability *cap, StgPTRecHeader * trec,
 	i++;
 	orelse = orelse->next;
     }
-    printf("Retry stack size is now %d\n", i);
-
-}
-
-void dummy1(StgPTRecHeader * trec){
-    StgPTRecOrElse * ptr = trec->retry_stack;
-    int i = 0;
-    while(ptr != NO_PTREC){
-	ptr = ptr->next;
-	i++;
-    }
-    printf("Prior to popping stack, retry stack size is %d\n", i);
-}
-
-void dummy2(StgPTRecHeader * trec){
-    StgPTRecOrElse * ptr = trec->retry_stack;
-    int i = 0;
-    while(ptr != NO_PTREC){
-	ptr = ptr->next;
-	i++;
-    }
-    printf("After popping stack, retry stack size is %d\n", i);
 }
