@@ -227,8 +227,6 @@ stg_partial_retryzh()
     W_ trec;
     W_ alt;
     W_ retry_stack;
-
-    MAYBE_GC_ (stg_pretryzh);
      
     trec = StgTSO_ptrec(CurrentTSO);
 
@@ -251,12 +249,8 @@ stg_partial_popRetry(P_ x)
  
     trec = StgTSO_ptrec(CurrentTSO);
 
-    ccall dummy1(trec);
-
     retry_stack = StgPTRecHeader_retry_stack(trec);
     StgPTRecHeader_retry_stack(trec) = StgPTRecOrElse_next(retry_stack);
-
-    ccall dummy2(trec);
 
     return(x);
 }

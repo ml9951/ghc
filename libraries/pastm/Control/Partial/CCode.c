@@ -367,23 +367,3 @@ void pa_stmCatchRetry(Capability *cap, StgPTRecHeader * trec,
     printf("Retry stack size is now %d\n", i);
 
 }
-
-void dummy1(StgPTRecHeader * trec){
-    StgPTRecOrElse * ptr = trec->retry_stack;
-    int i = 0;
-    while(ptr != NO_PTREC){
-	ptr = ptr->next;
-	i++;
-    }
-    printf("Prior to popping stack, retry stack size is %d\n", i);
-}
-
-void dummy2(StgPTRecHeader * trec){
-    StgPTRecOrElse * ptr = trec->retry_stack;
-    int i = 0;
-    while(ptr != NO_PTREC){
-	ptr = ptr->next;
-	i++;
-    }
-    printf("After popping stack, retry stack size is %d\n", i);
-}
