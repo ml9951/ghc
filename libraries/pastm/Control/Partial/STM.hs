@@ -97,11 +97,6 @@ orElse (STM m) e = STM $ \c -> \s ->
         case unsafeCoerce# pcatchRetry# (m (unsafeCoerce# popRetry#)) (unSTM e initK) s of
                (# s', t #) -> c t s'
 
-{-
-orElse :: STM a -> STM a -> STM a
-orElse first second = orElse' (first >>= unsafeCoerce# popRetry#) (second >>= unsafeCoerce# popRetry#)
--}
-
 foreign import prim safe "stg_partial_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
 
@@ -119,7 +114,6 @@ foreign import prim safe "stg_partial_retryzh" pretry#
 
 foreign import prim safe "stg_partial_catchRetryzh" pcatchRetry#
         :: Any() -> Any() -> State# RealWorld -> (# State# RealWorld, a #)
-
 
 foreign import prim safe "stg_partial_popRetry" popRetry#
         :: Any() -> State# RealWorld -> (# State# RealWorld, a #)

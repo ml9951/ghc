@@ -244,16 +244,6 @@ stg_partial_retryzh()
     jump stg_ap_v_fast(alt);
 }
 
-/*
-INFO_TABLE_RET ( label, FRAME_TYPE, info_ptr, field1, ..., fieldN )
-               return ( arg1, ..., argM )
-{
-  ... code ...
-}
-*/
-
- // INFO_TABLE_RET(stg_partial_popRetry, CATCH_FRAME)
- //     return () // value returned to the frame
 stg_partial_popRetry(P_ x)
 {
     W_ trec;
@@ -271,11 +261,6 @@ stg_partial_popRetry(P_ x)
     return(x);
 }
 
-/*
- * atomically $ (do t <- (return 1 `orElse` return 2); if t == 1 then retry else return t) `orElse` return 3
- * 
- * It would probably make more sense for this to return 3 than 2
- */
 stg_partial_catchRetryzh (P_ first_code,     /* :: STM a */
 			  P_ alt_code       /* :: STM a */)
 {
@@ -291,7 +276,3 @@ stg_partial_catchRetryzh (P_ first_code,     /* :: STM a */
     
     jump stg_ap_v_fast (first_code);
 }
-
-
-
-//jump f (info_ptr, field1,..,fieldN) (arg1,..,argN)
