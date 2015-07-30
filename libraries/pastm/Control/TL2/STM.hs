@@ -21,7 +21,7 @@
 --
 -----------------------------------------------------------------------------
 
-module Control.PartialTL2.STM
+module Control.TL2.STM
 (
     readTVar,
     writeTVar,
