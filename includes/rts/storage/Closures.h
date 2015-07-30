@@ -471,6 +471,8 @@ typedef struct {
 } StgTL2TVar;
 
 
+struct StgPTRecChunk_;
+
 /* It's important that the PTRecWithK structure be a strict extension
  * of the PTRecWithoutK structure, so that we can do some ugly 
  * subtyping-ish tricks.
@@ -480,8 +482,9 @@ typedef struct PTRecWithK_{
     StgTVar               *tvar;
     StgClosure            *read_value;
     StgWriteSet           *write_set;
-    StgStgClosure         *continuation;
-    struct PTRecWithK_    *prev_k;
+    StgClosure            *continuation;
+    struct StgPTRecChunk_ *prev_k;         //chunk of previous checkpoint
+    StgWord                prev_k_offset;  //offset into that chunk
 } PTRecWithK;
 
 typedef struct{

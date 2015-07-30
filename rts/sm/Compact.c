@@ -531,6 +531,29 @@ update_fwd_large( bdescr *bd )
         continue;
     }
 
+    case PTREC_CHUNK:
+    {
+        StgWord i = 0;
+        StgPTRecChunk * tc = (StgPTRecChunk *)p;
+        thread_(&tc->prev_chunk);
+        while(i < tc->next_entry_idx){
+            PTRecWithoutK * entry = &(tc->entries[i]);
+            if(entry->size == 3){ //checkpoint
+                thread_(&entry->tvar);
+                thread(&entry->read_value);
+                i += 3;
+            }else{ //checkpoint
+                PTRecWithK * withK = (PTRecWithK*)entry;
+                thread_(&withK->tvar);
+                thread(&withK->read_value);
+                thread_(&withK->write_set);
+                thread(&withK->continuation);
+                thread_(&withK->prev_k); 
+                i += 7;
+            }
+        }
+    }
+
     default:
       barf("update_fwd_large: unknown/strange object  %d", (int)(info->type));
     }
@@ -726,6 +749,29 @@ thread_obj (StgInfoTable *info, StgPtr p)
           thread(&e->new_value);
         }
         return p + sizeofW(StgTRecChunk);
+    }
+
+    case PTREC_CHUNK:
+    {
+        StgWord i = 0;
+        StgPTRecChunk * tc = (StgPTRecChunk *)p;
+        thread_(&tc->prev_chunk);
+        while(i < tc->next_entry_idx){
+            PTRecWithoutK * entry = &(tc->entries[i]);
+            if(entry->size == 3){ //checkpoint
+                thread_(&entry->tvar);
+                thread(&entry->read_value);
+                i += 3;
+            }else{ //checkpoint
+                PTRecWithK * withK = (PTRecWithK*)entry;
+                thread_(&withK->tvar);
+                thread(&withK->read_value);
+                thread_(&withK->write_set);
+                thread(&withK->continuation);
+                thread_(&withK->prev_k); 
+                i += 7;
+            }
+        }
     }
 
     default:

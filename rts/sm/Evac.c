@@ -736,6 +736,10 @@ loop:
       copy(p,info,q,sizeofW(StgTRecChunk),gen_no);
       return;
 
+  case PTREC_CHUNK:
+      copy(p,info,q,sizeofW(StgPTRecChunk),gen_no);
+      return;
+
   default:
     barf("evacuate: strange closure type %d", (int)(INFO_PTR_TO_STRUCT(info)->type));
   }

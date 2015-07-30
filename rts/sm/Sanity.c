@@ -424,6 +424,13 @@ checkClosure( StgClosure* p )
         return sizeofW(StgTRecChunk);
       }
 
+    case PTREC_CHUNK:
+    {
+        return sizeofW(StgPTRecChunk);
+    }
+
+    
+
     default:
             barf("checkClosure (closure type %d)", info->type);
     }

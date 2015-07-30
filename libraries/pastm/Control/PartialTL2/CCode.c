@@ -106,7 +106,7 @@ static StgPTRecWithK * extendTS(StgPTRecHeader * trec){
 	    stamp2 = tvar->stamp;
 	    tvar->lock = 0;
 	    
-	    if(stamp2 > trec->read_version){
+	    if(stamp1 > trec->read_version){
 		clearTRec(trec);
 		trec->read_version = atomic_inc(&version_clock, 1);
 		return TO_WITHK(PASTM_FAIL);
@@ -171,7 +171,7 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 	    stamp2 = tvar->stamp;
 	    tvar->lock = 0;
 	    
-	    if(stamp2 > trec->read_version){
+	    if(stamp1 > trec->read_version){
 		clearTRec(trec);
 		trec->read_version = atomic_inc(&version_clock, 1);
 		return TO_WITHK(PASTM_FAIL);
@@ -230,7 +230,7 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 	stamp2 = tvar->stamp;
     }while(tvar->lock);
 
-    if(stamp2 > trec->read_version || stamp1 != stamp2){
+    if(stamp1 > trec->read_version || stamp1 != stamp2){
 	StgPTRecWithK * res = extendTS(trec);
 	if(res != TO_WITHK(PASTM_SUCCESS)){
 	    return TO_CLOSURE(res);
