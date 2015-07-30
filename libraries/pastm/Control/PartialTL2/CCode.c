@@ -109,7 +109,7 @@ static StgPTRecWithK * extendTS(StgPTRecHeader * trec){
 	    if(stamp2 > trec->read_version){
 		clearTRec(trec);
 		trec->read_version = atomic_inc(&version_clock, 1);
-		return PASTM_FAIL;
+		return TO_WITHK(PASTM_FAIL);
 	    }
 	    
 	    checkpoint->read_value = val;
@@ -140,14 +140,14 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 	while(ptr != TO_WITHOUTK(NO_PTREC)){
 	    StgTL2TVar * tvar = TO_TL2(ptr->tvar);
 	    if(ptr->header.info == WITHOUTK_HEADER){
-		if(tvar->stamp > stamp){
+		if((tvar->lock && tvar->lock != stamp) || tvar->stamp > stamp){
 		    checkpoint = TO_WITHK(PASTM_FAIL);
 		    kCount = 0;
 		}
 		ptr = ptr->next;
 	    }else{ // WITHK
 		StgPTRecWithK * withK = TO_WITHK(ptr);
-		if(tvar->stamp > stamp){
+		if((tvar->lock && tvar->lock != stamp) || tvar->stamp > stamp){
 		    checkpoint = withK;
 		    ptr = ptr->next;
 		    kCount = 1;
@@ -194,7 +194,6 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
     }
 }
 
-
 StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
 			    StgTL2TVar * tvar, StgClosure * k){
     StgWriteSet * ws = trec->write_set;
@@ -206,6 +205,7 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         ws = ws->next;
     }
     
+    /*
     StgClosure * val; 
     unsigned long stamp1, stamp2;
     
@@ -219,8 +219,25 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 	trec->read_version = atomic_inc(&version_clock, 1);
 	return PASTM_FAIL;
     }
+    */
     
+    unsigned long stamp1, stamp2;
+    StgClosure * val;
+ retry:
+    do{
+	stamp1 = tvar->stamp;
+	val = tvar->current_value;
+	stamp2 = tvar->stamp;
+    }while(tvar->lock);
 
+    if(stamp2 > trec->read_version || stamp1 != stamp2){
+	StgPTRecWithK * res = extendTS(trec);
+	if(res != TO_WITHK(PASTM_SUCCESS)){
+	    return TO_CLOSURE(res);
+	}
+	goto retry;
+    }
+    
     if(trec->numK < KBOUND){//Still room for more
         if((trec->capture_freq & 0xFFFFFFFF) == 0){//Store the continuation
             StgPTRecWithK * entry = (StgPTRecWithK *)allocate(cap, sizeofW(StgPTRecWithK));
@@ -231,7 +248,6 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->write_set = trec->write_set;
             entry->continuation = k;
             entry->prev_k = trec->lastK;
-            entry->is_retry = FALSE;
             trec->read_set = TO_WITHOUTK(entry);
 			
             trec->lastK = entry;

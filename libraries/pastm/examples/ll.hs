@@ -8,8 +8,10 @@ import Control.Full.STM           --full abort STM (NoRec)
 import Control.Ordered.STM
 #elif defined(CPSFULL)
 import Control.CPSFull.STM
-#elif defined(TL2)
+#elif defined(PTL2)
 import Control.PartialTL2.STM
+#elif defined(TL2)
+import Control.TL2.STM
 #else
 import Control.Partial.STM
 --import Control.Concurrent.PASTM.Core

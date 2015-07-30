@@ -13,7 +13,8 @@ ORDERED_FILES = ../Control/OrderedRemSet/CmmHooks.cmm ../Control/OrderedRemSet/C
 FULL_FILES = ../Control/Full/CmmHooks.cmm ../Control/Full/CCode.c ../Control/Full/STM.hs -I../../../rts
 PARTIAL_FILES = ../Control/Partial/CmmHooks.cmm ../Control/Partial/CCode.c ../Control/Partial/STM.hs -I../../../rts
 CPSFULL_FILES = ../Control/CPSFull/CmmHooks.cmm ../Control/CPSFull/CCode.c ../Control/CPSFull/STM.hs -I../../../rts
-TL2_FILES = ../Control/PartialTL2/CmmHooks.cmm ../Control/PartialTL2/CCode.c ../Control/PartialTL2/STM.hs -I../../../rts
+TL2_FILES = ../Control/TL2/CmmHooks.cmm ../Control/TL2/CCode.c ../Control/TL2/STM.hs -I../../../rts
+PartialTL2_FILES = ../Control/PartialTL2/CmmHooks.cmm ../Control/PartialTL2/CCode.c ../Control/PartialTL2/STM.hs -I../../../rts
 
 OPT =
 
@@ -36,6 +37,10 @@ llPartial:	ll.hs cbits/gettime.c
 .PHONY:	llCPSFull
 llCPSFull:	ll.hs cbits/gettime.c
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DCPSFULL -optc-g $(CPSFULL_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llCPSFull$(OPT)
+
+.PHONY:	llPartialTL2
+llPartialTL2:	ll.hs cbits/gettime.c
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DPTL2 -optc-g $(PartialTL2_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llPTL2$(OPT)
 
 .PHONY:	llTL2
 llTL2:	ll.hs cbits/gettime.c
@@ -67,7 +72,7 @@ retry:	test_retry.hs
 full:	llFull counterFull
 
 clean:
-	rm -f *.hi *.o *-O*
+	rm -f *.hi *.o *-O* 
 
 
 

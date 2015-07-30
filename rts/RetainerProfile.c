@@ -605,6 +605,12 @@ push( StgClosure *c, retainer c_child_r, StgClosure **first_child )
         *first_child = (StgClosure *)((StgTRecChunk *)c)->prev_chunk;
         se.info.next.step = 0;  // entry no.
         break;
+
+    case PTREC_CHUNK:
+        *first_child = (StgClosure *)((StgPTRecChunk *)c)->prev_chunk;
+        se.info.next.step = 0;  // entry no.
+        break;
+
         // cannot appear
     case PAP:
     case AP:
@@ -857,6 +863,11 @@ pop( StgClosure **c, StgClosure **cp, retainer *r )
             return;
         }
 
+        case PTREC_CHUNK: {
+            /*not yet sure what to do here...*/
+            return;
+        }
+
         case TVAR:
         case CONSTR:
         case PRIM:
@@ -1084,6 +1095,7 @@ isRetainer( StgClosure *c )
     case ARR_WORDS:
         // STM
     case TREC_CHUNK:
+    case PTREC_CHUNK:
         // immutable arrays
     case MUT_ARR_PTRS_FROZEN:
     case MUT_ARR_PTRS_FROZEN0:

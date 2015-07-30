@@ -79,6 +79,7 @@ processHeapClosureForDead( StgClosure *c )
     case BCO:
     case PRIM:
     case MUT_PRIM:
+    case PTREC_CHUNK:
     case TREC_CHUNK:
         return size;
 

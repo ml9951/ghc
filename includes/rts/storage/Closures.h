@@ -471,6 +471,34 @@ typedef struct {
 } StgTL2TVar;
 
 
+/* It's important that the PTRecWithK structure be a strict extension
+ * of the PTRecWithoutK structure, so that we can do some ugly 
+ * subtyping-ish tricks.
+ */
+typedef struct PTRecWithK_{
+    StgWord                size;
+    StgTVar               *tvar;
+    StgClosure            *read_value;
+    StgWriteSet           *write_set;
+    StgStgClosure         *continuation;
+    struct PTRecWithK_    *prev_k;
+} PTRecWithK;
+
+typedef struct{
+    StgWord           size;
+    StgTVar          *tvar;
+    StgClosure       *read_value;
+}PTRecWithoutK;
+
+#define PTREC_CHUNK_SIZE 61 
+//Make this 512 bytes.
+typedef struct StgPTRecChunk_ {
+    StgHeader                  header;                     //8 bytes
+    struct StgTRecChunk_      *prev_chunk;                 //8 bytes (16 total)
+    StgWord                    next_entry_idx;             //8 bytes (24 total)
+    StgWord                    entries[PTREC_CHUNK_SIZE];  //488 bytes -- 61 Words (512 total bytes) -- This will also perfectly fit 20 withoutK entries
+} StgPTRecChunk;
+
 /* ----------------------------------------------------------------------------
    Messages
    ------------------------------------------------------------------------- */

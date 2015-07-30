@@ -1013,6 +1013,7 @@ char *closure_type_names[] = {
  [TSO]                   = "TSO",
  [STACK]                 = "STACK",
  [TREC_CHUNK]            = "TREC_CHUNK",
+ [PTREC_CHUNK]           = "PTREC_CHUNK",
  [ATOMICALLY_FRAME]      = "ATOMICALLY_FRAME",
  [CATCH_RETRY_FRAME]     = "CATCH_RETRY_FRAME",
  [CATCH_STM_FRAME]       = "CATCH_STM_FRAME",

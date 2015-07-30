@@ -1079,6 +1079,11 @@ heapCensusChain( Census *census, bdescr *bd )
                 size = sizeofW(StgTRecChunk);
                 break;
 
+            case PTREC_CHUNK:
+                prim = rtsTrue;
+                size = sizeofW(StgPTRecChunk);
+                break;
+
             default:
                 barf("heapCensus, unknown object: %d", info->type);
             }
