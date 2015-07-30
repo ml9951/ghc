@@ -11,7 +11,7 @@ import Control.CPSFull.STM
 #elif defined(PTL2)
 import Control.PartialTL2.STM
 #elif defined(TL2)
-import Control.TL2.STM
+import Control.FullTL2.STM
 #else
 import Control.Partial.STM
 --import Control.Concurrent.PASTM.Core

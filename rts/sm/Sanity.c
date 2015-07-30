@@ -424,6 +424,12 @@ checkClosure( StgClosure* p )
         return sizeofW(StgTRecChunk);
       }
 
+    case PTREC_CHUNK:
+    {
+        nat i;
+
+    }
+
     default:
             barf("checkClosure (closure type %d)", info->type);
     }
