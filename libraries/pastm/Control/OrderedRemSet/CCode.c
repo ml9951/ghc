@@ -72,20 +72,13 @@ StgPTRecHeader * ord_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec
     return ptrec;
 }
 
-int rsSize(StgPTRecWithoutK * rs){
-    int i = 0;
-    while(rs != TO_WITHOUTK(NO_PTREC)){
-	rs = rs->next;
-	i++;
-    }
-    return i;
-}
-
 static inline void clearTRec(StgPTRecHeader * trec){
-    trec->read_set = TO_WITHOUTK(NO_PTREC);
+    StgPTRecWithoutK * first = trec->read_set;
+    first->next = TO_WITHOUTK(NO_PTREC);
     trec->lastK = TO_WITHK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    trec->tail = first;
     StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
     trec->capture_freq = capture_freq | (capture_freq >> 32);
     trec->numK = 0;
@@ -281,9 +274,7 @@ StgPTRecWithK * ord_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
         }
         snapshot = trec->read_version;
     }
-
-    //TRACE("%d: Clock locked with current value %lu\n", cap->no, version_clock);
-
+    
     StgWriteSet * write_set = trec->write_set;
     while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
