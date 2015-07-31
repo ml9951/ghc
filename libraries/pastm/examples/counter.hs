@@ -8,6 +8,8 @@ import Control.Full.STM           --full abort STM (NoRec)
 import Control.Ordered.STM
 #elif defined(TL2)
 import Control.PartialTL2.STM
+#elif defined(CHUNKED)
+import Control.Chunked.STM
 #else
 import Control.Partial.STM
 #endif

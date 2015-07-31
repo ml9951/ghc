@@ -823,7 +823,7 @@ scavenge_block (bdescr *bd)
         }
         gct->eager_promotion = saved_eager_promotion;
         gct->failed_to_evac = rtsTrue; // mutable
-        p += sizeofW(StgTRecChunk);
+        p += sizeofW(StgPTRecChunk);
         break;
     }
 

@@ -482,6 +482,9 @@ wanteds = concat
 
           ,closureField C "StgTRecHeader" "enclosing_trec"
 
+          ,structField C "PTRecWithK" "continuation"
+          ,structField C "PTRecWithK" "read_value"
+
           ,closureField C "StgPTRecWithK" "continuation"
           ,closureField C "StgPTRecWithK" "read_value"
           ,closureField C "StgPTRecHeader" "retry_stack"

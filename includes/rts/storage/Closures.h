@@ -497,7 +497,7 @@ typedef struct{
 //Make this 512 bytes.
 typedef struct StgPTRecChunk_ {
     StgHeader                  header;                     //8 bytes
-    struct StgTRecChunk_      *prev_chunk;                 //8 bytes (16 total)
+    struct StgPTRecChunk_     *prev_chunk;                 //8 bytes (16 total)
     StgWord                    next_entry_idx;             //8 bytes (24 total)
     StgWord                    entries[PTREC_CHUNK_SIZE];  //488 bytes -- 61 Words (512 total bytes) -- This will also perfectly fit 20 withoutK entries
 } StgPTRecChunk;

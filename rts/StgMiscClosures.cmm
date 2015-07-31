@@ -581,6 +581,10 @@ INFO_TABLE(stg_TL2_TVAR_DIRTY, 1, 2, TVAR, "TVAR", "TVAR")
 INFO_TABLE(stg_PTREC_CHUNK, 0, 0, PTREC_CHUNK, "PTREC_CHUNK", "PTREC_CHUNK")
 { foreign "C" barf("PTREC_CHUNK object entered!") never returns; }
 
+INFO_TABLE(stg_CHUNKED_PTREC_HEADER, 5, 4, MUT_PRIM, "CHUNKED_PTREC_HEADER", "CHUNKED_PTREC_HEADER")
+{ foreign "C" barf("CHUNKED_PTREC_HEADER object entered!") never returns; }
+
+
 /* ----------------------------------------------------------------------------
    Messages
    ------------------------------------------------------------------------- */

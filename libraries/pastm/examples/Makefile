@@ -15,6 +15,7 @@ PARTIAL_FILES = ../Control/Partial/CmmHooks.cmm ../Control/Partial/CCode.c ../Co
 CPSFULL_FILES = ../Control/CPSFull/CmmHooks.cmm ../Control/CPSFull/CCode.c ../Control/CPSFull/STM.hs -I../../../rts
 TL2_FILES = ../Control/TL2/CmmHooks.cmm ../Control/TL2/CCode.c ../Control/TL2/STM.hs -I../../../rts
 PartialTL2_FILES = ../Control/PartialTL2/CmmHooks.cmm ../Control/PartialTL2/CCode.c ../Control/PartialTL2/STM.hs -I../../../rts
+CHUNKED_FILES = ../Control/Chunked/CmmHooks.cmm ../Control/Chunked/CCode.c ../Control/Chunked/STM.hs -I../../../rts
 
 OPT =
 
@@ -65,6 +66,9 @@ counterOrdered:	counter.hs cbits/gettime.c
 counterTL2:	counter.hs cbits/gettime.c 
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DTL2 $(TL2_FILES) -optc-g -optc-O0 -fforce-recomp cbits/gettime.c counter.hs -o counterTL2$(OPT)
 
+.PHONY:	counterChunked
+counterChunked:	counter.hs cbits/gettime.c
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DCHUNKED $(CHUNKED_FILES) -optc-g -optc-O0 -fforce-recomp cbits/gettime.c counter.hs -o counterChunked$(OPT)
 
 retry:	test_retry.hs 
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) -fforce-recomp cbits/gettime.c test_retry.hs -o retryPartial$(OPT)
