@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, ForeignFunctionInterface #-} 
 
-module StraightForwardSTM(newList, addToTail, find, delete, List, printStats)
+module StraightForwardSTM(newList, addToTail, find, delete, List, printStats, whichSTM)
 where
 
 #ifdef STMHASKELL
@@ -13,8 +13,26 @@ import Control.Ordered.STM
 import Control.CPSFull.STM
 #elif defined(PABORT)
 import Control.Partial.STM
-#elif defined(TL2)
+#elif defined(PTL2)
 import Control.PartialTL2.STM
+#else
+#error NO STM SPECIFIED
+#endif
+
+import Dump
+
+#ifdef STMHASKELL
+whichSTM = "STM Haskell"
+#elif defined(FABORT)
+whichSTM = "Full Abort NoRec"
+#elif defined(ORDERED)
+whichSTM = "Ordered NoRec"
+#elif defined(CPSFULL)
+whichSTM = "CPS Converted Full Abort NoRec"
+#elif defined(PABORT)
+whichSTM = "Partial Abort NoRec"
+#elif defined(PTL2)
+whichSTM = "Partial Abort TL2"
 #else
 #error NO STM SPECIFIED
 #endif
@@ -61,32 +79,29 @@ find (ListHandle {headList = ptrPtr}) i =
         Node {val = curval, next = curnext} ->
            if (curval == i) then return True
            else find2 curnext i
-delete :: Eq a => ListHandle a -> a -> IO Bool
-delete (ListHandle {headList = ptrPtr})  i =
-       atomically (do startptr <- readTVar ptrPtr
-                      delete2 startptr i)
-       where
-       delete2 :: Eq a => TVar (List a) -> a -> STM Bool
-       delete2 prevPtr i = do
-               prevNode <- readTVar prevPtr
-               let curNodePtr = next prevNode
-               curNode <- readTVar curNodePtr
-               case curNode of
-                    Null -> return False
-                    Node {val = curval, next = nextNode} ->
-                         if (curval /= i)
-                         then delete2 curNodePtr i -- keep searching
-                         else case prevNode of
-                            Head {} -> do
-                                 writeTVar prevPtr (Head {next = nextNode})
-                                 return True
-                            Node {} -> do
-                                 writeTVar prevPtr (Node {val = val prevNode,
-                                                          next = nextNode})
-                                 return True                          
 
+getNext (Node{next=n}) = return n
+getNext (Head{next=n}) = return n
 
-
-
-
-
+delete (ListHandle{headList=ptrPtr}) i =
+        atomically(do startPtr <- readTVar ptrPtr
+                      raw <- readTVar startPtr
+                      n <- getNext raw
+                      delete2 startPtr n)
+        where
+        delete2 prevPtr currentPtr = do
+                curNode <- readTVar currentPtr
+                case curNode of
+                     Null -> return False
+                     Node{val = curval, next = nextNode} ->
+                              if curval /= i
+                              then delete2 currentPtr nextNode
+                              else do 
+                                   prevNode <- readTVar prevPtr
+                                   case prevNode of
+                                        Head{} -> do
+                                               writeTVar prevPtr (Head{next=nextNode})
+                                               return True
+                                        Node{} -> do
+                                               writeTVar prevPtr (Node{val=val prevNode, next=nextNode})
+                                               return True

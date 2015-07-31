@@ -38,9 +38,10 @@ module Control.PartialTL2.STM
 )
 where
 
---add TVar TVar# newTVar# newTVarIO readTVarIO
 import GHC.Base(State#, RealWorld, IO(..), ap)
 import GHC.Prim(Any, unsafeCoerce# )
+
+import Dump
 
 newtype STM a = STM {unSTM :: forall r . --r is the type of the final result
                                  (a -> State# RealWorld -> (# State# RealWorld, r #)) -> --Continuation
@@ -73,10 +74,10 @@ writeTVar (TVar tv) a = STM $ \c -> \s ->
                (# s', tv #) -> c () s'
 
 newTVarIO :: a -> IO (TVar a)
-newTVarIO x = IO $ \s -> unsafeCoerce# newTVar# x s 
+newTVarIO x = IO $ \s -> unsafeCoerce# newTL2TVar# x s 
 
 newTVar :: a -> STM (TVar a)
-newTVar x = STM $ \c -> \s -> case unsafeCoerce# newTVar# x s of
+newTVar x = STM $ \c -> \s -> case unsafeCoerce# newTL2TVar# x s of
                                 (# s', tv #) -> c (TVar tv) s'
 
 initK :: a -> State# RealWorld -> (# State# RealWorld, a #)
@@ -96,7 +97,7 @@ foreign import prim safe "stg_partial_writeTVarzh" writeTVar#
 
 foreign import ccall "pa_printSTMStats" printStats :: IO ()
 
-foreign import prim safe "stg_newTL2TVarzh" newTVar#
+foreign import prim safe "stg_newTL2TVarzh" newTL2TVar#
         :: Any() -> State# RealWorld -> (# state# RealWorld, a #) 
 
 foreign import prim safe "stg_readTL2TVarIOzh" readTVarIO#

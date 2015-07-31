@@ -128,9 +128,9 @@ check l = do
            Head l' -> do
                 rawL' <- readTVarIO l'
                 case rawL' of
-                     Null -> putStrLn "Invariant check passed!" >>= \ _ ->  return()
-                     _ -> throw $ AssertionFailed "Non empty list after transactions"
-           _ -> throw $ AssertionFailed "Headless list after transactions"
+                     Null -> putStrLn "Success: Invariant check passed!" >>= \ _ ->  return()
+                     _ -> throw $ AssertionFailed "Error: Non empty list after transactions"
+           _ -> throw $ AssertionFailed "Error: Headless list after transactions"
 
 toList :: Show a => TVar (STMList a) -> IO [a]
 toList l = do

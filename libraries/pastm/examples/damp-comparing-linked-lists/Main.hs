@@ -18,6 +18,7 @@ import Control.Monad(foldM_)
 import Control.Concurrent.MVar(takeMVar, putMVar, newEmptyMVar, MVar)
 import Control.Concurrent(forkOn, getNumCapabilities)
 import Text.Printf(printf)
+import Dump
 
 --            0-1          2           3-6
 data Op = Lookup Int | Delete Int | Insert Int
@@ -45,6 +46,9 @@ join (mv:mvs) = do
      join mvs
 
 main = do
+#if defined(STRAIGHT) || defined(DISSECTED)
+     putStrLn ("Executing benchmark with " ++ whichSTM)
+#endif
      l <- newList
      let randoms = randomRs (0::Int, 100000) (mkStdGen 0)
      let (init, randoms') = splitAt 3000 randoms

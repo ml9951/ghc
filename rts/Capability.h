@@ -143,7 +143,7 @@ struct Capability_ {
     StgTRecHeader *free_trec_headers;
     nat transaction_tokens;
 
-    StgPTRecWithoutK * free_ptrec_items;
+    StgPTRecChunk * free_ptrec_chunks;
 
     StgPASTMStats pastmStats;
 

@@ -55,9 +55,7 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
 
 static void clearTRec(StgPTRecHeader * trec){
     trec->read_set = TO_WITHOUTK(NO_PTREC);
-    trec->lastK = TO_WITHK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
-    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
 }
 
 static StgPTRecWithK * validate(StgPTRecHeader * trec){
@@ -78,6 +76,11 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
     return TO_WITHK(PASTM_SUCCESS);
 }
 
+StgClosure * abort_transaction(StgPTRecHeader * trec){
+    trec->read_version = atomic_inc(&version_clock, 1);
+    clearTRec(trec);
+    return PASTM_FAIL;
+}
 
 StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
 			    StgTL2TVar * tvar, StgClosure * k){
@@ -93,21 +96,15 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     StgClosure * val; 
     unsigned long stamp1, stamp2;
     
-
-    do{
-	load_load_barrier();
-	stamp1 = tvar->stamp;
-	load_load_barrier();
-	val = tvar->current_value;
-	load_load_barrier();
-	stamp2 = tvar->stamp;
-	load_load_barrier();
-    }while(tvar->lock);
-
-    if(stamp2 > trec->read_version || stamp1 != stamp2){
-	trec->read_version = atomic_inc(&version_clock, 1);
-	clearTRec(trec);
-	return PASTM_FAIL;
+    stamp1 = tvar->stamp;
+    if(tvar->lock || stamp1 > trec->read_version)
+	return abort_transaction(trec);
+    
+    val = tvar->current_value;
+    
+    stamp2 = tvar->stamp;
+    if(tvar->lock || stamp1 != stamp2){
+	return abort_transaction(trec);
     }
     
     StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));

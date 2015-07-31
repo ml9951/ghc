@@ -288,7 +288,7 @@ initCapability( Capability *cap, nat i )
     cap->free_trec_chunks = END_STM_CHUNK_LIST;
     cap->free_trec_headers = NO_TREC;
     
-    cap->free_ptrec_items = NO_PTREC;
+    cap->free_ptrec_chunks = NO_PTREC;
 
     cap->pastmStats.eagerPartialAborts = 0;
     cap->pastmStats.commitTimePartialAborts = 0;

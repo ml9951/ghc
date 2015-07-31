@@ -8,7 +8,7 @@ import Control.STMHaskell.STM     --full abort STM haskell
 import Control.Full.STM           --full abort STM (NoRec)
 #elif defined(ORDERED)
 import Control.Ordered.STM
-#elif defined(TL2)
+#elif defined(PTL2)
 import Control.PartialTL2.STM
 #else
 import Control.Partial.STM

@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, ForeignFunctionInterface #-} 
 
-module DissectedSTM(newList, addToTail, find, delete, List, printStats)
+module DissectedSTM(newList, addToTail, find, delete, List, printStats, whichSTM)
 where
 
 #ifdef STMHASKELL
@@ -11,11 +11,28 @@ import Control.Full.STM           --full abort STM (NoRec)
 import Control.Ordered.STM
 #elif defined(CPSFULL)
 import Control.CPSFull.STM
-#elif define(TL2)
+#elif defined(PTL2)
 import Control.PartialTL2.STM
-#else
+#elif defined(PABORT)
 import Control.Partial.STM
---import Control.Concurrent.PASTM.Core
+#else
+#error No STM Specified
+#endif
+
+#ifdef STMHASKELL
+whichSTM = "STM Haskell"
+#elif defined(FABORT)
+whichSTM = "Full Abort NoRec"
+#elif defined(ORDERED)
+whichSTM = "Ordered NoRec"
+#elif defined(CPSFULL)
+whichSTM = "CPS Converted Full Abort NoRec"
+#elif defined(PABORT)
+whichSTM = "Partial Abort NoRec"
+#elif defined(PTL2)
+whichSTM = "Partial Abort TL2"
+#else
+#error NO STM SPECIFIED
 #endif
 
 data List a = Node { val :: a
@@ -65,7 +82,6 @@ searchAndExecute
        -> List a
        -> STM (IO Bool))
     -> IO Bool
-
 searchAndExecute (ListHandle { headList = head }) x apply =
     do startPtr <- atomically (readTVar head)
        go startPtr
