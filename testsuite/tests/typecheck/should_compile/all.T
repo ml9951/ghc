@@ -283,7 +283,7 @@ test('T2433', extra_clean(['T2433_Help.hi', 'T2433_Help.o']),
      multimod_compile, ['T2433', '-v0'])
 test('T2494', normal, compile_fail, [''])
 test('T2494-2', normal, compile, [''])
-test('T2497', expect_broken_for(10657, ['optasm', 'optllvm']), compile, [''])
+test('T2497', normal, compile, [''])
 
 
 # Omitting temporarily
@@ -458,7 +458,7 @@ test('T10390', normal, compile, [''])
 test('T8555', normal, compile, [''])
 test('T8799', normal, compile, [''])
 test('T10423', normal, compile, [''])
-test('T10489', normal, compile, [''])
+test('T10489', unless(compiler_debugged(), skip), compile, [''])
 test('T10348', normal, compile, [''])
 test('T10494', normal, compile, [''])
 test('T10493', normal, compile, [''])

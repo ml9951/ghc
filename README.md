@@ -1,5 +1,6 @@
 The Glasgow Haskell Compiler with Partial Abort STM
 ============================
+
 This is a fork of GHC that adds a new STM monad which is able to 
 partially abort transactions.  Below are the steps necessary to
 get everything checked out and built:
@@ -15,7 +16,7 @@ get everything checked out and built:
     ./configure
     make         # can also say 'make -jX' for X number of jobs
     make install	 
-    
+
 Contributors & Acknowledgements
 ===============================
 

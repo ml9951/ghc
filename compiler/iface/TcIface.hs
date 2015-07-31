@@ -49,7 +49,8 @@ import DataCon
 import PrelNames
 import TysWiredIn
 import TysPrim          ( superKindTyConName )
-import BasicTypes       ( strongLoopBreaker, Arity, TupleSort(..), Boxity(..) )
+import BasicTypes       ( strongLoopBreaker, Arity, TupleSort(..)
+                        , Boxity(..), pprRuleName )
 import Literal
 import qualified Var
 import VarEnv
@@ -542,9 +543,9 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
 
         ; con <- buildDataCon (pprPanic "tcIfaceDataCons: FamInstEnvs" (ppr name))
                        name is_infix
-                       stricts     -- Pass the HsImplBangs (i.e. final decisions
-                                   -- to buildDataCon; it'll use these to guide 
-                                   -- the construction of a worker
+                       stricts -- Pass the HsImplBangs (i.e. final decisions)
+                               -- to buildDataCon; it'll use these to guide
+                               -- the construction of a worker
                        lbl_names
                        tc_tyvars ex_tyvars
                        eq_spec theta
@@ -554,7 +555,7 @@ tcIfaceDataCons tycon_name tycon tc_tyvars if_cons
     mk_doc con_name = ptext (sLit "Constructor") <+> ppr con_name
 
     tc_strict :: IfaceBang -> IfL HsImplBang
-    tc_strict IfNoBang = return HsNoBang
+    tc_strict IfNoBang = return HsLazy
     tc_strict IfStrict = return HsStrict
     tc_strict IfUnpack = return (HsUnpack Nothing)
     tc_strict (IfUnpackCo if_co) = do { co <- tcIfaceCo if_co
@@ -638,7 +639,7 @@ tcIfaceRule (IfaceRule {ifRuleName = name, ifActivation = act, ifRuleBndrs = bnd
                         ifRuleAuto = auto, ifRuleOrph = orph })
   = do  { ~(bndrs', args', rhs') <-
                 -- Typecheck the payload lazily, in the hope it'll never be looked at
-                forkM (ptext (sLit "Rule") <+> ftext name) $
+                forkM (ptext (sLit "Rule") <+> pprRuleName name) $
                 bindIfaceBndrs bndrs                      $ \ bndrs' ->
                 do { args' <- mapM tcIfaceExpr args
                    ; rhs'  <- tcIfaceExpr rhs
