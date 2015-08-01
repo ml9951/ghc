@@ -53,9 +53,9 @@ main = do
      let randoms = randomRs (0::Int, 100000) (mkStdGen 0)
      let (init, randoms') = splitAt 3000 randoms
      foldM_ (\b -> \a -> addToTail l a) () init
-     numCapabilities <- getNumCapabilities
+   --  numCapabilities <- getNumCapabilities
      start <- getTime
-     mvs <- mkThreads numCapabilities l
+     mvs <- mkThreads 8 l
      join mvs
      end <- getTime
      printf "Time = %0.3f\n" (end - start :: Double)

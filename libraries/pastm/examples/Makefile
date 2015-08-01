@@ -73,6 +73,9 @@ counterChunked:	counter.hs cbits/gettime.c
 retry:	test_retry.hs 
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) -fforce-recomp cbits/gettime.c test_retry.hs -o retryPartial$(OPT)
 
+multiplePartial:	multipleTVars.hs 
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) -fforce-recomp cbits/gettime.c multipleTVars.hs -o multipleTVarsPartial$(OPT)
+
 full:	llFull counterFull
 
 clean:

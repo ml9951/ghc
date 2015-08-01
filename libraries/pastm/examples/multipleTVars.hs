@@ -31,14 +31,12 @@ whichSTM = "Full Abort NoRec"
 whichSTM = "Partial Abort NoRec"
 #endif
 
-numTVars = 100
+numTVars = (100 :: Int)
 numSamples = 10
 numWrites = 10 
-numIters = 200 --1000
+numIters = (200 :: Int) --1000
 
 newtype TArray i e = TArray (Array i (TVar e)) deriving (Eq, Typeable)
-
-globalTV = newTVar 0
 
 instance MArray TArray e STM where
     getBounds (TArray a) = return (bounds a)
@@ -66,49 +64,32 @@ rep n m = go n []
 
 type TVars = TArray Int Int
 
-tvars :: STM TVars
-tvars = newArray (0, numTVars) 0
+sample tvars [] x = return x
+sample tvars (r:rs) x = do
+       x <- readArray tvars r
+       sample tvars rs x
 
-sample :: Int -> Int -> RandT StdGen STM Int
-sample 0 x = return x
-sample i x = do
-       rn <- getRandomR(0, numTVars)
-       x <- lift (do  
-            tvars <- tvars
-            x <- readArray tvars rn
-            return(x))
-       sample (i-1) x
+write tvars [] = return ()
+write tvars (r:rs) = do
+      temp <- readArray tvars r
+      traceM ("Incrementing tvar " ++ show r ++ " from " ++ show temp ++ " to " ++ show (temp+1))
+      writeArray tvars r (temp+1)
+      write tvars rs
 
-write :: Int -> RandT StdGen STM [Int]
-write 0 = return []
-write i = do
-      rn <- getRandomR (0, numTVars)
-      rands <- write (i-1)
-      lift $ do
-           tvars <- tvars
-           temp <- readArray tvars rn
-           let !new = temp + 1
-           traceM ("Updating position " ++ show rn ++ " to " ++ show new)
-           writeArray tvars rn new
-           t <- globalTV
-           x <- readTVar t
-           writeTVar t (x+1)
-           return $ rn : rands
-
-threadLoop :: StdGen -> Int -> IO [Int]
-threadLoop g 0 = return []
-threadLoop g i = do
-           (writes, g) <- atomically $ runRandT (sample numSamples 0 >>= \ _-> write numWrites) g
-           rest <- threadLoop g (i-1)
+threadLoop :: TVars -> [Int] -> Int -> IO [Int]
+threadLoop tvars g 0 = return []
+threadLoop tvars g i = do
+           (samples, g1) <- return $ splitAt numSamples g
+           (writes, g2) <- return $ splitAt numWrites g1
+           atomically $ sample tvars samples 0 >>= \_ -> write tvars writes
+           rest <- threadLoop tvars g2 (i-1)
            return(writes ++ rest)
 
-mkThreads :: Int -> IO [MVar [Int]]
-mkThreads 0 = return[]
-mkThreads i = do
-          gen <- newStdGen
+mkThreads tvars 0 = return[]
+mkThreads tvars i = do
           mv <- newEmptyMVar
-          forkIO $ threadLoop gen numIters >>= \writes -> putMVar mv writes
-          mvs <- mkThreads (i-1)
+          forkIO $ threadLoop tvars (randomRs (0, numTVars) (mkStdGen i)) numIters >>= \writes -> putMVar mv writes
+          mvs <- mkThreads tvars (i-1)
           return(mv : mvs)
 
 join [] = return []
@@ -118,29 +99,26 @@ join (mv:mvs) = do
      return(writes ++ rest)
 
 
-check :: [(Int, Int)] -> STM [(Int, Int, Int)]
-check [] = return []
-check ((i, freq):rest) = do
-      tvars <- tvars
+check :: TVars -> [(Int, Int)] -> STM [(Int, Int, Int)]
+check tvars [] = return []
+check tvars ((i, freq):rest) = do
       actual <- readArray tvars i
       if actual == freq
-      then check rest
+      then check tvars rest
       else do
-           failed <- check rest
+           failed <- check tvars rest
            return((i, freq, actual):failed)
 
 main = do
-     putStrLn("Executing benchmark with " ++ whichSTM)
-     mvs <- mkThreads numCapabilities
+     putStrLn("Executing benchmark with " ++ whichSTM)  
+     tvars <- atomically $ newArray (0, numTVars) 0
+     mvs <- mkThreads tvars numCapabilities
      writes <- join mvs
      let freq = MS.toOccurList (MS.fromList writes)
-     failed <- atomically $ check freq
+     failed <- atomically $ check tvars freq
      mapM_ (\(i,freq,actual) -> putStrLn(show i ++ ": Count should be " ++ show freq ++ ", but found " ++ show actual)) failed
-     x <- atomically $ do t <- globalTV; readTVar t
-     putStrLn("x = " ++ show x)
+     putStrLn(show writes)
      return()
-
-
 
 
 
