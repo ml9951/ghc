@@ -46,7 +46,7 @@ StgPTRecHeader * fa_stmStartTransaction(Capability *cap) {
     ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
 
-	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+    ptrec->tail = TO_WITHOUTK(NO_PTREC);
 
     ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
 
@@ -61,6 +61,11 @@ StgPTRecHeader * fa_stmStartTransaction(Capability *cap) {
     return ptrec;
 }
 
+void clearTRec(StgPTRecHeader * trec){
+    trec->read_set = TO_WITHOUTK(NO_PTREC);
+    trec->write_set = TO_WITHOUTK(NO_PTREC);
+}
+
 static StgClosure * fa_validate(StgPTRecHeader * trec){
     while(TRUE){
         unsigned long time = version_clock;
@@ -73,14 +78,14 @@ static StgClosure * fa_validate(StgPTRecHeader * trec){
         StgPTRecWithoutK * ptr = trec->read_set;
 
         while(ptr != TO_WITHOUTK(NO_PTREC)){
-	  
-		    if(ptr->read_value != ptr->tvar->current_value){
-			    return PASTM_FAIL;
-			}
-			ptr = ptr->next;
-		}
+	    if(ptr->read_value != ptr->tvar->current_value){
+		clearTRec(trec);
+		return PASTM_FAIL;
+	    }
+	    ptr = ptr->next;
+	}
         if(time == version_clock){
-		    return PASTM_SUCCESS; //necessarily PASTM_SUCCESS
+	    return PASTM_SUCCESS; //necessarily PASTM_SUCCESS
         }
         //Validation succeeded, but someone else committed in the meantime, loop back around...
     }
@@ -147,7 +152,18 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
         snapshot = trec->read_version;
     }
    
-    StgWriteSet * write_set = trec->write_set;
+    StgWriteSet * one, * two;
+    one = TO_WRITE_SET(NO_PTREC);
+    two = trec->write_set;
+    
+    while(two != TO_WRITE_SET(NO_PTREC)){
+        StgWriteSet * temp = two->next;
+	two->next = one;
+	one = two;
+	two = temp;
+    }
+
+    StgWriteSet * write_set = one;
     while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;

@@ -77,6 +77,13 @@ retry:	test_retry.hs
 multiplePartial:	multipleTVars.hs 
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) -fforce-recomp cbits/gettime.c multipleTVars.hs -o multipleTVarsPartial$(OPT)
 
+multipleOrdered:	multipleTVars.hs 
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(ORDERED_FILES) -DORDERED -fforce-recomp cbits/gettime.c multipleTVars.hs -o multipleTVarsOrdered$(OPT)
+
+multipleFull:	multipleTVars.hs 
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FULL_FILES) -DFABORT -fforce-recomp cbits/gettime.c multipleTVars.hs -o multipleTVarsFull$(OPT)
+
+
 full:	llFull counterFull
 
 clean:

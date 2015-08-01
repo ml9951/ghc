@@ -275,7 +275,18 @@ StgPTRecWithK * ord_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
         snapshot = trec->read_version;
     }
     
-    StgWriteSet * write_set = trec->write_set;
+    StgWriteSet * one, * two;
+    one = TO_WRITE_SET(NO_PTREC);
+    two = trec->write_set;
+    
+    while(two != TO_WRITE_SET(NO_PTREC)){
+        StgWriteSet * temp = two->next;
+	two->next = one;
+	one = two;
+	two = temp;
+    }
+
+    StgWriteSet * write_set = one;
     while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;

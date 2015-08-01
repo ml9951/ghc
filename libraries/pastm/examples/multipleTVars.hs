@@ -4,6 +4,8 @@
 import Control.STMHaskell.STM     --full abort STM (STM Haskell)
 #elif defined(FABORT)
 import Control.Full.STM           --full abort STM (NoRec)
+#elif defined(ORDERED)
+import Control.Ordered.STM
 #else
 import Control.Partial.STM
 #endif
@@ -27,6 +29,8 @@ import Data.Typeable (Typeable)
 whichSTM = "STM Haskell"
 #elif defined(FABORT)
 whichSTM = "Full Abort NoRec"
+#elif defined(ORDERED)
+whichSTM = "Ordered NoRec"
 #else
 whichSTM = "Partial Abort NoRec"
 #endif
@@ -34,7 +38,7 @@ whichSTM = "Partial Abort NoRec"
 numTVars = (100 :: Int)
 numSamples = 10
 numWrites = 10 
-numIters = (200 :: Int) --1000
+numIters = (1000 :: Int) --1000
 
 newtype TArray i e = TArray (Array i (TVar e)) deriving (Eq, Typeable)
 
@@ -115,7 +119,7 @@ main = do
      writes <- join mvs
      let freq = MS.toOccurList (MS.fromList writes)
      failed <- atomically $ check tvars freq
-     mapM_ (\(i,freq,actual) -> putStrLn(show i ++ ": Count should be " ++ show freq ++ ", but found " ++ show actual)) failed
+     mapM_ (\(i,freq,actual) -> putStrLn("Error: " ++ show i ++ ": Count should be " ++ show freq ++ ", but found " ++ show actual)) failed
      case failed of
           [] -> putStrLn "Success: test passed"
           _ -> return()
