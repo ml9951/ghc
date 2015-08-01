@@ -72,7 +72,6 @@ sample tvars (r:rs) x = do
 write tvars [] = return ()
 write tvars (r:rs) = do
       temp <- readArray tvars r
-      traceM ("Incrementing tvar " ++ show r ++ " from " ++ show temp ++ " to " ++ show (temp+1))
       writeArray tvars r (temp+1)
       write tvars rs
 
@@ -117,9 +116,9 @@ main = do
      let freq = MS.toOccurList (MS.fromList writes)
      failed <- atomically $ check tvars freq
      mapM_ (\(i,freq,actual) -> putStrLn(show i ++ ": Count should be " ++ show freq ++ ", but found " ++ show actual)) failed
-     putStrLn(show writes)
-     return()
-
+     case failed of
+          [] -> putStrLn "Success: test passed"
+          _ -> return()
 
 
 

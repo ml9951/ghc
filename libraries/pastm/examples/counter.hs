@@ -27,7 +27,10 @@ threadLoop i c = do
            atomically $ do 
                       t <- readTVar c; 
                       let !n = t+1; 
-                      writeTVar c n
+                      writeTVar c n 
+                      t2 <- readTVar c; 
+                      let !n2 = t2+1; 
+                      writeTVar c n2
            threadLoop (i-1) c
 
 

@@ -55,6 +55,7 @@ counterSTMHaskell:	counter.hs
 counterFull:	counter.hs 
 	$(GHC) $(THREADED) $(DEBUG) -DFABORT $(FULL_FILES) -fforce-recomp counter.hs -o counterFull$(OPT)
 
+.PHONY:	counterPartial
 counterPartial:	counter.hs
 	$(GHC) $(THREADED) $(DEBUG) $(PARTIAL_FILES) -fforce-recomp counter.hs -o counterPartial$(OPT)
 

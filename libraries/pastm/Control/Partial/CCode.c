@@ -178,6 +178,7 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     
     //Not found in write set
     StgClosure * val = tvar->current_value;
+
     while(trec->read_version != version_clock){
 	StgPTRecWithK * checkpoint = pa_validate(trec, cap);
         if(checkpoint != TO_WITHK(PASTM_SUCCESS)){
@@ -278,7 +279,19 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
     //TRACE("%d: Clock locked with current value %lu\n", cap->no, version_clock);
 
-    StgWriteSet * write_set = trec->write_set;
+    
+    StgWriteSet * one, * two;
+    one = TO_WRITE_SET(NO_PTREC);
+    two = trec->write_set;
+    
+    while(two != TO_WRITE_SET(NO_PTREC)){
+        StgWriteSet * temp = two->next;
+	two->next = one;
+	one = two;
+	two = temp;
+    }
+
+    StgWriteSet * write_set = one;
     while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;
