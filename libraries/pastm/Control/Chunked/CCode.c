@@ -98,7 +98,7 @@ TRec * ord_stmStartTransaction(Capability *cap, TRec * ptrec) {
 //TODO: recycle trec chunks
 static inline void clearTRec(Capability * cap, TRec * trec){
     //leave one chunk on the read set.
-    cap->free_ptrec_chunks->prev_chunk = trec->read_set->prev_chunk;
+    //cap->free_ptrec_chunks->prev_chunk = trec->read_set->prev_chunk;
     trec->read_set->prev_chunk = TO_CHUNK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->retry_stack = TO_OR_ELSE(NO_PTREC);

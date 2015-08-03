@@ -27,7 +27,7 @@
 
 static volatile unsigned long version_clock = 0;
 
-#define STATS
+//use -optc-DSTATS to enable statistics
 
 #ifdef STATS
 static StgPASTMStats stats = {0, 0, 0, 0, 0};

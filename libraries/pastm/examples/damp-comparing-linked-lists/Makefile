@@ -15,7 +15,7 @@ partial:
 	$(eval WHICHSTM := -DPABORT)
 
 ordered:	
-	$(eval FILES := ../../Control/Ordered/CmmHooks.cmm ../../Control/Ordered/CCode.c ../../Control/Ordered/STM.hs -I../../../../rts)
+	$(eval FILES := ../../Control/OrderedRemSet/CmmHooks.cmm ../../Control/OrderedRemSet/CCode.c ../../Control/OrderedRemSet/STM.hs -I../../../../rts)
 	$(eval WHICHSTM := -DORDERED)
 
 stmHaskell:	
