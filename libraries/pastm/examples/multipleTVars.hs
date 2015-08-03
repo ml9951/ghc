@@ -6,6 +6,8 @@ import Control.STMHaskell.STM     --full abort STM (STM Haskell)
 import Control.Full.STM           --full abort STM (NoRec)
 #elif defined(ORDERED)
 import Control.Ordered.STM
+#elif defined(CHUNKED)
+import Control.Chunked.STM
 #else
 import Control.Partial.STM
 #endif
@@ -14,7 +16,6 @@ import Prelude hiding (lookup)
 import GHC.Conc(numCapabilities, forkIO)
 import Control.Concurrent.MVar
 import System.Random
-import Control.Monad.Random
 import qualified Data.MultiSet as MS
 import Data.Array.MArray
 import Dump
@@ -120,6 +121,7 @@ main = do
      let freq = MS.toOccurList (MS.fromList writes)
      failed <- atomically $ check tvars freq
      mapM_ (\(i,freq,actual) -> putStrLn("Error: " ++ show i ++ ": Count should be " ++ show freq ++ ", but found " ++ show actual)) failed
+     printStats
      case failed of
           [] -> putStrLn "Success: test passed"
           _ -> return()

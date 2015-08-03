@@ -80,7 +80,7 @@ stg_ordered_atomicallyzh (P_ stm)
 
     code = stm;
     next_invariant = END_INVARIANT_CHECK_QUEUE;
-    frame_result = NO_TREC;
+    frame_result = NO_PTREC;
 
     jump stg_ap_v_fast
         (ATOMICALLY_FRAME_FIELDS(,,stg_ordered_atomically_frame_info, CCCS, 0,

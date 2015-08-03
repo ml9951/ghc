@@ -47,6 +47,10 @@ llPartialTL2:	ll.hs cbits/gettime.c
 llTL2:	ll.hs cbits/gettime.c
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DTL2 -optc-g $(TL2_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llTL2$(OPT)
 
+.PHONY:	llChunked
+llChunked:	ll.hs cbits/gettime.c
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DCHUNKED -optc-g $(CHUNKED_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llChunked$(OPT)
+
 counter:	counterFull counterPartial counterSTMHaskell counterOrdered
 
 counterSTMHaskell:	counter.hs
@@ -83,6 +87,8 @@ multipleOrdered:	multipleTVars.hs
 multipleFull:	multipleTVars.hs 
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FULL_FILES) -DFABORT -fforce-recomp cbits/gettime.c multipleTVars.hs -o multipleTVarsFull$(OPT)
 
+multipleChunked:	multipleTVars.hs
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(CHUNKED_FILES) -DCHUNKED -fforce-recomp cbits/gettime.c multipleTVars.hs -o multipleTVarsChunked$(OPT)
 
 full:	llFull counterFull
 

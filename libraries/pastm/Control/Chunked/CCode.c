@@ -131,6 +131,7 @@ static PTRecWithK * ord_validate(TRec * trec, Capability * cap){
 	    StgWord i = 0;
 	    while(i < chunk->next_entry_idx){
 		PTRecWithoutK * entry = (PTRecWithoutK *)&(chunk->entries[i]);
+
 		if(entry->tvar->current_value != entry->read_value){
 		    if(checkpoint != NULL){ //we have a checkpoint
 			PTRecWithK * withK = (PTRecWithK*)(checkpoint->entries + checkpointOffset);
@@ -154,7 +155,7 @@ static PTRecWithK * ord_validate(TRec * trec, Capability * cap){
 			return TO_WITHK(PASTM_FAIL);
 		    }
 		}
-		if(entry->size == 7){
+		if(entry->size == 7 && ((PTRecWithK*)entry)->continuation != NO_PTREC){
 		    checkpoint = chunk;
 		    checkpointOffset = i;
 		    kCount++;
@@ -168,17 +169,6 @@ static PTRecWithK * ord_validate(TRec * trec, Capability * cap){
 	}
     }
 }
-
-
-/*typedef struct PTRecWithK_{
-  StgWord                size;
-  StgTVar               *tvar;
-  StgClosure            *read_value;
-  StgWriteSet           *write_set;
-  StgClosure            *continuation;
-  struct StgPTRecChunk_ *prev_k;         //chunk of previous checkpoint
-  StgWord                prev_k_offset;  //offset into that chunk
-  } PTRecWithK;*/
 
 StgClosure * ord_stmReadTVar(Capability * cap, TRec * trec, 
 			     StgTVar * tvar, StgClosure * k){
@@ -325,7 +315,18 @@ PTRecWithK * ord_stmCommitTransaction(Capability *cap, TRec *trec) {
         snapshot = trec->read_version;
     }
     
-    StgWriteSet * write_set = trec->write_set;
+    StgWriteSet * one, * two;
+    one = TO_WRITE_SET(NO_PTREC);
+    two = trec->write_set;
+    
+    while(two != TO_WRITE_SET(NO_PTREC)){
+        StgWriteSet * temp = two->next;
+	two->next = one;
+	one = two;
+	two = temp;
+    }
+
+    StgWriteSet * write_set = one;
     while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;
@@ -348,7 +349,6 @@ PTRecWithK * ord_stmCommitTransaction(Capability *cap, TRec *trec) {
     version_clock = snapshot + 2;//unlock clock
 
     clearTRec(cap, trec);
-
     return (PTRecWithK *)PASTM_SUCCESS;
 }
 

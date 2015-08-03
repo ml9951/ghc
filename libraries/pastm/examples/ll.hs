@@ -12,9 +12,12 @@ import Control.CPSFull.STM
 import Control.PartialTL2.STM
 #elif defined(TL2)
 import Control.FullTL2.STM
-#else
+#elif defined(CHUNKED)
+import Control.Chunked.STM
+#elif defined(PABORT)
 import Control.Partial.STM
---import Control.Concurrent.PASTM.Core
+#else
+#error No STM Specified
 #endif
 
 import Prelude hiding (lookup)

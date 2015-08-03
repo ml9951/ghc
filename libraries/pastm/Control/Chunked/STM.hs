@@ -1,26 +1,5 @@
 {-# LANGUAGE CPP, MagicHash, UnboxedTuples, Rank2Types, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes#-}
 
-#if __GLASGOW_HASKELL__ >= 701
-{-# LANGUAGE Trustworthy #-}
-#endif
-
------------------------------------------------------------------------------
--- |
--- Module      :  Control.Ordered.STM
--- Copyright   :  (c) The University of Glasgow 2004
--- License     :  BSD-style (see the file libraries/base/LICENSE)
---
--- Maintainer  :  libraries@haskell.org
--- Stability   :  experimental
--- Portability :  non-portable (requires PASTM)
---
--- Software Transactional Memory: a modular composable concurrency
--- abstraction.  
---
---  * This contains the core STM operations
---
------------------------------------------------------------------------------
-
 module Control.Chunked.STM
 (
     readTVar,
