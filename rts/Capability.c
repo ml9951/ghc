@@ -288,13 +288,16 @@ initCapability( Capability *cap, nat i )
     cap->free_trec_chunks = END_STM_CHUNK_LIST;
     cap->free_trec_headers = NO_TREC;
     
-    cap->free_ptrec_chunks = NO_PTREC;
+    cap->free_ptrec_chunks = (StgPTRecChunk*)NO_PTREC;
 
     cap->pastmStats.eagerPartialAborts = 0;
     cap->pastmStats.commitTimePartialAborts = 0;
     cap->pastmStats.eagerFullAborts = 0;
     cap->pastmStats.commitTimeFullAborts = 0;
     cap->pastmStats.numCommits = 0;
+    cap->pastmStats.tsExtensions = 0;
+    cap->pastmStats.fastForwardAttempts = 0;
+    cap->pastmStats.fastForwards = 0;
 
     cap->transaction_tokens = 0;
     cap->context_switch = 0;
@@ -318,6 +321,30 @@ initCapability( Capability *cap, nat i )
     traceSparkCounters(cap);
 #endif
 }
+
+void getStats(StgPASTMStats * stats){
+    stats->eagerPartialAborts = 0;
+    stats->eagerFullAborts = 0; 
+    stats->commitTimePartialAborts = 0;
+    stats->commitTimeFullAborts = 0; 
+    stats->tsExtensions = 0; 
+    stats->numCommits = 0; 
+    stats->fastForwardAttempts = 0; 
+    stats->fastForwards = 0; 
+    
+    nat i;
+    for(i = 0; i < n_capabilities; i++){
+        stats->eagerPartialAborts += capabilities[i]->pastmStats.eagerPartialAborts;
+        stats->eagerFullAborts += capabilities[i]->pastmStats.eagerFullAborts;
+        stats->commitTimePartialAborts += capabilities[i]->pastmStats.commitTimePartialAborts;
+        stats->commitTimeFullAborts += capabilities[i]->pastmStats.commitTimeFullAborts;
+        stats->tsExtensions += capabilities[i]->pastmStats.tsExtensions;
+        stats->numCommits += capabilities[i]->pastmStats.numCommits;
+        stats->fastForwardAttempts += capabilities[i]->pastmStats.fastForwardAttempts;
+        stats->fastForwards += capabilities[i]->pastmStats.fastForwards;
+    }
+}
+
 
 /* ---------------------------------------------------------------------------
  * Function:  initCapabilities()

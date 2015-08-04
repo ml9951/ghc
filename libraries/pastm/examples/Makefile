@@ -16,6 +16,8 @@ CPSFULL_FILES = ../Control/CPSFull/CmmHooks.cmm ../Control/CPSFull/CCode.c ../Co
 TL2_FILES = ../Control/TL2/CmmHooks.cmm ../Control/TL2/CCode.c ../Control/TL2/STM.hs -I../../../rts
 PartialTL2_FILES = ../Control/PartialTL2/CmmHooks.cmm ../Control/PartialTL2/CCode.c ../Control/PartialTL2/STM.hs -I../../../rts
 CHUNKED_FILES = ../Control/Chunked/CmmHooks.cmm ../Control/Chunked/CCode.c ../Control/Chunked/STM.hs -I../../../rts
+FF_FILES = ../Control/FastForward/CmmHooks.cmm ../Control/FastForward/CCode.c ../Control/FastForward/STM.hs -I../../../rts 
+
 
 OPT =
 
@@ -33,7 +35,7 @@ llFull:	ll.hs cbits/gettime.c
 
 .PHONY:	llPartial
 llPartial:	ll.hs cbits/gettime.c
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llPartial$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) -DPABORT -fforce-recomp cbits/gettime.c ll.hs -o llPartial$(OPT)
 
 .PHONY:	llCPSFull
 llCPSFull:	ll.hs cbits/gettime.c
@@ -50,6 +52,10 @@ llTL2:	ll.hs cbits/gettime.c
 .PHONY:	llChunked
 llChunked:	ll.hs cbits/gettime.c
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DCHUNKED -optc-g $(CHUNKED_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llChunked$(OPT)
+
+.PHONY:	llFF
+llFF:	ll.hs cbits/gettime.c
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DFF -optc-g $(FF_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llFF$(OPT)
 
 counter:	counterFull counterPartial counterSTMHaskell counterOrdered
 

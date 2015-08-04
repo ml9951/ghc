@@ -69,80 +69,85 @@ StgClosure * abort_transaction(StgPTRecHeader * trec){
     return PASTM_FAIL;
 }
 
-static StgPTRecWithK * extendTS(StgPTRecHeader * trec){
- RETRY: 
-    { 
-	unsigned long newStamp = atomic_inc(&(version_clock), 1);
-	unsigned long stamp = trec->read_version;
-	StgPTRecWithoutK * ptr = trec->read_set;
-	StgPTRecWithK * checkpoint = TO_WITHK(PASTM_SUCCESS);
-	StgInt kCount = 0;
+static StgPTRecWithK * extendTS(StgPTRecHeader * trec, Capability * cap){
+    unsigned long newStamp = atomic_inc(&(version_clock), 1);
+    unsigned long stamp = trec->read_version;
+    StgPTRecWithoutK * ptr = trec->read_set;
+    StgPTRecWithK * checkpoint = TO_WITHK(PASTM_SUCCESS);
+    StgInt kCount = 0;
 	
-	while(ptr != TO_WITHOUTK(NO_PTREC)){
-	    StgTL2TVar * tvar = TO_TL2(ptr->tvar);
-	    unsigned long v1, v2;
-	    if(ptr->header.info == WITHOUTK_HEADER){
-		if(tvar->lock || tvar->stamp > stamp){
-		    checkpoint = TO_WITHK(PASTM_FAIL);
-		    kCount = 0;
-		}
-	    }else{
-		StgPTRecWithK * withK = TO_WITHK(ptr);
-		if(tvar->lock || tvar->stamp > stamp){
-		    checkpoint = withK;
-		    ptr = ptr->next;
-		    kCount = 1;
-		    continue;
-		}else if(checkpoint == TO_WITHK(PASTM_FAIL)){
-		    checkpoint = withK;
-		}
-		kCount++;
+    while(ptr != TO_WITHOUTK(NO_PTREC)){
+	StgTL2TVar * tvar = TO_TL2(ptr->tvar);
+	unsigned long v1, v2;
+	if(ptr->header.info == WITHOUTK_HEADER){
+	    if(tvar->lock || tvar->stamp > stamp){
+		checkpoint = TO_WITHK(PASTM_FAIL);
+		kCount = 0;
 	    }
-	    ptr = ptr->next;
-	}
-	
-	trec->read_version = newStamp;
-	if(checkpoint->header.info == WITHK_HEADER){
-	    StgTL2TVar * tvar = TO_TL2(checkpoint->tvar);
-
-
-	    StgClosure * val; 
-	    unsigned long stamp1, stamp2;
-	    
-	    stamp1 = tvar->stamp;
-	    if(tvar->lock || stamp1 > trec->read_version){
-		clearTRec(trec);
-		return TO_WITHK(PASTM_FAIL);
-	    }
-	    
-	    val = tvar->current_value;
-	    
-	    stamp2 = tvar->stamp;
-	    if(tvar->lock || stamp1 != stamp2){
-		clearTRec(trec);
-		return TO_WITHK(PASTM_FAIL);
-	    }
-	    
-
-
-	    checkpoint->read_value = val;
-	    trec->read_set = TO_WITHOUTK(checkpoint);
-	    trec->write_set = checkpoint->write_set;
-	    trec->lastK = checkpoint;
-	    StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
-	    trec->capture_freq = capture_freq | (capture_freq >> 32);
-	    trec->numK = kCount;
-	    return checkpoint;
-	}else if(checkpoint == TO_WITHK(PASTM_FAIL)){
-	    clearTRec(trec);
-	    return checkpoint;
 	}else{
-	    return checkpoint;
+	    StgPTRecWithK * withK = TO_WITHK(ptr);
+	    if(tvar->lock || tvar->stamp > stamp){
+		checkpoint = withK;
+		ptr = ptr->next;
+		kCount = 1;
+		continue;
+	    }else if(checkpoint == TO_WITHK(PASTM_FAIL)){
+		checkpoint = withK;
+	    }
+	    kCount++;
 	}
+	ptr = ptr->next;
     }
+	
+    trec->read_version = newStamp;
+    if(checkpoint->header.info == WITHK_HEADER){
+	StgTL2TVar * tvar = TO_TL2(checkpoint->tvar);
+
+	StgClosure * val; 
+	unsigned long stamp1, stamp2;
+	    
+	stamp1 = tvar->stamp;
+	if(tvar->lock || stamp1 > trec->read_version){
+	    clearTRec(trec);
+	    return TO_WITHK(PASTM_FAIL);
+	}
+	    
+	val = tvar->current_value;
+	    
+	stamp2 = tvar->stamp;
+	if(tvar->lock || stamp1 != stamp2){
+	    clearTRec(trec);
+	    return TO_WITHK(PASTM_FAIL);
+	}
+	    
+#ifdef STATS
+	cap->pastmStats.eagerPartialAborts++;
+#endif
+
+	checkpoint->read_value = val;
+	trec->read_set = TO_WITHOUTK(checkpoint);
+	trec->write_set = checkpoint->write_set;
+	trec->lastK = checkpoint;
+	StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+	trec->capture_freq = capture_freq | (capture_freq >> 32);
+	trec->numK = kCount;
+	return checkpoint;
+    }else if(checkpoint == TO_WITHK(PASTM_FAIL)){
+#ifdef STATS
+	cap->pastmStats.eagerFullAborts++;
+#endif
+	clearTRec(trec);
+	return checkpoint;
+    }else{
+#ifdef STATS
+	cap->pastmStats.tsExtensions++;
+#endif
+	return checkpoint;
+    }
+    
 }
 
-static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
+static StgPTRecWithK * commitValidate(StgPTRecHeader * trec, Capability * cap){
     unsigned long stamp = trec->read_version;
     StgPTRecWithoutK * ptr = trec->read_set;
     StgPTRecWithK * checkpoint = TO_WITHK(PASTM_SUCCESS);
@@ -192,6 +197,10 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 		return TO_WITHK(abort_transaction(trec));
 	}
 	
+#ifdef STATS
+	cap->pastmStats.commitTimePartialAborts++;
+#endif
+
 	checkpoint->read_value = val;
 	trec->read_set = TO_WITHOUTK(checkpoint);
 	trec->write_set = checkpoint->write_set;
@@ -201,9 +210,15 @@ static StgPTRecWithK * commitValidate(StgPTRecHeader * trec){
 	trec->numK = kCount;
 	return checkpoint;
     }else if(checkpoint == TO_WITHK(PASTM_FAIL)){
+#ifdef STATS
+	cap->pastmStats.commitTimeFullAborts++;
+#endif
 	clearTRec(trec);
 	return checkpoint;
     }else{
+#ifdef STATS
+	cap->pastmStats.numCommits++;
+#endif
 	return checkpoint;
     }
 }
@@ -226,7 +241,7 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
  retry:
     stamp1 = tvar->stamp;
     if(tvar->lock || stamp1 > trec->read_version){
-	StgPTRecWithK * res = extendTS(trec);
+	StgPTRecWithK * res = extendTS(trec, cap);
 	if(res != TO_WITHK(PASTM_SUCCESS)){
 	    return TO_CLOSURE(res);
 	}
@@ -237,7 +252,7 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     
     stamp2 = tvar->stamp;
     if(tvar->lock || stamp1 != stamp2){
-	StgPTRecWithK * res = extendTS(trec);
+	StgPTRecWithK * res = extendTS(trec, cap);
 	if(res != TO_WITHK(PASTM_SUCCESS)){
 	    return TO_CLOSURE(res);
 	}
@@ -336,7 +351,7 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 		}else{//someone else locked this
 		    //validate read set
 		    releaseLocks(trec->write_set, ptr);
-		    StgPTRecWithK * res = extendTS(trec);
+		    StgPTRecWithK * res = extendTS(trec, cap);
 		    if(res != TO_WITHK(PASTM_SUCCESS)){
 			return res;
 		    }
@@ -352,7 +367,7 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	if(version_clock != trec->read_version + 1){
 	    //validate read set
 	    ptr = trec->write_set;
-	    StgPTRecWithK * res = commitValidate(trec);
+	    StgPTRecWithK * res = commitValidate(trec, cap);
 	    if(res != TO_WITHK(PASTM_SUCCESS)){
 		releaseLocks(ptr, TO_WRITE_SET(NO_PTREC));
 		trec->read_version = write_version;
@@ -372,31 +387,19 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	}
     }
 
-#ifdef STATS
-    atomic_inc((StgVolatilePtr)&(stats.commitTimeFullAborts), cap->pastmStats.commitTimeFullAborts);
-    atomic_inc((StgVolatilePtr)&(stats.commitTimePartialAborts), cap->pastmStats.commitTimePartialAborts);
-    atomic_inc((StgVolatilePtr)&(stats.eagerFullAborts), cap->pastmStats.eagerFullAborts);
-    atomic_inc((StgVolatilePtr)&(stats.eagerPartialAborts), cap->pastmStats.eagerPartialAborts);
-    atomic_inc((StgVolatilePtr)&(stats.numCommits), 1);
-    cap->pastmStats.commitTimeFullAborts = 0;
-    cap->pastmStats.commitTimePartialAborts = 0;
-    cap->pastmStats.eagerFullAborts = 0;
-    cap->pastmStats.eagerPartialAborts = 0;
-#endif
-
     return TO_WITHK(PASTM_SUCCESS);
 }
 
 void pa_printSTMStats(){
 #ifdef STATS
+    StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
+    getStats(&stats);
+    
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Commit Partial Aborts = %lu\n", stats.commitTimePartialAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
     printf("Eager Partial Aborts = %lu\n", stats.eagerPartialAborts);
-    printf("Total Commit Time Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts);
-    printf("Total Eager Aborts = %lu\n", stats.eagerFullAborts + stats.eagerPartialAborts);
-    printf("Total Full Aborts = %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
-    printf("Total Partial Aborts = %lu\n", stats.commitTimePartialAborts + stats.eagerPartialAborts);
+    printf("Timestamp Extensions = %lu\n", stats.tsExtensions);
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);

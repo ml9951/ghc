@@ -63,7 +63,7 @@ StgPTRecHeader * fa_stmStartTransaction(Capability *cap) {
 
 void clearTRec(StgPTRecHeader * trec){
     trec->read_set = TO_WITHOUTK(NO_PTREC);
-    trec->write_set = TO_WITHOUTK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
 }
 
 static StgClosure * fa_validate(StgPTRecHeader * trec){
@@ -92,7 +92,7 @@ static StgClosure * fa_validate(StgPTRecHeader * trec){
 }
 
 StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
-							StgTVar * tvar){
+			    StgTVar * tvar){
     StgWriteSet * ws = trec->write_set;
 
     while(ws != TO_WRITE_SET(NO_PTREC)){
@@ -112,6 +112,9 @@ StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 #endif
             return PASTM_FAIL;
         }
+#ifdef STATS
+	cap->pastmStats.tsExtensions++;
+#endif
         val = tvar->current_value;
     }
     
@@ -132,7 +135,7 @@ void fa_stmWriteTVar(Capability *cap,
                     StgClosure *new_value) {
     StgWriteSet * newEntry = (StgWriteSet *) allocate(cap, sizeofW(StgWriteSet));
     SET_HDR(newEntry , &stg_WRITE_SET_info, CCS_SYSTEM);
-	newEntry->tvar = tvar;
+    newEntry->tvar = tvar;
     newEntry->val = new_value;
     newEntry->next = trec->write_set;
     trec->write_set = newEntry;
@@ -172,11 +175,7 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     }
 
 #ifdef STATS
-    stats.commitTimeFullAborts += cap->pastmStats.commitTimeFullAborts;
-    stats.eagerFullAborts += cap->pastmStats.eagerFullAborts;
-    stats.numCommits++;
-    cap->pastmStats.commitTimeFullAborts = 0;
-    cap->pastmStats.eagerFullAborts = 0;
+    cap->pastmStats.numCommits = 0;
 #endif
 
     version_clock = snapshot + 2;//unlock clock
@@ -185,8 +184,12 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
 void fa_printSTMStats(){
 #ifdef STATS
+    StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
+    getStats(&stats);
+
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
+    printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);
 #endif
 }

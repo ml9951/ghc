@@ -109,8 +109,6 @@
 #define NACQ_ASSERT(_X) ASSERT(_X)
 #endif
 
-static volatile StgPASTMStats stats = {0, 0, 0, 0, 0};
-
 /*......................................................................*/
 
 // If SHAKE is defined then validation will sometime spuriously fail.  They helps test
@@ -1463,9 +1461,9 @@ StgBool stmCommitTransaction(Capability *cap, StgTRecHeader *trec) {
   TRACE("%p : stmCommitTransaction()=%d", trec, result);
 
   if(result){
-      atomic_inc(&(stats.numCommits), 1);
+      cap->pastmStats.numCommits++;
   }else{
-      atomic_inc(&(stats.commitTimeFullAborts), 1);
+      cap->pastmStats.commitTimeFullAborts++;
   }
 
   return result;
@@ -1521,7 +1519,7 @@ StgBool stmCommitNestedTransaction(Capability *cap, StgTRecHeader *trec) {
   TRACE("%p : stmCommitNestedTransaction()=%d", trec, result);
 
   if(!result){
-      atomic_inc(&(stats.eagerFullAborts), 1);
+      cap->pastmStats.eagerFullAborts++;
   }
 
   return result;
@@ -1711,8 +1709,12 @@ void stmWriteTVar(Capability *cap,
 }
 
 void stmPrintStats(){
+    StgPASTMStats stats;
+    getStats(&stats);
+
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
+    printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);
 }
 /*......................................................................*/

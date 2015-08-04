@@ -205,6 +205,8 @@ void stmWriteTVar(Capability *cap,
                   StgTVar *tvar, 
                   StgClosure *new_value);
 
+void stmPrintStats(void);
+
 /*----------------------------------------------------------------------*/
 
 /* NULLs */

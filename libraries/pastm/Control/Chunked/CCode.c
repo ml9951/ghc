@@ -70,10 +70,6 @@ TRec * ord_stmStartTransaction(Capability *cap, TRec * ptrec) {
     if(ptrec == (TRec*)NO_PTREC){
 	ptrec = (TRec *)allocate(cap, sizeofW(TRec));
 	SET_HDR(ptrec , &stg_CHUNKED_PTREC_HEADER_info, CCS_SYSTEM);
-	cap->pastmStats.commitTimeFullAborts = 0;
-	cap->pastmStats.commitTimePartialAborts = 0;
-	cap->pastmStats.eagerFullAborts = 0;
-	cap->pastmStats.eagerPartialAborts = 0;
     }
     
     StgPTRecChunk * c = getChunk(cap);
@@ -130,7 +126,7 @@ static PTRecWithK * ord_validate(TRec * trec, Capability * cap){
 	while(chunk != TO_CHUNK(NO_PTREC)){
 	    StgWord i = 0;
 	    while(i < chunk->next_entry_idx){
-		PTRecWithoutK * entry = (PTRecWithoutK *)&(chunk->entries[i]);
+		PTRecWithoutK * entry = (PTRecWithoutK *)(chunk->entries + i);
 
 		if(entry->tvar->current_value != entry->read_value){
 		    if(checkpoint != NULL){ //we have a checkpoint
@@ -155,7 +151,7 @@ static PTRecWithK * ord_validate(TRec * trec, Capability * cap){
 			return TO_WITHK(PASTM_FAIL);
 		    }
 		}
-		if(entry->size == 7 && ((PTRecWithK*)entry)->continuation != NO_PTREC){
+		if(entry->size == 7 && ((PTRecWithK*)entry)->continuation != TO_CLOSURE(NO_PTREC)){
 		    checkpoint = chunk;
 		    checkpointOffset = i;
 		    kCount++;
@@ -167,6 +163,9 @@ static PTRecWithK * ord_validate(TRec * trec, Capability * cap){
 	if(time == version_clock){
 	    return TO_WITHK(PASTM_SUCCESS);
 	}
+#ifdef STATS
+	cap->pastmStats.tsExtensions++;
+#endif
     }
 }
 
@@ -195,6 +194,9 @@ StgClosure * ord_stmReadTVar(Capability * cap, TRec * trec,
 #endif
 	    return TO_CLOSURE(checkpoint);
         }
+#ifdef STATS
+	cap->pastmStats.tsExtensions++;
+#endif
         val = tvar->current_value;
     }
     
@@ -335,17 +337,9 @@ PTRecWithK * ord_stmCommitTransaction(Capability *cap, TRec *trec) {
     }
     
 #ifdef STATS
-    //Since version clock is locked, these don't need to be atomic
-    stats.commitTimeFullAborts += cap->pastmStats.commitTimeFullAborts;
-    stats.commitTimePartialAborts += cap->pastmStats.commitTimePartialAborts;
-    stats.eagerFullAborts += cap->pastmStats.eagerFullAborts;
-    stats.eagerPartialAborts += cap->pastmStats.eagerPartialAborts;
-    stats.numCommits++;
-    cap->pastmStats.commitTimeFullAborts = 0;
-    cap->pastmStats.commitTimePartialAborts = 0;
-    cap->pastmStats.eagerFullAborts = 0;
-    cap->pastmStats.eagerPartialAborts = 0;
+    cap->pastmStats.numCommits++;
 #endif
+
     version_clock = snapshot + 2;//unlock clock
 
     clearTRec(cap, trec);
@@ -356,14 +350,14 @@ PTRecWithK * ord_stmCommitTransaction(Capability *cap, TRec *trec) {
 
 void ord_printSTMStats(){
 #ifdef STATS
+    StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
+    getStats(&stats);
+    
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Commit Partial Aborts = %lu\n", stats.commitTimePartialAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
     printf("Eager Partial Aborts = %lu\n", stats.eagerPartialAborts);
-    printf("Total Commit Time Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts);
-    printf("Total Eager Aborts = %lu\n", stats.eagerFullAborts + stats.eagerPartialAborts);
-    printf("Total Full Aborts = %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
-    printf("Total Partial Aborts = %lu\n", stats.commitTimePartialAborts + stats.eagerPartialAborts);
+    printf("Timestap Extensions = %lu\n", stats.tsExtensions);
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);

@@ -455,12 +455,14 @@ typedef struct StgPTRecHeader_ {
 
 //Statistics
 typedef struct StgPASTMStats_{
-    StgHeader header;
     StgInt64  eagerPartialAborts;
     StgInt64  eagerFullAborts;
     StgInt64  commitTimePartialAborts;
     StgInt64  commitTimeFullAborts;
+    StgInt64  tsExtensions;
     StgInt64  numCommits;
+    StgInt64  fastForwardAttempts;
+    StgInt64  fastForwards;
 } StgPASTMStats;
 
 typedef struct {

@@ -434,6 +434,9 @@ INLINE_HEADER rtsBool emptyInbox(Capability *cap)
 
 #endif
 
+void getStats(StgPASTMStats * stats);
+
+
 #include "EndPrivate.h"
 
 #endif /* CAPABILITY_H */

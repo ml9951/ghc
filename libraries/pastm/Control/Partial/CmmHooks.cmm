@@ -31,7 +31,6 @@ INFO_TABLE_RET(stg_partial_atomically_frame, ATOMICALLY_FRAME,
     ("ptr" checkpoint) = ccall pa_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
 
     if(checkpoint == PASTM_SUCCESS){ //Validation succeeded
-        StgTSO_ptrec(CurrentTSO) = NO_PTREC;
         frame_result = result;
         return(frame_result);
     }

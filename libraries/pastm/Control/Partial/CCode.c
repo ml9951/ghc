@@ -34,18 +34,17 @@ static StgPASTMStats stats = {0, 0, 0, 0, 0};
 #endif
 
 StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
-  
+    
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
 	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+	ptrec->read_set = TO_WITHOUTK(NO_PTREC);
+	ptrec->lastK = TO_WITHK(NO_PTREC);
+	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
+	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
     }
-	
-    ptrec->read_set = TO_WITHOUTK(NO_PTREC);
-    ptrec->lastK = TO_WITHK(NO_PTREC);
-    ptrec->write_set = TO_WRITE_SET(NO_PTREC);
-    ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
-
+    
     //get a read version
     ptrec->read_version = version_clock;
     while((ptrec->read_version & 1) != 0){
@@ -191,6 +190,9 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 #endif
 	    return TO_CLOSURE(checkpoint);
         }
+#ifdef STATS
+	cap->pastmStats.tsExtensions++;
+#endif
         val = tvar->current_value;
     }
     
@@ -276,9 +278,6 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
         }
         snapshot = trec->read_version;
     }
-
-    //TRACE("%d: Clock locked with current value %lu\n", cap->no, version_clock);
-
     
     StgWriteSet * one, * two;
     one = TO_WRITE_SET(NO_PTREC);
@@ -300,32 +299,29 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     }
 
 #ifdef STATS
-    //Since version clock is locked, these don't need to be atomic
-    stats.commitTimeFullAborts += cap->pastmStats.commitTimeFullAborts;
-    stats.commitTimePartialAborts += cap->pastmStats.commitTimePartialAborts;
-    stats.eagerFullAborts += cap->pastmStats.eagerFullAborts;
-    stats.eagerPartialAborts += cap->pastmStats.eagerPartialAborts;
-    stats.numCommits++;
-    cap->pastmStats.commitTimeFullAborts = 0;
-    cap->pastmStats.commitTimePartialAborts = 0;
-    cap->pastmStats.eagerFullAborts = 0;
-    cap->pastmStats.eagerPartialAborts = 0;
+    cap->pastmStats.numCommits++;
 #endif
 
+    //Clear the trec, so it can be GC'd
+    trec->read_set = TO_WITHOUTK(NO_PTREC);
+    trec->lastK = TO_WITHK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    trec->tail = TO_WITHOUTK(NO_PTREC);
+    
     version_clock = snapshot + 2;//unlock clock
     return (StgPTRecWithK *)PASTM_SUCCESS;
 }
 
 void pa_printSTMStats(){
 #ifdef STATS
+    StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
+    getStats(&stats);
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Commit Partial Aborts = %lu\n", stats.commitTimePartialAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
     printf("Eager Partial Aborts = %lu\n", stats.eagerPartialAborts);
-    printf("Total Commit Time Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts);
-    printf("Total Eager Aborts = %lu\n", stats.eagerFullAborts + stats.eagerPartialAborts);
-    printf("Total Full Aborts = %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
-    printf("Total Partial Aborts = %lu\n", stats.commitTimePartialAborts + stats.eagerPartialAborts);
+    printf("Timestamp Extensions = %lu\n", stats.tsExtensions);
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);
@@ -340,14 +336,6 @@ void pa_printSTMStats(){
  * appropriately.  
  */
 StgClosure * pa_stmRetry(StgPTRecHeader * trec){
-
-    StgPTRecOrElse * x = trec->retry_stack;
-    int i = 0;
-    while(x != NO_PTREC){
-	x =x->next;
-	i++;
-    }
-
     trec->write_set = trec->retry_stack->write_set;
     StgClosure * alt = trec->retry_stack->alt;
     trec->retry_stack = trec->retry_stack->next;
@@ -369,10 +357,4 @@ void pa_stmCatchRetry(Capability *cap, StgPTRecHeader * trec,
     orelse->write_set = trec->write_set;
     orelse->next = trec->retry_stack;
     trec->retry_stack = orelse;
-    
-    int i = 0;
-    while(orelse != NO_PTREC){
-	i++;
-	orelse = orelse->next;
-    }
 }

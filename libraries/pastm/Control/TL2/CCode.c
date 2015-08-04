@@ -97,13 +97,20 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     unsigned long stamp1, stamp2;
     
     stamp1 = tvar->stamp;
-    if(tvar->lock || stamp1 > trec->read_version)
+    if(tvar->lock || stamp1 > trec->read_version){
+#ifdef STATS
+	cap->pastmStats.eagerFullAborts++;
+#endif
 	return abort_transaction(trec);
+    }
     
     val = tvar->current_value;
     
     stamp2 = tvar->stamp;
     if(tvar->lock || stamp1 != stamp2){
+#ifdef STATS
+	cap->pastmStats.eagerFullAborts++;
+#endif
 	return abort_transaction(trec);
     }
     
@@ -153,6 +160,9 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	    }else{//someone else locked this
 		//validate read set
 		releaseLocks(trec->write_set, ptr);
+#ifdef STATS
+		cap->pastmStats.commitTimeFullAborts++;
+#endif
 		clearTRec(trec);
 		return TO_WITHK(PASTM_FAIL);
 	    }
@@ -169,6 +179,9 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     if(res != TO_WITHK(PASTM_SUCCESS)){
 	releaseLocks(ptr, TO_WRITE_SET(NO_PTREC));
 	trec->read_version = write_version;
+#ifdef STATS
+	cap->pastmStats.commitTimeFullAborts++;
+#endif
 	return res;
     }
     
@@ -184,11 +197,7 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     }
 
 #ifdef STATS
-    atomic_inc((StgVolatilePtr)&(stats.commitTimeFullAborts), cap->pastmStats.commitTimeFullAborts);
-    atomic_inc((StgVolatilePtr)&(stats.eagerFullAborts), cap->pastmStats.eagerFullAborts);
-    atomic_inc((StgVolatilePtr)&(stats.numCommits), 1);
-    cap->pastmStats.commitTimeFullAborts = 0;
-    cap->pastmStats.eagerFullAborts = 0;
+    cap->pastmStats.numCommits++;
 #endif
 
     return TO_WITHK(PASTM_SUCCESS);
@@ -196,6 +205,9 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
 void pa_printSTMStats(){
 #ifdef STATS
+    StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
+    getStats(&stats);
+
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 

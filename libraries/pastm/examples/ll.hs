@@ -16,6 +16,8 @@ import Control.FullTL2.STM
 import Control.Chunked.STM
 #elif defined(PABORT)
 import Control.Partial.STM
+#elif defined(FF)
+import Control.Ordered.STM
 #else
 #error No STM Specified
 #endif

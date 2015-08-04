@@ -15,6 +15,8 @@ import Control.CPSFull.STM
 import Control.Partial.STM
 #elif defined(PTL2)
 import Control.PartialTL2.STM
+#elif defined(CHUNKED)
+import Control.Chunked.STM
 #else
 #error NO STM SPECIFIED
 #endif
@@ -33,6 +35,8 @@ whichSTM = "CPS Converted Full Abort NoRec"
 whichSTM = "Partial Abort NoRec"
 #elif defined(PTL2)
 whichSTM = "Partial Abort TL2"
+#elif defined(CHUNKED)
+whichSTM = "Chunked (Ordered) NoRec"
 #else
 #error NO STM SPECIFIED
 #endif

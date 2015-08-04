@@ -42,25 +42,21 @@ StgPTRecHeader * ord_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
-	cap->pastmStats.commitTimeFullAborts = 0;
-	cap->pastmStats.commitTimePartialAborts = 0;
-	cap->pastmStats.eagerFullAborts = 0;
-	cap->pastmStats.eagerPartialAborts = 0;
+
+	StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
+	SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
+	
+	entry->tvar = &dummyTV;
+	entry->read_value = PASTM_SUCCESS;
+	entry->next = TO_WITHOUTK(NO_PTREC);
+	
+	ptrec->read_set = entry;
+	ptrec->lastK = TO_WITHK(NO_PTREC);
+	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
+	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
+	ptrec->tail = entry;
     }
     
-    StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
-    SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
-
-    entry->tvar = &dummyTV;
-    entry->read_value = PASTM_SUCCESS;
-    entry->next = TO_WITHOUTK(NO_PTREC);
-
-    ptrec->read_set = entry;
-    ptrec->lastK = TO_WITHK(NO_PTREC);
-    ptrec->write_set = TO_WRITE_SET(NO_PTREC);
-    ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
-    ptrec->tail = entry;
-
     //get a read version
     ptrec->read_version = version_clock;
     while((ptrec->read_version & 1) != 0){
@@ -133,6 +129,9 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
         if(time == version_clock){
             return TO_WITHK(PASTM_SUCCESS);
         }
+#ifdef STATS
+	cap->pastmStats.tsExtensions++;
+#endif
         //Validation succeeded, but someone else committed in the meantime, loop back around...
     }
 }
@@ -162,6 +161,9 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 #endif
 	    return TO_CLOSURE(checkpoint);
         }
+#ifdef STATS
+	cap->pastmStats.tsExtensions++;
+#endif
         val = tvar->current_value;
     }
     
@@ -295,17 +297,16 @@ StgPTRecWithK * ord_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
     }
     
 #ifdef STATS
-    //Since version clock is locked, these don't need to be atomic
-    stats.commitTimeFullAborts += cap->pastmStats.commitTimeFullAborts;
-    stats.commitTimePartialAborts += cap->pastmStats.commitTimePartialAborts;
-    stats.eagerFullAborts += cap->pastmStats.eagerFullAborts;
-    stats.eagerPartialAborts += cap->pastmStats.eagerPartialAborts;
-    stats.numCommits++;
-    cap->pastmStats.commitTimeFullAborts = 0;
-    cap->pastmStats.commitTimePartialAborts = 0;
-    cap->pastmStats.eagerFullAborts = 0;
-    cap->pastmStats.eagerPartialAborts = 0;
+    cap->pastmStats.numCommits++;
 #endif
+
+    StgPTRecWithoutK * first = trec->read_set;
+    first->next = TO_WITHOUTK(NO_PTREC);
+    trec->lastK = TO_WITHK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    trec->tail = first;
+
     version_clock = snapshot + 2;//unlock clock
     return (StgPTRecWithK *)PASTM_SUCCESS;
 }
@@ -314,14 +315,15 @@ StgPTRecWithK * ord_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
 
 void ord_printSTMStats(){
 #ifdef STATS
+
+    StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
+    getStats(&stats);
+
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Commit Partial Aborts = %lu\n", stats.commitTimePartialAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
     printf("Eager Partial Aborts = %lu\n", stats.eagerPartialAborts);
-    printf("Total Commit Time Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts);
-    printf("Total Eager Aborts = %lu\n", stats.eagerFullAborts + stats.eagerPartialAborts);
-    printf("Total Full Aborts = %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
-    printf("Total Partial Aborts = %lu\n", stats.commitTimePartialAborts + stats.eagerPartialAborts);
+    printf("Timestamp Extensions = %lu\n", stats.tsExtensions);
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);

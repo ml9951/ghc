@@ -496,12 +496,6 @@ wanteds = concat
           ,closureField C "StgTL2TVar" "current_value"
           ,closureField C "StgTL2TVar" "stamp"
           ,closureField C "StgTL2TVar" "lock"
-          
-          ,closureField C "StgPASTMStats" "eagerPartialAborts"
-          ,closureField C "StgPASTMStats" "eagerFullAborts"
-          ,closureField C "StgPASTMStats" "commitTimePartialAborts"
-          ,closureField C "StgPASTMStats" "commitTimeFullAborts"
-          ,closureField C "StgPASTMStats" "numCommits"
 
           ,closureSize  C "StgCatchSTMFrame"
           ,closureField C "StgCatchSTMFrame" "handler"
