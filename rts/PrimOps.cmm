@@ -1408,12 +1408,13 @@ INFO_TABLE_RET(stg_patomically_frame, ATOMICALLY_FRAME,
     ("ptr" checkpoint) = ccall p_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
 
     if(checkpoint == PASTM_SUCCESS){ //Validation succeeded
-        StgTSO_ptrec(CurrentTSO) = NO_PTREC;
         frame_result = result;
         return(frame_result);
     }
     if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint
-        ("ptr" trec) = ccall p_stmStartTransaction(MyCapability() "ptr");
+		trec = StgTSO_ptrec(CurrentTSO);
+		
+        ("ptr" trec) = ccall p_stmStartTransaction(MyCapability() "ptr", trec "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
 
@@ -1454,13 +1455,8 @@ stg_patomicallyzh (P_ stm)
     old_trec = StgTSO_ptrec(CurrentTSO);
 
     /* Start the memory transcation */
-    ("ptr" new_trec) = ccall p_stmStartTransaction(MyCapability() "ptr");
+    ("ptr" new_trec) = ccall p_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
     StgTSO_ptrec(CurrentTSO) = new_trec;
-
-    /* Nested transactions are idempotent */ 
-    if (old_trec != NO_PTREC) {
-        jump stg_ap_v_fast(stm);
-    }
 
     code = stm;
     next_invariant = END_INVARIANT_CHECK_QUEUE;
@@ -1477,13 +1473,14 @@ stg_eagerFullAbort
     W_ frame;
     P_ code; 
 
-
     //fully abort -- p_setAtomicallyFrameHelper will unwind the stack to the nearest atomic frame
     //According to StgCmmForeign.hs, SAVE_THREAD_STATE() gets compiled to:
     //tso = CurrentTSO;
     //tso->stackobj->sp = Sp;  --Sp is the register containing the stack pointer
     SAVE_THREAD_STATE();
-    ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr");
+
+    //We can use the same C function the partial abort implementation is using
+    ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr"); 
 
     /* According to StgCmmForeign.hs:
        tso = CurrentTSO;
@@ -1539,6 +1536,7 @@ stg_eagerPartialAbort
 {
     P_ k;
     P_ val;
+
     SAVE_THREAD_STATE(); //see stg_eagerFullAbort for details
     ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr");
     LOAD_THREAD_STATE();
@@ -1561,7 +1559,7 @@ stg_preadTVarzh (P_ tvar, P_ k)
 
     trec = StgTSO_ptrec(CurrentTSO);
     ("ptr" result) = ccall p_stmReadTVar(MyCapability() "ptr", trec "ptr",
-                                         tvar "ptr", k "ptr");
+										  tvar "ptr", k "ptr");
 
     if(result == PASTM_FAIL){
         jump stg_eagerFullAbort []; //full abort
@@ -1576,8 +1574,10 @@ stg_preadTVarzh (P_ tvar, P_ k)
     return (result);
 }
 
+
+
 stg_pwriteTVarzh (P_ tvar,     /* :: TVar a */
-                  P_ new_value /* :: a      */)
+		      P_ new_value /* :: a      */)
 {
     W_ trec;
 
@@ -1586,9 +1586,10 @@ stg_pwriteTVarzh (P_ tvar,     /* :: TVar a */
 
     trec = StgTSO_ptrec(CurrentTSO);
     ccall p_stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
-                         new_value "ptr");
-    return ();
+						  new_value "ptr");
+    return (tvar);
 }
+
 
 /*
  * Bail on a transaction, execution should continue with the alternative
@@ -1602,8 +1603,6 @@ stg_pretryzh()
     W_ trec;
     W_ alt;
     W_ retry_stack;
-
-    MAYBE_GC_ (stg_pretryzh);
      
     trec = StgTSO_ptrec(CurrentTSO);
 
@@ -1619,35 +1618,33 @@ stg_pretryzh()
     jump stg_ap_v_fast(alt);
 }
 
-/*
- * Catch a retry.  The current implementation has a slightly
- * different semantics in that orElse is dynamically scoped.
- * We could match the static scoping semantics from the original
- * implementation by removing the orElse entry from the read set
- * after the orElse code finishes, by pushing a frame onto the stack
- * that immediatly splices the entry out of the read set. 
- *
- * For example:
- * 
- * atomically $ (do t <- (return 1 `orElse` return 2); if t == 1 then retry else return t) `orElse` return 3
- * 
- * It would probably make more sense for this to return 3 than 2
- *
- */
+stg_ppopRetry(P_ x)
+{
+    W_ trec;
+    W_ retry_stack;
+ 
+    trec = StgTSO_ptrec(CurrentTSO);
+
+    retry_stack = StgPTRecHeader_retry_stack(trec);
+    StgPTRecHeader_retry_stack(trec) = StgPTRecOrElse_next(retry_stack);
+
+    return(x);
+}
+
 stg_pcatchRetryzh (P_ first_code,     /* :: STM a */
-                   P_ alt_code,       /* :: STM a */
-                   P_ continuation)
+			  P_ alt_code       /* :: STM a */)
 {
 
     W_ trec;
-    
-    MAYBE_GC_PPP(stg_pcatchRetryzh, first_code, alt_code, continuation);
+    W_ retry_stack;
+
+    MAYBE_GC_PP(stg_pcatchRetryzh, first_code, alt_code);
 
     trec = StgTSO_ptrec(CurrentTSO);
     ccall p_stmCatchRetry(MyCapability() "ptr", trec "ptr", 
-                          alt_code "ptr", continuation "ptr");
+			   alt_code "ptr");
     
-    jump stg_ap_v_fast(first_code);
+    jump stg_ap_v_fast (first_code);
 }
 
 /* -----------------------------------------------------------------------------

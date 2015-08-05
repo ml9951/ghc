@@ -32,21 +32,21 @@
 
 static volatile unsigned long version_clock = 0;
 
-StgPTRecHeader * p_stmStartTransaction(Capability *cap) {
-    TRACE("p_stmStartTransaction");
+
+
+
+StgPTRecHeader * p_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
     
-    StgPTRecHeader * ptrec;
-    ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
-    SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+    if(ptrec == NO_PTREC){
+	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
+	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+	ptrec->read_set = TO_WITHOUTK(NO_PTREC);
+	ptrec->lastK = TO_WITHK(NO_PTREC);
+	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
+	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    }
     
-    ptrec->read_set = TO_WITHOUTK(NO_PTREC);
-    ptrec->lastK = TO_WITHK(NO_PTREC);
-    ptrec->write_set = TO_WRITE_SET(NO_PTREC);
-
-    ptrec->tail = TO_WITHOUTK(NO_PTREC);
-
-    ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
-
     //get a read version
     ptrec->read_version = version_clock;
     while((ptrec->read_version & 1) != 0){
@@ -58,46 +58,93 @@ StgPTRecHeader * p_stmStartTransaction(Capability *cap) {
     return ptrec;
 }
 
-static StgPTRecWithK * validate(StgPTRecHeader * trec){
+static inline void clearTRec(StgPTRecHeader * trec){
+    trec->read_set = TO_WITHOUTK(NO_PTREC);
+    trec->lastK = TO_WITHK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+    trec->capture_freq = capture_freq | (capture_freq >> 32);
+    trec->numK = 0;
+}
+
+static StgPTRecWithK * p_validate(StgPTRecHeader * trec, Capability * cap){
     while(TRUE){
         unsigned long time = version_clock;
         if((time & 1) != 0){
             continue; //clock is locked
         }
-        TRACE("Validating: sampled version clock is currently %lu (must be even at this point)\n", time);
         trec->read_version = time;
         //validate read set
         StgPTRecWithoutK * ptr = trec->read_set;
         StgPTRecWithK *checkpoint = TO_WITHK(PASTM_SUCCESS);
         StgInt kCount = 0;
+
+	/*
+	//this loop assumes that we do not need a checkpoint
+    NOCHKPNT:
         while(ptr != TO_WITHOUTK(NO_PTREC)){
-            if(ptr->header.info == WITHK_HEADER){ // this is a WithK entry
-                StgPTRecWithK * withK = TO_WITHK(ptr);
-                if(withK->read_value != withK->tvar->current_value){
-                    checkpoint = TO_WITHK(PASTM_FAIL);
-                    ptr = ptr->next;
-                    kCount = 0;
-                    continue;
-                }else if(checkpoint == TO_WITHK(PASTM_FAIL)){ //Valid and we need a checkpoint
-                    checkpoint = withK;
-                }
-                kCount++;
-            }else if(ptr->read_value != ptr->tvar->current_value){  //WithoutK entry
-                checkpoint = TO_WITHK(PASTM_FAIL);
-                kCount = 0;
-            }
+	    if(ptr->read_value != ptr->tvar->current_value){
+		if(ptr->header.info == WITHK_HEADER){
+		    checkpoint = TO_WITHK(ptr);
+		}else{
+		    checkpoint = TO_WITHK(PASTM_FAIL);
+		    ptr = ptr->next;
+		    goto CHKPNT;  //look for a checkpoint
+		}
+	    }
+	    ptr = ptr->next;
+	}
+
+    CHKPNT:
+	while(ptr != TO_WITHOUTK(NO_PTREC)){
+	    if(ptr->read_value != ptr->tvar->current_value){
+		if(ptr->header.info == WITHK_HEADER){
+		    checkpoint = TO_WITHK(ptr);
+		    ptr = ptr->next;
+		    goto NOCHKPNT;
+		}
+	    }else if(ptr->header.info == WITHK_HEADER){  //valid and checkpointed
+		checkpoint = TO_WITHK(ptr);
+		ptr = ptr->next;
+		goto NOCHKPNT;
+	    }
+	    ptr = ptr->next;
+	}
+	*/
+	
+	while(ptr != TO_WITHOUTK(NO_PTREC)){
+	    if(ptr->header.info == WITHOUTK_HEADER){
+		if(ptr->read_value != ptr->tvar->current_value){
+		    checkpoint = TO_WITHK(PASTM_FAIL);
+		    kCount = 0;
+		}
+	    }else{
+		StgPTRecWithK * withK = TO_WITHK(ptr);
+		if(withK->read_value != withK->tvar->current_value){
+		    checkpoint = withK;
+		    ptr = ptr->next;
+		    kCount = 1;
+		    continue;
+		}else if(checkpoint == TO_WITHK(PASTM_FAIL)){ //Valid and we need a checkpoint
+		    checkpoint = withK;
+		}
+		kCount++;
+	    }
             ptr = ptr->next;
         }
+	
+
         if(checkpoint == TO_WITHK(PASTM_FAIL)){ //no checkpoint found, but we need to abort
-            TRACE("Validation failed an no checkpoint was found...\n");
+	    clearTRec(trec);
             return checkpoint;
         }
+
         if(checkpoint != TO_WITHK(PASTM_SUCCESS)){ //validation failed, but we found a checkpoint
             //try reading from this tvar
             StgTVar * tvar = checkpoint->tvar;
             StgClosure * val = tvar->current_value;
             if(time == version_clock){
-                TRACE("Validation failed, a checkpoint was found, and we successfully read from the checkpointed tvar\n");
                 checkpoint->read_value = val; //apply the continuation to this in C--
                 trec->read_set = TO_WITHOUTK(checkpoint);
                 trec->write_set = checkpoint->write_set;
@@ -107,14 +154,12 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
                 trec->numK = kCount;
                 return checkpoint;
             }else{
-                TRACE("Someone else committed while we tried to re-read from the checkpointed tvar\n");
                 continue; //revalidate the whole log
             }
             
         }
 
         if(time == version_clock){
-            TRACE("Validation succeeded\n");
             return checkpoint; //necessarily PASTM_SUCCESS
         }
         //Validation succeeded, but someone else committed in the meantime, loop back around...
@@ -122,7 +167,7 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec){
 }
 
 StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
-                           StgTVar * tvar, StgClosure * k){
+			    StgTVar * tvar, StgClosure * k){
     StgWriteSet * ws = trec->write_set;
 
     while(ws != TO_WRITE_SET(NO_PTREC)){
@@ -134,17 +179,27 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     
     //Not found in write set
     StgClosure * val = tvar->current_value;
+
     while(trec->read_version != version_clock){
-        StgPTRecWithK * checkpoint = validate(trec);
+	StgPTRecWithK * checkpoint = p_validate(trec, cap);
         if(checkpoint != TO_WITHK(PASTM_SUCCESS)){
-            return TO_CLOSURE(checkpoint);
+#ifdef STATS
+	    if(checkpoint == TO_WITHK(PASTM_FAIL)){
+		cap->pastmStats.eagerFullAborts++;
+		return TO_CLOSURE(checkpoint);
+	    }
+	    cap->pastmStats.eagerPartialAborts++;
+#endif
+	    return TO_CLOSURE(checkpoint);
         }
+#ifdef STATS
+	cap->pastmStats.tsExtensions++;
+#endif
         val = tvar->current_value;
     }
     
     if(trec->numK < KBOUND){//Still room for more
         if((trec->capture_freq & 0xFFFFFFFF) == 0){//Store the continuation
-            //TRACE("Read from tvar %p, capturing a continuation...");
             StgPTRecWithK * entry = (StgPTRecWithK *)allocate(cap, sizeofW(StgPTRecWithK));
             SET_HDR(entry , &stg_PTREC_WITHK_info, CCS_SYSTEM);
             entry->tvar = tvar;
@@ -154,6 +209,7 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->continuation = k;
             entry->prev_k = trec->lastK;
             trec->read_set = TO_WITHOUTK(entry);
+			
             trec->lastK = entry;
             trec->numK++;
             if(trec->numK == KBOUND)
@@ -161,7 +217,6 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             trec->capture_freq |= (trec->capture_freq >> 32);
             
         }else{//Don't store the continuation
-            //TRACE("Read from tvar %p, not capturing a continuation");
             StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
             SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
             entry->tvar = tvar;
@@ -171,7 +226,6 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             trec->capture_freq--;
         }
     }else{//filter the read set
-        //TRACE("Read from tvar %p, filtering read set");
         StgPTRecWithK * ptr = trec->lastK;
         int numK = trec->numK;
         while(ptr != TO_WITHK(NO_PTREC)){
@@ -195,14 +249,13 @@ StgClosure * p_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         trec->read_set = entry;
         trec->capture_freq--;
     }
-    return val;
+    return val; 
 }
 
 void p_stmWriteTVar(Capability *cap,
-                    StgPTRecHeader *trec,
-                    StgTVar *tvar,
-                    StgClosure *new_value) {
-    TRACE("Writing to tvar %p");
+		     StgPTRecHeader *trec,
+		     StgTVar *tvar,
+		     StgClosure *new_value) {
     StgWriteSet * newEntry = (StgWriteSet *) allocate(cap, sizeofW(StgWriteSet));
     SET_HDR(newEntry , &stg_WRITE_SET_info, CCS_SYSTEM);
     newEntry->tvar = tvar;
@@ -211,76 +264,70 @@ void p_stmWriteTVar(Capability *cap,
     trec->write_set = newEntry;
 }
 
-void stmPushWriteSet(Capability * cap, StgWriteSet * write_set){
+StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+    unsigned long snapshot = trec->read_version;
+    while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
+	StgPTRecWithK * checkpoint = p_validate(trec, cap);
+        if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
+#ifdef STATS
+	    if(checkpoint == TO_WITHK(PASTM_FAIL)){
+		cap->pastmStats.commitTimeFullAborts++;
+		return checkpoint;
+	    }
+	    cap->pastmStats.commitTimePartialAborts++;
+#endif
+	    return checkpoint;
+        }
+        snapshot = trec->read_version;
+    }
+    
+    StgWriteSet * one, * two;
+    one = TO_WRITE_SET(NO_PTREC);
+    two = trec->write_set;
+    
+    while(two != TO_WRITE_SET(NO_PTREC)){
+        StgWriteSet * temp = two->next;
+	two->next = one;
+	one = two;
+	two = temp;
+    }
+
+    StgWriteSet * write_set = one;
     while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;
         dirty_TVAR(cap,tvar);
         write_set = write_set->next;
     }
-}
 
-/*
- * This function validates the log.  If validation succeeds, then 
- * it returns "(StgClosure*)0".  If it fails, but was unable to 
- * find a safe checkpoint, then we return "(StgClosure*)1", 
- * otherwise we return a pointer to continuation to be "thrown to"
- * This is pretty ugly, but I'm not familiar enough with C-- to come
- * up with anything better...
- */
-StgPTRecWithK * p_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
-    unsigned long snapshot = trec->read_version;
-    while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
-        StgPTRecWithK * checkpoint = validate(trec);
-        if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
-            //The validate function sets up the trec with the appropriate read/write sets
-            return checkpoint;
-        }
-        snapshot = trec->read_version;
-    }
+#ifdef STATS
+    cap->pastmStats.numCommits++;
+#endif
+
+    //Clear the trec, so it can be GC'd
+    trec->read_set = TO_WITHOUTK(NO_PTREC);
+    trec->lastK = TO_WITHK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+    trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    trec->tail = TO_WITHOUTK(NO_PTREC);
     
-    StgWriteSet * write_set = trec->write_set;
-    stmPushWriteSet(cap, write_set);
-
-    TRACE("Committing transaction, version clock is currently %lu, soon to be %lu (must currently be odd)\n", version_clock, snapshot+2);
     version_clock = snapshot + 2;//unlock clock
     return (StgPTRecWithK *)PASTM_SUCCESS;
 }
 
-/* -----------------------------------------------------------------------------
- * p_setAtomicallyFrameHelper
- * 
- * This function is called by the preadTVar# primitive.  It traverses the stack
- * leaving tso->sp referring to the enclosing atomically frame.  
- * When performing an eager abort, we should only need to pop one frame...
- * --------------------------------------------------------------------------- */
-void p_setAtomicallyFrameHelper(Capability *cap, StgTSO *tso){
-  StgPtr           p, next;
-  StgRetInfoTable *info;
-
-  p = tso->stackobj->sp;
-  while (1) {
-    info = get_ret_itbl((StgClosure *)p);
-    next = p + stack_frame_sizeW((StgClosure *)p);
-    switch (info->i.type) {
-
-    case ATOMICALLY_FRAME:
-        tso->stackobj->sp = p;
-        return;
-
-    case UNDERFLOW_FRAME: 
-        tso->stackobj->sp = p;
-        threadStackUnderflow(cap,tso);
-        p = tso->stackobj->sp;
-        continue;
-
-    default:
-      ASSERT(info->i.type != CATCH_FRAME);
-      ASSERT(info->i.type != STOP_FRAME);
-      p = next;
-      continue;
-    }
-  }
+void p_printSTMStats(){
+#ifdef STATS
+    StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
+    getStats(&stats);
+    printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
+    printf("Commit Partial Aborts = %lu\n", stats.commitTimePartialAborts);
+    printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
+    printf("Eager Partial Aborts = %lu\n", stats.eagerPartialAborts);
+    printf("Timestamp Extensions = %lu\n", stats.tsExtensions);
+    printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
+	   stats.eagerPartialAborts + stats.eagerFullAborts);
+    printf("Number of Commits = %lu\n", stats.numCommits);
+#endif
 }
 
 /*
@@ -291,13 +338,10 @@ void p_setAtomicallyFrameHelper(Capability *cap, StgTSO *tso){
  * appropriately.  
  */
 StgClosure * p_stmRetry(StgPTRecHeader * trec){
-
-    StgPTRecOrElse * orelse =trec->retry_stack;
-    
-    trec->write_set = orelse->write_set;
-    trec->retry_stack = orelse->next;
-
-    return orelse->alt;
+    trec->write_set = trec->retry_stack->write_set;
+    StgClosure * alt = trec->retry_stack->alt;
+    trec->retry_stack = trec->retry_stack->next;
+    return alt;
 }
 
 //I think the header can be clean, since it isn't going to be pointing
@@ -308,7 +352,7 @@ static StgTVar retryTV = {.header = {.info = &stg_TVAR_CLEAN_info /*, TODO: add 
                           .num_updates = 0};
 
 void p_stmCatchRetry(Capability *cap, StgPTRecHeader * trec, 
-                     StgClosure * alt, StgClosure * continuation){
+                     StgClosure * alt){
     StgPTRecOrElse * orelse = (StgPTRecOrElse*)allocate(cap, sizeofW(StgPTRecOrElse));
     SET_HDR(orelse, &stg_PTREC_OR_ELSE_info, CCS_SYSTEM);
     orelse->alt = alt;
@@ -317,3 +361,41 @@ void p_stmCatchRetry(Capability *cap, StgPTRecHeader * trec,
     trec->retry_stack = orelse;
 }
 
+
+
+
+/* -----------------------------------------------------------------------------
+ * p_setAtomicallyFrameHelper
+ * 
+ * This function is called by the preadTVar# primitive.  It traverses the stack
+ * leaving tso->sp referring to the enclosing atomically frame.  
+ * When performing an eager abort, we should only need to pop one frame...
+ * --------------------------------------------------------------------------- */
+void p_setAtomicallyFrameHelper(Capability *cap, StgTSO *tso){
+    StgPtr           p, next;
+    StgRetInfoTable *info;
+
+    p = tso->stackobj->sp;
+    while (1) {
+        info = get_ret_itbl((StgClosure *)p);
+        next = p + stack_frame_sizeW((StgClosure *)p);
+        switch (info->i.type) {
+            
+        case ATOMICALLY_FRAME:
+            tso->stackobj->sp = p;
+            return;
+            
+        case UNDERFLOW_FRAME: 
+            tso->stackobj->sp = p;
+            threadStackUnderflow(cap,tso);
+            p = tso->stackobj->sp;
+            continue;
+            
+        default:
+            ASSERT(info->i.type != CATCH_FRAME);
+            ASSERT(info->i.type != STOP_FRAME);
+            p = next;
+            continue;
+        }
+    }
+}

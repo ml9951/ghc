@@ -36,6 +36,11 @@ partialTL2:
 	$(eval WHICHSTM := -DPTL2)
 	$(eval STM := PTL2)
 
+partialRTS:
+	$(eval FILES := ../../Control/Concurrent/PASTM/Core.hs)
+	$(eval WHICHSTM := -DPRTS)
+	$(eval STM := PRTS)
+
 mvar:	LockCoupling.hs Main.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) ../cbits/gettime.c -DLOCKCOUPLING -fforce-recomp LockCoupling.hs Main.hs -o lockCoupling
 

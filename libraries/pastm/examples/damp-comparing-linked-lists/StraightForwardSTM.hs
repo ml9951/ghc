@@ -17,6 +17,8 @@ import Control.Partial.STM
 import Control.PartialTL2.STM
 #elif defined(CHUNKED)
 import Control.Chunked.STM
+#elif defined(PRTS)
+import Control.Concurrent.PASTM.Core
 #else
 #error NO STM SPECIFIED
 #endif
@@ -37,6 +39,8 @@ whichSTM = "Partial Abort NoRec"
 whichSTM = "Partial Abort TL2"
 #elif defined(CHUNKED)
 whichSTM = "Chunked (Ordered) NoRec"
+#elif defined(PRTS)
+whichSTM = "Partial Abort NoRec (RTS version)"
 #else
 #error NO STM SPECIFIED
 #endif

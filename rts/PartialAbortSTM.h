@@ -17,7 +17,7 @@
 
 #include "BeginPrivate.h"
 
-StgPTRecHeader *p_stmStartTransaction(Capability *);
+StgPTRecHeader *p_stmStartTransaction(Capability *, StgPTRecHeader *);
 
 StgClosure * p_stmReadTVar(Capability *, StgPTRecHeader *, 
                            StgTVar *, StgClosure *);
@@ -31,7 +31,7 @@ void p_setAtomicallyFrameHelper (Capability *, StgTSO *);
 
 StgClosure * p_stmRetry(StgPTRecHeader *);
 
-void p_stmCatchRetry(Capability *, StgPTRecHeader *, StgClosure *, StgClosure *);
+void p_stmCatchRetry(Capability *, StgPTRecHeader *, StgClosure *);
 
 void stmPushWriteSet(Capability *, StgWriteSet *);
 
