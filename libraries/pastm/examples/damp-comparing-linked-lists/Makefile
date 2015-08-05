@@ -3,6 +3,7 @@ THREADED = -threaded -optc-DTHREADED_RTS
 GHC = ghc
 DEBUG = 
 OPT =
+STATS = -optc-DSTATS
 
 .PHONY:	full partial ordered stmHaskell PartialTL2 LockCoupling StraightForward Dissected CAS partialRTS
 
@@ -45,10 +46,10 @@ mvar:	LockCoupling.hs Main.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) ../cbits/gettime.c -DLOCKCOUPLING -fforce-recomp LockCoupling.hs Main.hs -o mvar$(OPT)
 
 straight:	StraightForwardSTM.hs Main.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FILES) $(WHICHSTM) -DSTRAIGHT -fforce-recomp ../cbits/gettime.c StraightForwardSTM.hs Main.hs -o straightForward$(STM)$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FILES) $(WHICHSTM) $(STATS) -DSTRAIGHT -fforce-recomp ../cbits/gettime.c StraightForwardSTM.hs Main.hs -o straightForward$(STM)$(OPT)
 
 dissected:	DissectedSTM.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FILES) $(WHICHSTM) -DDISSECTED -fforce-recomp ../cbits/gettime.c DissectedSTM.hs Main.hs -o dissected$(STM)$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FILES) $(WHICHSTM) $(STATS) -DDISSECTED -fforce-recomp ../cbits/gettime.c DissectedSTM.hs Main.hs -o dissected$(STM)$(OPT)
 
 cas:	CASLL.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DCAS -fforce-recomp ../cbits/gettime.c CASLL.hs Main.hs -o cas$(OPT)

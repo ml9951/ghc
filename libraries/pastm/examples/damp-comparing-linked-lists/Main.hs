@@ -55,7 +55,7 @@ main = do
      foldM_ (\b -> \a -> addToTail l a) () init
    --  numCapabilities <- getNumCapabilities
      start <- getTime
-     mvs <- mkThreads 8 l
+     mvs <- mkThreads 4 l
      join mvs
      end <- getTime
      printf "Time = %0.3f\n" (end - start :: Double)
