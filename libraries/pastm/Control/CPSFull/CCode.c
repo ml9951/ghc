@@ -36,17 +36,17 @@ static volatile unsigned long version_clock = 0;
 static StgPASTMStats stats = {0, 0, 0, 0, 0};
 #endif
 
-StgPTRecHeader * fa_stmStartTransaction(Capability *cap) {
-  
-    StgPTRecHeader * ptrec;
-    ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
-    SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
-    
+StgPTRecHeader * fa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
+    if(ptrec == NO_PTREC){
+	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
+	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+    }
+
     ptrec->read_set = TO_WITHOUTK(NO_PTREC);
     ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
 
-	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+    ptrec->tail = TO_WITHOUTK(NO_PTREC);
 
     ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
 
@@ -61,6 +61,15 @@ StgPTRecHeader * fa_stmStartTransaction(Capability *cap) {
     return ptrec;
 }
 
+void clearTRec(StgPTRecHeader * trec){
+    trec->read_set = TO_WITHOUTK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+}
+
+#ifdef ABORT
+static StgBool shouldAbort = TRUE;
+#endif
+
 static StgClosure * fa_validate(StgPTRecHeader * trec){
     while(TRUE){
         unsigned long time = version_clock;
@@ -68,26 +77,36 @@ static StgClosure * fa_validate(StgPTRecHeader * trec){
             continue; //clock is locked
         }
 
+#ifdef ABORT
+	if(shouldAbort){
+	    clearTRec(trec);
+	    shouldAbort = FALSE;
+	    return PASTM_FAIL;
+	}
+	shouldAbort = TRUE;
+
+#endif
+
         trec->read_version = time;
         //validate read set
         StgPTRecWithoutK * ptr = trec->read_set;
 
         while(ptr != TO_WITHOUTK(NO_PTREC)){
-	  
-		    if(ptr->read_value != ptr->tvar->current_value){
-			    return PASTM_FAIL;
-			}
-			ptr = ptr->next;
-		}
+	    if(ptr->read_value != ptr->tvar->current_value){
+		clearTRec(trec);
+		return PASTM_FAIL;
+	    }
+	    ptr = ptr->next;
+	}
         if(time == version_clock){
-		    return PASTM_SUCCESS; //necessarily PASTM_SUCCESS
+	    return PASTM_SUCCESS; //necessarily PASTM_SUCCESS
         }
         //Validation succeeded, but someone else committed in the meantime, loop back around...
     }
 }
 
 StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
-							StgTVar * tvar){
+			    StgTVar * tvar){
     StgWriteSet * ws = trec->write_set;
 
     while(ws != TO_WRITE_SET(NO_PTREC)){
@@ -107,6 +126,9 @@ StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 #endif
             return PASTM_FAIL;
         }
+#ifdef STATS
+	cap->pastmStats.tsExtensions++;
+#endif
         val = tvar->current_value;
     }
     
@@ -127,13 +149,21 @@ void fa_stmWriteTVar(Capability *cap,
                     StgClosure *new_value) {
     StgWriteSet * newEntry = (StgWriteSet *) allocate(cap, sizeofW(StgWriteSet));
     SET_HDR(newEntry , &stg_WRITE_SET_info, CCS_SYSTEM);
-	newEntry->tvar = tvar;
+    newEntry->tvar = tvar;
     newEntry->val = new_value;
     newEntry->next = trec->write_set;
     trec->write_set = newEntry;
 }
 
 StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+
+#ifdef ABORT
+    StgClosure * checkpoint = fa_validate(trec);
+    if(checkpoint != PASTM_SUCCESS){
+	return checkpoint;
+    }
+#endif
+
     unsigned long snapshot = trec->read_version;
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
         StgClosure * res = fa_validate(trec);
@@ -147,7 +177,18 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
         snapshot = trec->read_version;
     }
    
-    StgWriteSet * write_set = trec->write_set;
+    StgWriteSet * one, * two;
+    one = TO_WRITE_SET(NO_PTREC);
+    two = trec->write_set;
+    
+    while(two != TO_WRITE_SET(NO_PTREC)){
+        StgWriteSet * temp = two->next;
+	two->next = one;
+	one = two;
+	two = temp;
+    }
+
+    StgWriteSet * write_set = one;
     while(write_set != TO_WRITE_SET(NO_PTREC)){
         StgTVar * tvar = write_set->tvar;
         tvar->current_value = write_set->val;
@@ -156,11 +197,7 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     }
 
 #ifdef STATS
-    stats.commitTimeFullAborts += cap->pastmStats.commitTimeFullAborts;
-    stats.eagerFullAborts += cap->pastmStats.eagerFullAborts;
-    stats.numCommits++;
-    cap->pastmStats.commitTimeFullAborts = 0;
-    cap->pastmStats.eagerFullAborts = 0;
+    cap->pastmStats.numCommits = 0;
 #endif
 
     version_clock = snapshot + 2;//unlock clock
@@ -169,8 +206,12 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
 void fa_printSTMStats(){
 #ifdef STATS
+    StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
+    getStats(&stats);
+
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
+    printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);
 #endif
 }

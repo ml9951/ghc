@@ -33,6 +33,7 @@ module Control.Partial.STM
     --The following are just re-exporting from the original STM
     newTVarIO,   
     readTVarIO, 
+    writeTVarIO,
     TVar(..),    
     newTVar       
 )
@@ -97,6 +98,9 @@ orElse (STM m) e = STM $ \c -> \s ->
         case unsafeCoerce# pcatchRetry# (m (unsafeCoerce# popRetry#)) (unSTM e initK) s of
                (# s', t #) -> c t s'
 
+writeTVarIO :: TVar a -> a -> IO ()
+writeTVarIO (TVar tv) a = IO $ \s -> unsafeCoerce# writeTVarIO# tv a s
+
 foreign import prim safe "stg_partial_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
 
@@ -117,3 +121,6 @@ foreign import prim safe "stg_partial_catchRetryzh" pcatchRetry#
 
 foreign import prim safe "stg_partial_popRetry" popRetry#
         :: Any() -> State# RealWorld -> (# State# RealWorld, a #)
+
+foreign import prim safe "stg_partial_writeTVarIOzh" writeTVarIO#
+        :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)

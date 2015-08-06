@@ -269,3 +269,9 @@ stg_partial_catchRetryzh (P_ first_code,     /* :: STM a */
     
     jump stg_ap_v_fast (first_code);
 }
+
+stg_partial_writeTVarIOzh(P_ tvar, P_ a){
+    StgTVar_current_value(tvar) = a;
+    SET_HDR (tvar, stg_TVAR_DIRTY_info, CCCS);
+    return(tvar);
+}

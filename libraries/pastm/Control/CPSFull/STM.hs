@@ -33,6 +33,7 @@ module Control.CPSFull.STM
     --The following are just re-exporting from the original STM
     newTVarIO,   
     readTVarIO, 
+    writeTVarIO,
     TVar(..),    
     newTVar       
 )
@@ -61,7 +62,7 @@ instance  Functor STM where
     fmap f m = m >>= (return . f)
 
 readTVar :: TVar a -> STM a
-readTVar (TVar tv) = STM $ \c -> \s-> case unsafeCoerce# readTVar# tv s of
+readTVar (TVar tv) = STM $ \c -> \s-> case unsafeCoerce# readTVar# tv c s of
                                            (# s', t #) -> c t s'
 
 writeTVar :: TVar a -> a -> STM ()
@@ -99,6 +100,9 @@ orElse (STM m) e = STM $ \c -> \s ->
        in pcatchRetry# m' (unSTM e c) (\a -> m') s
 -}
 
+writeTVarIO :: TVar a -> a -> IO()
+writeTVarIO (TVar tv) a = IO $ \s -> unsafeCoerce# writeTVarIO# tv a s
+
 foreign import prim "stg_full_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
 {-         FFI won't accept this type...
@@ -107,10 +111,13 @@ foreign import prim "stg_full_atomicallyzh" atomically#
 -} 
 
 foreign import prim "stg_full_readTVarzh" readTVar#
-        :: TVar# s a -> State# s -> (# State# s, a #)
+        :: TVar# s a -> Any() -> State# s -> (# State# s, a #)
 
 foreign import prim "stg_full_writeTVarzh" writeTVar#
         :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
 
 
 foreign import ccall "fa_printSTMStats" printStats :: IO()
+
+foreign import prim safe "stg_full_writeTVarIOzh" writeTVarIO#
+        :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)

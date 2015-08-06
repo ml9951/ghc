@@ -27,12 +27,11 @@ INFO_TABLE_RET(stg_full_atomically_frame, ATOMICALLY_FRAME,
     ("ptr" res) = ccall fa_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
 
     if(res == PASTM_SUCCESS){ //Validation succeeded
-        StgTSO_ptrec(CurrentTSO) = NO_PTREC;
         frame_result = result;
         return(frame_result);
     }
     if(res == PASTM_FAIL){ //Validation failed 
-        ("ptr" trec) = ccall fa_stmStartTransaction(MyCapability() "ptr");
+        ("ptr" trec) = ccall fa_stmStartTransaction(MyCapability() "ptr", trec "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
 
@@ -59,13 +58,8 @@ stg_full_atomicallyzh (P_ stm)
     old_trec = StgTSO_ptrec(CurrentTSO);
 
     /* Start the memory transcation */
-	("ptr" new_trec) = ccall fa_stmStartTransaction(MyCapability() "ptr");
+    ("ptr" new_trec) = ccall fa_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
     StgTSO_ptrec(CurrentTSO) = new_trec;
-
-    /* Nested transactions are idempotent */ 
-    if (old_trec != NO_PTREC) {
-        jump stg_ap_v_fast(stm);
-    }
 
     code = stm;
     next_invariant = END_INVARIANT_CHECK_QUEUE;
@@ -114,18 +108,18 @@ stg_full_eagerFullAbort
 
 }
 
-stg_full_readTVarzh (P_ tvar)
+stg_full_readTVarzh (P_ tvar, P_ k)
 {
     P_ trec;
     P_ result;
     W_ header;
     
     // Call to stmReadTVar may allocate
-    MAYBE_GC_P (stg_full_readTVarzh, tvar);
+    MAYBE_GC_PP (stg_full_readTVarzh, tvar, k);
 
     trec = StgTSO_ptrec(CurrentTSO);
     ("ptr" result) = ccall fa_stmReadTVar(MyCapability() "ptr", trec "ptr",
-                                         tvar "ptr");
+					  tvar "ptr");
 
     if(result == PASTM_FAIL){
         jump stg_full_eagerFullAbort []; //full abort
@@ -150,5 +144,10 @@ stg_full_writeTVarzh (P_ tvar,     /* :: TVar a */
     return (tvar);
 }
 
+stg_full_writeTVarIOzh(P_ tvar, P_ a){
+    StgTVar_current_value(tvar) = a;
+    SET_HDR (tvar, stg_TVAR_DIRTY_info, CCCS);
+    return(tvar);
+}
 
 

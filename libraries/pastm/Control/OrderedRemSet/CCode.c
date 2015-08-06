@@ -27,12 +27,6 @@
 
 static volatile unsigned long version_clock = 0;
 
-#define STATS
-
-#ifdef STATS
-static StgPASTMStats stats = {0, 0, 0, 0, 0};
-#endif
-
 static StgTVar dummyTV = {.header = {.info = &stg_NO_PTREC_info /*, TODO: add profiling field*/}, 
                           .current_value = PASTM_SUCCESS, //dummy value
                           .first_watch_queue_entry = ((StgTVarWatchQueue *)(void *)&stg_END_STM_WATCH_QUEUE_closure),
@@ -43,20 +37,21 @@ StgPTRecHeader * ord_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
 
-	StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
-	SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
-	
-	entry->tvar = &dummyTV;
-	entry->read_value = PASTM_SUCCESS;
-	entry->next = TO_WITHOUTK(NO_PTREC);
-	
-	ptrec->read_set = entry;
 	ptrec->lastK = TO_WITHK(NO_PTREC);
 	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
 	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
-	ptrec->tail = entry;
     }
     
+    StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
+    SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
+	
+    entry->tvar = &dummyTV;
+    entry->read_value = PASTM_SUCCESS;
+    entry->next = TO_WITHOUTK(NO_PTREC);
+
+    ptrec->read_set = entry;
+    ptrec->tail = entry;
+
     //get a read version
     ptrec->read_version = version_clock;
     while((ptrec->read_version & 1) != 0){
@@ -78,6 +73,32 @@ static inline void clearTRec(StgPTRecHeader * trec){
     StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
     trec->capture_freq = capture_freq | (capture_freq >> 32);
     trec->numK = 0;
+}
+
+static void sanity(StgPTRecHeader * trec){
+    int freq = trec->capture_freq >> 32;
+    int counter = freq;
+
+    StgPTRecWithoutK * ptr = trec->read_set;
+    while(ptr != TO_WITHOUTK(NO_PTREC)){
+	if(counter == 0 && ptr->header.info != WITHK_HEADER){
+	    if(ptr->header.info == WITHK_HEADER){
+		counter = freq;
+	    }else{
+		printf("checkpoint at incorrect interval\n");
+	    }
+	}
+
+	if(counter != 0 && ptr->header.info == WITHK_HEADER){
+	    printf("checkpoint at incorrect interval\n");
+	}
+	
+	ptr = ptr->next;
+	counter--;
+
+    }
+    
+    
 }
 
 static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
@@ -103,6 +124,8 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
 			checkpoint->read_value = val; //apply the continuation to this in C--
 			checkpoint->next = TO_WITHOUTK(NO_PTREC);
 			
+			cap->pastmStats.fastForwardAttempts += i;
+
 			trec->tail = TO_WITHOUTK(checkpoint);
 			trec->write_set = checkpoint->write_set;
 			trec->lastK = checkpoint;
@@ -179,10 +202,13 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->prev_k = trec->lastK;
 	    
 	    trec->tail->next = TO_WITHOUTK(entry); //append to end
-	    bdescr * desc = Bdescr((StgPtr)trec->tail);
-	    if(desc->gen_no > 0){
+	    /*bdescr * desc = Bdescr((StgPtr)trec->tail);
+	    if(desc->gen_no > 0 && trec->tail->header.info != &stg_PTREC_WITHOUTK_MUT_info){
+		//printf("Adding to remember set, tail is in generation %d\n", desc->gen_no);
+		cap->pastmStats.fastForwards++;
 		recordClosureMutated(cap, (StgClosure*)trec->tail);
 	    }
+*/
 
             trec->tail = TO_WITHOUTK(entry);
             trec->lastK = entry;
@@ -200,11 +226,13 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->next = TO_WITHOUTK(NO_PTREC);
 	    
 	    trec->tail->next = entry; //append to end
-	    bdescr * desc = Bdescr((StgPtr)trec->tail);
-	    if(desc->gen_no > 0){
+	    /*    bdescr * desc = Bdescr((StgPtr)trec->tail);
+	    if(desc->gen_no > 0 && trec->tail->header.info != &stg_PTREC_WITHOUTK_MUT_info){
+		//	printf("Adding to remember set, tail is in generation %d\n", desc->gen_no);
+		cap->pastmStats.fastForwards++;
 		recordClosureMutated(cap, (StgClosure*)trec->tail);
 	    }
-
+	    */
 	    trec->tail = entry;
             trec->capture_freq--;
         }
@@ -237,11 +265,15 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         entry->next = TO_WITHOUTK(NO_PTREC);
 
 	trec->tail->next = TO_WITHOUTK(entry); //append to end
+	/*
 	bdescr * desc = Bdescr((StgPtr)trec->tail);
-	if(desc->gen_no > 0){
+	if(desc->gen_no > 0 && trec->tail->header.info != &stg_PTREC_WITHOUTK_MUT_info){
+	    //   printf("Adding to remember set, tail is in generation %d\n", desc->gen_no);
+	    cap->pastmStats.fastForwards++;
 	    recordClosureMutated(cap, (StgClosure*)trec->tail);
 	}
-	
+	*/
+
 	trec->tail = entry;
         trec->capture_freq--;
     }
@@ -300,12 +332,11 @@ StgPTRecWithK * ord_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
     cap->pastmStats.numCommits++;
 #endif
 
-    StgPTRecWithoutK * first = trec->read_set;
-    first->next = TO_WITHOUTK(NO_PTREC);
+    trec->read_set = TO_WITHOUTK(NO_PTREC);
     trec->lastK = TO_WITHK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->retry_stack = TO_OR_ELSE(NO_PTREC);
-    trec->tail = first;
+    trec->tail = TO_WITHOUTK(NO_PTREC);
 
     version_clock = snapshot + 2;//unlock clock
     return (StgPTRecWithK *)PASTM_SUCCESS;
@@ -327,5 +358,7 @@ void ord_printSTMStats(){
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);
+    printf("Heap Objects remembered = %lu\n", stats.fastForwards);
+    printf("Fast Forwarded through %lu reads\n", stats.fastForwardAttempts);
 #endif
 }

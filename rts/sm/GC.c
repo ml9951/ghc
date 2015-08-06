@@ -186,6 +186,7 @@ GarbageCollect (nat collect_gen,
                 nat gc_type USED_IF_THREADS,
                 Capability *cap)
 {
+
   bdescr *bd;
   generation *gen;
   StgWord live_blocks, live_words, par_max_copied, par_tot_copied;

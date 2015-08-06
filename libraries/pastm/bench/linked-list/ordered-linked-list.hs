@@ -10,6 +10,12 @@ import Control.Full.STM           --full abort STM (NoRec)
 import Control.Ordered.STM
 #elif defined(PTL2)
 import Control.PartialTL2.STM
+#elif defined(CPSFULL)
+import Control.CPSFull.STM
+#elif defined(CHUNKED)
+import Control.Chunked.STM
+#elif defined(FF)
+import Control.FastForward.STM
 #else
 import Control.Partial.STM
 #endif

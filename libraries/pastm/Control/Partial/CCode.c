@@ -66,6 +66,10 @@ static inline void clearTRec(StgPTRecHeader * trec){
     trec->numK = 0;
 }
 
+#ifdef ABORT
+static StgBool shouldAbort = TRUE;
+#endif
+
 static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
     while(TRUE){
         unsigned long time = version_clock;
@@ -73,10 +77,34 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
             continue; //clock is locked
         }
         trec->read_version = time;
+
+#ifdef ABORT
+	if(shouldAbort){
+	    StgPTRecWithK * ptr = trec->lastK;
+	    int i;
+	    int n = trec->numK / 2;
+	    for(i = 0; i < n; i++){
+		ptr = ptr->prev_k;
+		trec->numK--;
+	    }
+	    trec->read_set = TO_WITHOUTK(ptr);
+	    trec->write_set = ptr->write_set;
+	    trec->lastK = ptr;
+	    StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
+	    trec->capture_freq = capture_freq | (capture_freq >> 32);
+
+	    shouldAbort = FALSE;
+
+	    return ptr;
+	}
+	shouldAbort = TRUE;
+
+#endif
         //validate read set
         StgPTRecWithoutK * ptr = trec->read_set;
         StgPTRecWithK *checkpoint = TO_WITHK(PASTM_SUCCESS);
         StgInt kCount = 0;
+	StgInt i = 0;
 
 	/*
 	//this loop assumes that we do not need a checkpoint
@@ -110,12 +138,12 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
 	    ptr = ptr->next;
 	}
 	*/
-	
 	while(ptr != TO_WITHOUTK(NO_PTREC)){
 	    if(ptr->header.info == WITHOUTK_HEADER){
 		if(ptr->read_value != ptr->tvar->current_value){
 		    checkpoint = TO_WITHK(PASTM_FAIL);
 		    kCount = 0;
+		    i = 0;
 		}
 	    }else{
 		StgPTRecWithK * withK = TO_WITHK(ptr);
@@ -123,6 +151,7 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
 		    checkpoint = withK;
 		    ptr = ptr->next;
 		    kCount = 1;
+		    i = 1;
 		    continue;
 		}else if(checkpoint == TO_WITHK(PASTM_FAIL)){ //Valid and we need a checkpoint
 		    checkpoint = withK;
@@ -130,8 +159,9 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
 		kCount++;
 	    }
             ptr = ptr->next;
+	    i++;
         }
-	
+
 
         if(checkpoint == TO_WITHK(PASTM_FAIL)){ //no checkpoint found, but we need to abort
 	    clearTRec(trec);
@@ -147,6 +177,11 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
                 trec->read_set = TO_WITHOUTK(checkpoint);
                 trec->write_set = checkpoint->write_set;
                 trec->lastK = checkpoint;
+
+#ifdef STATS
+		cap->pastmStats.fastForwardAttempts += i;
+#endif
+
                 StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
                 trec->capture_freq = capture_freq | (capture_freq >> 32);
                 trec->numK = kCount;
@@ -263,6 +298,14 @@ void pa_stmWriteTVar(Capability *cap,
 }
 
 StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+
+#ifdef ABORT
+    StgPTRecWithK * checkpoint = pa_validate(trec, cap);
+    if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
+	return checkpoint;
+    }
+#endif
+
     unsigned long snapshot = trec->read_version;
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
 	StgPTRecWithK * checkpoint = pa_validate(trec, cap);
@@ -325,6 +368,7 @@ void pa_printSTMStats(){
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);
+    printf("Fast Forwarded through %lu reads\n", stats.fastForwardAttempts);
 #endif
 }
 

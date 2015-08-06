@@ -36,12 +36,12 @@ static volatile unsigned long version_clock = 0;
 static StgPASTMStats stats = {0, 0, 0, 0, 0};
 #endif
 
-StgPTRecHeader * fa_stmStartTransaction(Capability *cap) {
-  
-    StgPTRecHeader * ptrec;
-    ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
-    SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
-    
+StgPTRecHeader * fa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
+    if(ptrec == NO_PTREC){
+	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
+	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+    }
+
     ptrec->read_set = TO_WITHOUTK(NO_PTREC);
     ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
@@ -175,7 +175,7 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     }
 
 #ifdef STATS
-    cap->pastmStats.numCommits = 0;
+    cap->pastmStats.numCommits++;
 #endif
 
     version_clock = snapshot + 2;//unlock clock

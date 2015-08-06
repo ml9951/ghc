@@ -11,27 +11,40 @@ FULL_FILES = ../../Control/Full/CmmHooks.cmm ../../Control/Full/CCode.c ../../Co
 PARTIAL_FILES = ../../Control/Partial/CmmHooks.cmm ../../Control/Partial/CCode.c ../../Control/Partial/STM.hs -I../../../../rts
 CPSFULL_FILES = ../../Control/CPSFull/CmmHooks.cmm ../../Control/CPSFull/CCode.c ../../Control/CPSFull/STM.hs -I../../../../rts
 PTL2_FILES = ../../Control/PartialTL2/CmmHooks.cmm ../../Control/PartialTL2/CCode.c ../../Control/PartialTL2/STM.hs -I../../../../rts
+CHUNKED_FILES = ../../Control/Chunked/CmmHooks.cmm ../../Control/Chunked/CCode.c ../../Control/Chunked/STM.hs -I../../../../rts
+FF_FILES = ../../Control/FastForward/CmmHooks.cmm ../../Control/FastForward/CCode.c ../../Control/FastForward/STM.hs -I../../../../rts
 
 OPT = 
+
+STATS = -optc-DSTATS
 
 .PHONY:	partial full stmHaskell ordered clean partialTL2
 
 all:	partial full stmHaskell ordered
 
 partial:	ordered-linked-list.hs Main.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) -fforce-recomp ordered-linked-list.hs Main.hs -o partial$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(STATS) $(PARTIAL_FILES) -fforce-recomp ordered-linked-list.hs Main.hs -o partial$(OPT)
 
 full:	ordered-linked-list.hs Main.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FULL_FILES) -DFABORT -fforce-recomp ordered-linked-list.hs Main.hs -o full$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(STATS) $(FULL_FILES) -DFABORT -fforce-recomp ordered-linked-list.hs Main.hs -o full$(OPT)
 
 stmHaskell:	ordered-linked-list.hs Main.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) ../../Control/STMHaskell/STM.hs -DSTMHASKELL -fforce-recomp ordered-linked-list.hs Main.hs -o stmHaskell$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(STATS) $(OPT) ../../Control/STMHaskell/STM.hs -DSTMHASKELL -fforce-recomp ordered-linked-list.hs Main.hs -o stmHaskell$(OPT)
 
 ordered:	ordered-linked-list.hs Main.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(ORDEREDREMSET_FILES) -DORDERED -fforce-recomp ordered-linked-list.hs Main.hs -o ordered$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(STATS) $(ORDEREDREMSET_FILES) -DORDERED -fforce-recomp ordered-linked-list.hs Main.hs -o ordered$(OPT)
 
 partialTL2:	ordered-linked-list.hs Main.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PTL2_FILES) -DPTL2 -fforce-recomp ordered-linked-list.hs Main.hs -o tl2Partial$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(STATS) $(PTL2_FILES) -DPTL2 -fforce-recomp ordered-linked-list.hs Main.hs -o tl2Partial$(OPT)
+
+cpsFull:	ordered-linked-list.hs Main.hs
+	$(GHC) $(THREADED) $(DEBUG) $(STATS) $(OPT) $(CPSFULL_FILES) -DCPSFULL -fforce-recomp ordered-linked-list.hs Main.hs -o cpsFull$(OPT)
+
+chunked:	ordered-linked-list.hs Main.hs
+	$(GHC) $(THREADED) $(DEBUG) $(STATS) $(OPT) $(CHUNKED_FILES) -DCHUNKED -fforce-recomp ordered-linked-list.hs Main.hs -o chunked$(OPT)
+
+ff:	ordered-linked-list.hs Main.hs
+	$(GHC) $(THREADED) $(DEBUG) $(STATS) $(OPT) $(FF_FILES) -DFF -fforce-recomp ordered-linked-list.hs Main.hs -o ff$(OPT)
 
 clean:	
 	rm -f *.o *.hi ordered ordered-O* stmHaskell* full* partial* tl2*

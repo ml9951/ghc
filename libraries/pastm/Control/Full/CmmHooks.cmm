@@ -27,12 +27,11 @@ INFO_TABLE_RET(stg_full_atomically_frame, ATOMICALLY_FRAME,
     ("ptr" res) = ccall fa_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
 
     if(res == PASTM_SUCCESS){ //Validation succeeded
-        StgTSO_ptrec(CurrentTSO) = NO_PTREC;
         frame_result = result;
         return(frame_result);
     }
     if(res == PASTM_FAIL){ //Validation failed 
-        ("ptr" trec) = ccall fa_stmStartTransaction(MyCapability() "ptr");
+        ("ptr" trec) = ccall fa_stmStartTransaction(MyCapability() "ptr", trec "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
 
@@ -59,13 +58,8 @@ stg_full_atomicallyzh (P_ stm)
     old_trec = StgTSO_ptrec(CurrentTSO);
 
     /* Start the memory transcation */
-	("ptr" new_trec) = ccall fa_stmStartTransaction(MyCapability() "ptr");
+    ("ptr" new_trec) = ccall fa_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
     StgTSO_ptrec(CurrentTSO) = new_trec;
-
-    /* Nested transactions are idempotent */ 
-    if (old_trec != NO_PTREC) {
-        jump stg_ap_v_fast(stm);
-    }
 
     code = stm;
     next_invariant = END_INVARIANT_CHECK_QUEUE;

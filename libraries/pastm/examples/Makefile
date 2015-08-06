@@ -95,7 +95,16 @@ multipleFull:	multipleTVars.hs
 multipleChunked:	multipleTVars.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(CHUNKED_FILES) -DCHUNKED -fforce-recomp cbits/gettime.c multipleTVars.hs -o multipleTVarsChunked$(OPT)
 
-full:	llFull counterFull
+
+#Synthetic
+.PHONY:	syntheticPartial syntheticCPSFull
+syntheticPartial:	synthetic.hs
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) $(STATS) -DPABORT -optc-DABORT -fforce-recomp cbits/gettime.c synthetic.hs -o syntheticPartial$(OPT)
+
+syntheticCPSFull:	synthetic.hs
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(CPSFULL_FILES) $(STATS) -optc-DABORT -DCPSFULL -fforce-recomp cbits/gettime.c synthetic.hs -o syntheticCPSFull$(OPT)
+
+
 
 clean:
 	rm -f *.hi *.o *-O* 
