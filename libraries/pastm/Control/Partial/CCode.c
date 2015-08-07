@@ -33,8 +33,8 @@ static volatile unsigned long version_clock = 0;
 static StgPASTMStats stats = {0, 0, 0, 0, 0};
 #endif
 
-StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
-    
+StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec, unsigned long heapPtr) {
+    printf("Allocated %lu bytes\n", cap->total_allocated);
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
@@ -43,6 +43,7 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
 	ptrec->lastK = TO_WITHK(NO_PTREC);
 	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
 	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
+	ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ; 
     }
     
     //get a read version
@@ -50,7 +51,7 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
     while((ptrec->read_version & 1) != 0){
         ptrec->read_version = version_clock;
     }
-    ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ; 
+    
     ptrec->numK = 0;
 
     return ptrec;
@@ -80,6 +81,11 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
 
 #ifdef ABORT
 	if(shouldAbort){
+	    /*
+	    clearTRec(trec);
+	    shouldAbort = FALSE;
+	    return TO_WITHK(PASTM_FAIL);
+	    */
 	    StgPTRecWithK * ptr = trec->lastK;
 	    int i;
 	    int n = trec->numK / 2;
@@ -87,6 +93,17 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
 		ptr = ptr->prev_k;
 		trec->numK--;
 	    }
+
+#ifdef STATS
+	    i = 0;
+	    StgPTRecWithoutK * x = TO_WITHOUTK(ptr);
+	    while(x != TO_WITHOUTK(NO_PTREC)){
+		i++;
+		x = x->next;
+	    }
+	    cap->pastmStats.fastForwardAttempts += i;
+#endif
+
 	    trec->read_set = TO_WITHOUTK(ptr);
 	    trec->write_set = ptr->write_set;
 	    trec->lastK = ptr;
@@ -106,38 +123,6 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
         StgInt kCount = 0;
 	StgInt i = 0;
 
-	/*
-	//this loop assumes that we do not need a checkpoint
-    NOCHKPNT:
-        while(ptr != TO_WITHOUTK(NO_PTREC)){
-	    if(ptr->read_value != ptr->tvar->current_value){
-		if(ptr->header.info == WITHK_HEADER){
-		    checkpoint = TO_WITHK(ptr);
-		}else{
-		    checkpoint = TO_WITHK(PASTM_FAIL);
-		    ptr = ptr->next;
-		    goto CHKPNT;  //look for a checkpoint
-		}
-	    }
-	    ptr = ptr->next;
-	}
-
-    CHKPNT:
-	while(ptr != TO_WITHOUTK(NO_PTREC)){
-	    if(ptr->read_value != ptr->tvar->current_value){
-		if(ptr->header.info == WITHK_HEADER){
-		    checkpoint = TO_WITHK(ptr);
-		    ptr = ptr->next;
-		    goto NOCHKPNT;
-		}
-	    }else if(ptr->header.info == WITHK_HEADER){  //valid and checkpointed
-		checkpoint = TO_WITHK(ptr);
-		ptr = ptr->next;
-		goto NOCHKPNT;
-	    }
-	    ptr = ptr->next;
-	}
-	*/
 	while(ptr != TO_WITHOUTK(NO_PTREC)){
 	    if(ptr->header.info == WITHOUTK_HEADER){
 		if(ptr->read_value != ptr->tvar->current_value){
@@ -402,3 +387,9 @@ void pa_stmCatchRetry(Capability *cap, StgPTRecHeader * trec,
     orelse->next = trec->retry_stack;
     trec->retry_stack = orelse;
 }
+
+void printBytesAllocated(Capability * cap){
+    printf("Bytes allocated: %lu\n", cap->total_allocated);
+}
+
+

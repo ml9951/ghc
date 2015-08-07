@@ -37,6 +37,7 @@ static StgPASTMStats stats = {0, 0, 0, 0, 0};
 #endif
 
 StgPTRecHeader * fa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
+    printf("Allocated %lu bytes\n", cap->total_allocated);
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);

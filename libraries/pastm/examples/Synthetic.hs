@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ForeignFunctionInterface #-} 
+{-# LANGUAGE CPP, ForeignFunctionInterface, GHCForeignImportPrim, MagicHash, UnliftedFFITypes #-} 
 
 #ifdef STMHASKELL
 import Control.STMHaskell.STM     --full abort STM (STM Haskell)
@@ -30,6 +30,7 @@ import Dump
 import Data.Map(Map, empty)
 import Text.Printf
 import Control.Monad(foldM_)
+import GHC.Prim(Any, unsafeCoerce#, Int#)
 
 data STMList a = Head (TVar (STMList a))
                | Null
@@ -41,7 +42,7 @@ newList = do
         l <- newTVarIO (Head nullPtr)
         return(l)
 
-lookup :: Eq a => TVar (STMList a) -> a -> STM Bool
+lookup :: (Eq a, Show a) => TVar (STMList a) -> a -> STM Bool
 lookup l x = do
        y <- readTVar l
        case y of
@@ -66,10 +67,10 @@ loop i l = atomically(lookup l 100000000) >>= \_ -> loop (i-1) l
 
 main = do
      stmList <- newList
-     foldM_ (\b -> \a -> insert stmList a) () [0..10000]
+     foldM_ (\b -> \a -> insert stmList a) () [10000, 9999..0]
      putStrLn "Done initializing"
      start <- getTime
-     loop 1000 stmList
+     loop 5000 stmList
      end <- getTime
      printf "Time = %0.3f\n" (end - start :: Double)
      printStats

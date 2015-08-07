@@ -146,3 +146,8 @@ stg_full_writeTVarzh (P_ tvar,     /* :: TVar a */
 
 
 
+stg_full_writeTVarIOzh(P_ tvar, P_ a){
+    StgTVar_current_value(tvar) = a;
+    SET_HDR (tvar, stg_TVAR_DIRTY_info, CCCS);
+    return(tvar);
+}

@@ -13,9 +13,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-iters", type=int, help="Number of iterations for each STM implementation", default="10")
 args = parser.parse_args()
 
-stms = ["STMHaskell", "Full", "Partial", "OrderedRemSet", "CPSFull"]
+stms = ["Full", "Partial", "CPSFull"]
 
-prog = "ll"
+prog = "synthetic"
 
 filename = prog + 'Times.txt'
 

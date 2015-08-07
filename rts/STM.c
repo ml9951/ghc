@@ -931,6 +931,7 @@ void stmPreGCHook (Capability *cap) {
   cap->free_tvar_watch_queues = END_STM_WATCH_QUEUE;
   cap->free_trec_chunks = END_STM_CHUNK_LIST;
   cap->free_trec_headers = NO_TREC;
+  cap->free_ptrec_chunks =  ((StgPTRecChunk *)(void *)&stg_NO_PTREC_closure);
   unlock_stm(NO_TREC);
 }
 

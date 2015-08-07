@@ -66,12 +66,25 @@ void clearTRec(StgPTRecHeader * trec){
     trec->write_set = TO_WRITE_SET(NO_PTREC);
 }
 
+#ifdef ABORT
+static StgBool shouldAbort = TRUE;
+#endif
+
 static StgClosure * fa_validate(StgPTRecHeader * trec){
     while(TRUE){
         unsigned long time = version_clock;
         if((time & 1) != 0){
             continue; //clock is locked
         }
+
+#ifdef ABORT
+	if(shouldAbort){
+	    clearTRec(trec);
+	    shouldAbort = FALSE;
+	    return PASTM_FAIL;
+	}
+	shouldAbort = TRUE;
+#endif
 
         trec->read_version = time;
         //validate read set
@@ -142,6 +155,14 @@ void fa_stmWriteTVar(Capability *cap,
 }
 
 StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+
+#ifdef ABORT
+    StgClosure * checkpoint = fa_validate(trec);
+    if(checkpoint != PASTM_SUCCESS){
+	return checkpoint;
+    }
+#endif
+
     unsigned long snapshot = trec->read_version;
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
         StgClosure * res = fa_validate(trec);

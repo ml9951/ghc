@@ -78,7 +78,7 @@ stg_partial_atomicallyzh (P_ stm)
     old_trec = StgTSO_ptrec(CurrentTSO);
 
     /* Start the memory transcation */
-    ("ptr" new_trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
+    ("ptr" new_trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", old_trec "ptr", Hp);
     StgTSO_ptrec(CurrentTSO) = new_trec;
 
     code = stm;
@@ -275,3 +275,8 @@ stg_partial_writeTVarIOzh(P_ tvar, P_ a){
     SET_HDR (tvar, stg_TVAR_DIRTY_info, CCCS);
     return(tvar);
 }
+
+stg_printBytesAllocated(){
+    ccall printBytesAllocated(MyCapability() "ptr");
+}
+

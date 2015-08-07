@@ -20,6 +20,8 @@ FF_FILES = ../Control/FastForward/CmmHooks.cmm ../Control/FastForward/CCode.c ..
 
 OPT =
 
+STATS = -optc-DSTATS
+
 .PHONY:	llOrdered
 llOrdered:	ll.hs cbits/gettime.c 
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DORDERED -optc-g $(ORDERED_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llOrdered$(OPT)
@@ -95,19 +97,24 @@ multipleFull:	multipleTVars.hs
 multipleChunked:	multipleTVars.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(CHUNKED_FILES) -DCHUNKED -fforce-recomp cbits/gettime.c multipleTVars.hs -o multipleTVarsChunked$(OPT)
 
+ABORT = -optc-DABORT
 
 #Synthetic
-.PHONY:	syntheticPartial syntheticCPSFull
-syntheticPartial:	synthetic.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) $(STATS) -DPABORT -optc-DABORT -fforce-recomp cbits/gettime.c synthetic.hs -o syntheticPartial$(OPT)
+.PHONY:	syntheticPartial syntheticCPSFull syntheticFull
+syntheticPartial:	Synthetic.hs
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(PARTIAL_FILES) $(STATS) $(ABORT) -DPABORT -fforce-recomp cbits/gettime.c Synthetic.hs -o syntheticPartial$(OPT)$(ABORT)
 
-syntheticCPSFull:	synthetic.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(CPSFULL_FILES) $(STATS) -optc-DABORT -DCPSFULL -fforce-recomp cbits/gettime.c synthetic.hs -o syntheticCPSFull$(OPT)
+syntheticCPSFull:	Synthetic.hs
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(CPSFULL_FILES) $(STATS) $(ABORT) -DCPSFULL -fforce-recomp cbits/gettime.c Synthetic.hs -o syntheticCPSFull$(OPT)$(ABORT)
+
+syntheticFull:	Synthetic.hs
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FULL_FILES) $(STATS) $(ABORT) -DFABORT -fforce-recomp cbits/gettime.c Synthetic.hs -o syntheticFull$(OPT)$(ABORT)
 
 
+synthetic:	syntheticFull syntheticCPSFull syntheticPartial
 
 clean:
-	rm -f *.hi *.o *-O* 
+	rm -f *.hi *.o *-O* synthetic*
 
 
 

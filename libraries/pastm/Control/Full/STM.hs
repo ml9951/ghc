@@ -33,6 +33,7 @@ module Control.Full.STM
     --The following are just re-exporting from the original STM
     newTVarIO,   
     readTVarIO, 
+    writeTVarIO,
     TVar(..),    
     newTVar       
 )
@@ -73,6 +74,9 @@ newTVar x = STM $ \s -> case newTVar# x s of
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> unsafeCoerce# atomically# c s)
 
+writeTVarIO :: TVar a -> a -> IO()
+writeTVarIO (TVar tv) a = IO $ \s -> unsafeCoerce# writeTVarIO# tv a s
+
 {-
 -- |Retry execution of the current memory transaction because it has seen
 -- values in TVars which mean that it should not continue (e.g. the TVars
@@ -108,3 +112,6 @@ foreign import prim "stg_full_writeTVarzh" writeTVar#
 
 
 foreign import ccall "fa_printSTMStats" printStats :: IO()
+
+foreign import prim safe "stg_full_writeTVarIOzh" writeTVarIO#
+        :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
