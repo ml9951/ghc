@@ -231,6 +231,51 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         val = tvar->current_value;
     }
     
+    /* 
+    if((trec->capture_freq & 0xFFFFFFFF) == 0){//Store the continuation
+	printf("Storing continuation\n");
+	StgPTRecWithK * entry = (StgPTRecWithK *)allocate(cap, sizeofW(StgPTRecWithK));
+	SET_HDR(entry , &stg_PTREC_WITHK_info, CCS_SYSTEM);
+	entry->tvar = tvar;
+	entry->read_value = val;
+	entry->next = trec->read_set;
+	entry->write_set = trec->write_set;
+	entry->continuation = k;
+	entry->prev_k = trec->lastK;
+	trec->read_set = TO_WITHOUTK(entry);
+	trec->lastK = entry;
+
+	if(trec->numK == KBOUND-1){
+	    int numK = trec->numK;
+	    while(entry != TO_WITHK(NO_PTREC)){
+		if(entry->prev_k != TO_WITHK(NO_PTREC)){
+		    StgPTRecWithK * dropped = entry->prev_k;
+		    dropped->continuation = TO_CLOSURE(NO_PTREC);
+		    entry->prev_k = entry->prev_k->prev_k;
+		    entry = entry->prev_k;
+		    SET_HDR(dropped, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
+		    numK--;
+		}else{
+		    break;
+		}
+	    }
+	    trec->numK = numK + 1;
+	    trec->capture_freq <<= 1;
+	    trec->capture_freq |= (trec->capture_freq >> 32);
+	}else{
+	    trec->numK++;
+	}
+    }else{//Don't store the continuation
+	StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
+	SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
+	entry->tvar = tvar;
+	entry->read_value = val;
+	entry->next = trec->read_set;
+	trec->read_set = entry;
+	trec->capture_freq--;
+    }
+    */
+    
     if(trec->numK < KBOUND){//Still room for more
         if((trec->capture_freq & 0xFFFFFFFF) == 0){//Store the continuation
             StgPTRecWithK * entry = (StgPTRecWithK *)allocate(cap, sizeofW(StgPTRecWithK));
@@ -282,6 +327,8 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         trec->read_set = entry;
         trec->capture_freq--;
     }
+    
+
     return val; 
 }
 

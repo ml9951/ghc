@@ -30,12 +30,6 @@
 
 static volatile unsigned long version_clock = 0;
 
-#define STATS
-
-#ifdef STATS
-static StgPASTMStats stats = {0, 0, 0, 0, 0};
-#endif
-
 StgPTRecHeader * fa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
@@ -84,7 +78,6 @@ static StgClosure * fa_validate(StgPTRecHeader * trec){
 	    return PASTM_FAIL;
 	}
 	shouldAbort = TRUE;
-
 #endif
 
         trec->read_version = time;

@@ -24,9 +24,7 @@ module Control.STMHaskell.STM (
         TVar,
         atomically,
         newTVar,
-        newTVarIO,
         readTVar,
-        readTVarIO,
         writeTVar,
         printStats
   ) where

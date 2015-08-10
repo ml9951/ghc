@@ -11,6 +11,8 @@ import Control.Concurrent(forkOn)
 import Text.Printf
 import System.Environment
 
+import Dump
+
 data Opts = Opts
      { iters     :: Int
      , threads   :: Int
@@ -58,7 +60,7 @@ threadLoop l opts i (r:rands) times =
                    else do 
                         size <- getSize l
                         start <- getTime
-                        delete l (r `mod` fromIntegral size)
+                        deleteIndex l (r `mod` fromIntegral size)
                         end <- getTime
                         threadLoop l opts (i-1) rands ((Delete, r, size, end-start::Double):times)
 
@@ -88,7 +90,7 @@ main = do
      print opts
      l <- newList
 
-     mapM_ (\x -> add l (x::Word)) (take (initSize opts) (randoms (mkStdGen $ numCapabilities+1)))
+     mapM_ (\x -> addIO l (x::Word)) (take (initSize opts) (randoms (mkStdGen $ numCapabilities+1)))
      s <- getSizeIO l
      putStrLn("Starting with list at size " ++ show s)
 

@@ -28,12 +28,6 @@ module Control.CPSFull.STM
     atomically,
     STM(..),
     printStats,
-  --  retry,
-  --  orElse,
-    --The following are just re-exporting from the original STM
-    newTVarIO,   
-    readTVarIO, 
-    writeTVarIO,
     TVar(..),    
     newTVar       
 )
@@ -41,7 +35,7 @@ where
 
 
 
-import GHC.Conc.Sync(TVar(..), readTVarIO, newTVarIO)
+import GHC.Conc.Sync(TVar(..))
 import GHC.Base(State#, RealWorld, IO(..), ap, newTVar#, TVar#)
 import GHC.Prim(Any, unsafeCoerce# )
 
@@ -100,9 +94,6 @@ orElse (STM m) e = STM $ \c -> \s ->
        in pcatchRetry# m' (unSTM e c) (\a -> m') s
 -}
 
-writeTVarIO :: TVar a -> a -> IO()
-writeTVarIO (TVar tv) a = IO $ \s -> unsafeCoerce# writeTVarIO# tv a s
-
 foreign import prim "stg_full_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
 {-         FFI won't accept this type...
@@ -118,6 +109,3 @@ foreign import prim "stg_full_writeTVarzh" writeTVar#
 
 
 foreign import ccall "fa_printSTMStats" printStats :: IO()
-
-foreign import prim safe "stg_full_writeTVarIOzh" writeTVarIO#
-        :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)

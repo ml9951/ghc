@@ -7,18 +7,13 @@ module Control.Chunked.STM
     atomically,
     STM(..),
     printStats,
-  --  retry,
-  --  orElse,
-    --The following are just re-exporting from the original STM
-    newTVarIO,   
-    readTVarIO, 
     TVar(..),    
     newTVar       
 )
 where
 
 
-import GHC.Conc.Sync(TVar(..), readTVarIO, newTVarIO)
+import GHC.Conc.Sync(TVar(..))
 import GHC.Base(State#, RealWorld, IO(..), ap, newTVar#, TVar#)
 import GHC.Prim(Any, unsafeCoerce# )
 

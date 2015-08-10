@@ -230,9 +230,3 @@ stg_newTL2TVarzh (P_ init)
     return (tv);
 }
 
-stg_readTL2TVarIOzh(P_ tvar)
-{
-    P_ result;
-    result = StgTL2TVar_current_value(tvar);
-    return(result);
-}

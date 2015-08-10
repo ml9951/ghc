@@ -30,8 +30,6 @@
 
 static volatile unsigned long version_clock = 0;
 
-#define STATS
-
 #ifdef STATS
 static StgPASTMStats stats = {0, 0, 0, 0, 0};
 #endif
@@ -190,6 +188,7 @@ void fa_printSTMStats(){
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.eagerFullAborts);
+    printf("Timestamp Extensions = %lu\n", stats.tsExtensions);
     printf("Number of Commits = %lu\n", stats.numCommits);
 #endif
 }

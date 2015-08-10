@@ -31,16 +31,13 @@ module Control.Partial.STM
     retry,
     orElse,
     --The following are just re-exporting from the original STM
-    newTVarIO,   
-    readTVarIO, 
-    writeTVarIO,
     TVar(..),    
     newTVar       
 )
 where
 
 
-import GHC.Conc.Sync(TVar(..), readTVarIO, newTVarIO)
+import GHC.Conc.Sync(TVar(..))
 import GHC.Base(State#, RealWorld, IO(..), ap, newTVar#, TVar#)
 import GHC.Prim(Any, unsafeCoerce# )
 
@@ -98,9 +95,6 @@ orElse (STM m) e = STM $ \c -> \s ->
         case unsafeCoerce# pcatchRetry# (m (unsafeCoerce# popRetry#)) (unSTM e initK) s of
                (# s', t #) -> c t s'
 
-writeTVarIO :: TVar a -> a -> IO ()
-writeTVarIO (TVar tv) a = IO $ \s -> unsafeCoerce# writeTVarIO# tv a s
-
 foreign import prim safe "stg_partial_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
 
@@ -121,6 +115,3 @@ foreign import prim safe "stg_partial_catchRetryzh" pcatchRetry#
 
 foreign import prim safe "stg_partial_popRetry" popRetry#
         :: Any() -> State# RealWorld -> (# State# RealWorld, a #)
-
-foreign import prim safe "stg_partial_writeTVarIOzh" writeTVarIO#
-        :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
