@@ -23,7 +23,7 @@ STATS = -optc-DSTATS
 
 .PHONY:	partial full stmHaskell ordered clean partialTL2
 
-all:	partial full stmHaskell ordered
+all:	partial full stmHaskell ordered partialTL2 cpsFull chunked ff
 
 partial:	ordered-linked-list.hs Main.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(STATS) $(PARTIAL_FILES) -fforce-recomp ordered-linked-list.hs Main.hs -o partial$(OPT)
@@ -50,5 +50,5 @@ ff:	ordered-linked-list.hs Main.hs
 	$(GHC) $(THREADED) $(DEBUG) $(STATS) $(OPT) $(FF_FILES) -DFF -fforce-recomp ordered-linked-list.hs Main.hs -o ff$(OPT)
 
 clean:	
-	rm -f *.o *.hi ordered ordered-O* stmHaskell* full* partial* tl2*
+	rm -f *.o *.hi ordered ordered-O* stmHaskell* full* partial* tl2* cpsFull* chunked* ff*
 
