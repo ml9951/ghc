@@ -299,6 +299,11 @@ initCapability( Capability *cap, nat i )
     cap->pastmStats.fastForwardAttempts = 0;
     cap->pastmStats.fastForwards = 0;
 
+    cap->profileSTM.readTime = 0;
+    cap->profileSTM.eagerValidationTime = 0;
+    cap->profileSTM.commitValidationTime = 0;
+    cap->profileSTM.commitTime = 0;
+
     cap->transaction_tokens = 0;
     cap->context_switch = 0;
     cap->pinned_object_block = NULL;
@@ -345,6 +350,25 @@ void getStats(StgPASTMStats * stats){
     }
 }
 
+#define TO_SECS(x)(1.0e-9 * (double)(x))
+
+void printSTMProfile(){
+    nat i;
+
+    printf("Capability  |   Read Time  |  Eager Validation Time  |  Commit Validation Time  |  Commit Time\n");
+    printf("----------------------------------------------------------------------------------------------\n");
+    
+
+    for(i = 0; i < n_capabilities; i++){
+        
+        STMProfiling prof = capabilities[i]->profileSTM;
+        
+
+        printf("%-10d  |  %-10f  |  %-10f             |  %-10f              |  %-10f\n", i, 
+               TO_SECS(prof.readTime), TO_SECS(prof.eagerValidationTime),
+               TO_SECS(prof.commitValidationTime), TO_SECS(prof.commitTime));
+    }
+}
 
 /* ---------------------------------------------------------------------------
  * Function:  initCapabilities()

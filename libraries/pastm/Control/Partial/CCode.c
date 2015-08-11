@@ -4,6 +4,20 @@
 #include "sm/Storage.h"
 #include <stdio.h>
 
+#if defined(HAVE_MACH_ABSOLUTE_TIME)
+#  include <mach/mach_time.h>
+#elif defined(HAVE_CLOCK_GETTIME)
+#  include <time.h>
+#else
+#  include <time.h>
+#  include <sys/time.h>
+#endif
+
+#define US_PER_NANOSECOND     1000
+#define MS_PER_SECOND  	      1000
+#define US_PER_SECOND	      (1000 * MS_PER_SECOND)
+#define NS_PER_SECOND	      (1000 * US_PER_SECOND)
+
 #define TRUE 1
 #define FALSE 0
 #define KBOUND 20
@@ -24,6 +38,7 @@
 #define WRITESET_HEADER            &stg_WRITE_SET_info
 
 #define TRACE(_x...) printf(_x)
+#define TimeToSecondsDbl(t) ((double)(t) / TIME_RESOLUTION)
 
 static volatile unsigned long version_clock = 0;
 
@@ -199,10 +214,28 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
     }
 }
 
+STATIC_INLINE uint64_t TIMER_Now ()
+{
+#if defined(HAVE_MACH_ABSOLUTE_TIME)
+    return mach_absolute_time();
+#elif defined(HAVE_CLOCK_GETTIME)
+    struct timespec t;
+    clock_gettime (CLOCK_REALTIME, &t);
+    return (NS_PER_SECOND * (uint64_t)t.tv_sec) + (uint64_t)t.tv_nsec;
+#else
+    struct timeval t;
+    gettimeofday (&t, 0);
+    return (NS_PER_SECOND * (uint64_t)t.tv_sec) + (US_PER_NANOSECOND * (uint64_t)t.tv_usec);
+#endif
+}
+
 StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
 			    StgTVar * tvar, StgClosure * k){
+#ifdef STMPROF
+    uint64_t startRead = TIMER_Now();
+#endif
+    
     StgWriteSet * ws = trec->write_set;
-
     while(ws != TO_WRITE_SET(NO_PTREC)){
         if(ws->tvar == tvar){
             return ws->val;
@@ -214,21 +247,33 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     StgClosure * val = tvar->current_value;
 
     while(trec->read_version != version_clock){
+#ifdef STMPROF	
+	uint64_t startValidate = getThreadCPUTime();
+#endif
 	StgPTRecWithK * checkpoint = pa_validate(trec, cap);
         if(checkpoint != TO_WITHK(PASTM_SUCCESS)){
 #ifdef STATS
 	    if(checkpoint == TO_WITHK(PASTM_FAIL)){
 		cap->pastmStats.eagerFullAborts++;
+#ifdef STMPROF
+		cap->profileSTM.eagerValidationTime += TIMER_Now() - startValidate;
+#endif
 		return TO_CLOSURE(checkpoint);
 	    }
 	    cap->pastmStats.eagerPartialAborts++;
+#endif
+#ifdef STMPROF
+	    cap->profileSTM.eagerValidationTime += TIMER_Now() - startValidate;
 #endif
 	    return TO_CLOSURE(checkpoint);
         }
 #ifdef STATS
 	cap->pastmStats.tsExtensions++;
 #endif
-        val = tvar->current_value;
+#ifdef STMPROF
+	cap->profileSTM.eagerValidationTime += TIMER_Now() - startValidate;
+#endif
+	val = tvar->current_value;
     }
     
     /* 
@@ -327,8 +372,9 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         trec->read_set = entry;
         trec->capture_freq--;
     }
-    
-
+#ifdef STMPROF
+    cap->profileSTM.readTime += TIMER_Now() - startRead;
+#endif
     return val; 
 }
 
@@ -346,6 +392,10 @@ void pa_stmWriteTVar(Capability *cap,
 
 StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
+#ifdef STMPROF
+    uint64_t startCommit = TIMER_Now();
+#endif 
+
 #ifdef ABORT
     StgPTRecWithK * checkpoint = pa_validate(trec, cap);
     if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
@@ -355,18 +405,30 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
     unsigned long snapshot = trec->read_version;
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
+#ifdef STMPROF
+	uint64_t startValidate = TIMER_Now();
+#endif
 	StgPTRecWithK * checkpoint = pa_validate(trec, cap);
         if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
 #ifdef STATS
 	    if(checkpoint == TO_WITHK(PASTM_FAIL)){
 		cap->pastmStats.commitTimeFullAborts++;
+#ifdef STMPROF
+		cap->profileSTM.commitValidationTime += TIMER_Now() - startValidate;
+#endif 
 		return checkpoint;
 	    }
 	    cap->pastmStats.commitTimePartialAborts++;
 #endif
+#ifdef STMPROF
+	    cap->profileSTM.commitValidationTime += TIMER_Now() - startValidate;
+#endif 
 	    return checkpoint;
         }
         snapshot = trec->read_version;
+#ifdef STMPROF
+	cap->profileSTM.commitValidationTime += TIMER_Now() - startValidate;
+#endif 
     }
     
     StgWriteSet * one, * two;
@@ -400,6 +462,9 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     trec->tail = TO_WITHOUTK(NO_PTREC);
     
     version_clock = snapshot + 2;//unlock clock
+#ifdef STMPROF
+    cap->profileSTM.commitTime += TIMER_Now() - startCommit;
+#endif 
     return (StgPTRecWithK *)PASTM_SUCCESS;
 }
 

@@ -7,14 +7,14 @@ DEBUG = -rtsopts
 
 
 
-ORDEREDREMSET_FILES = ../../Control/OrderedRemSet/CmmHooks.cmm ../../Control/OrderedRemSet/CCode.c ../../Control/OrderedRemSet/STM.hs -I../../../../rts ../../Control/STM_IO/STM.hs ../../Control/STM_IO/CmmHooks.cmm
-FULL_FILES = ../../Control/Full/CmmHooks.cmm ../../Control/Full/CCode.c ../../Control/Full/STM.hs -I../../../../rts ../../Control/STM_IO/STM.hs ../../Control/STM_IO/CmmHooks.cmm
-PARTIAL_FILES = ../../Control/Partial/CmmHooks.cmm ../../Control/Partial/CCode.c ../../Control/Partial/STM.hs -I../../../../rts ../../Control/STM_IO/STM.hs ../../Control/STM_IO/CmmHooks.cmm
-CPSFULL_FILES = ../../Control/CPSFull/CmmHooks.cmm ../../Control/CPSFull/CCode.c ../../Control/CPSFull/STM.hs -I../../../../rts ../../Control/STM_IO/STM.hs ../../Control/STM_IO/CmmHooks.cmm
-PTL2_FILES = ../../Control/PartialTL2/CmmHooks.cmm ../../Control/PartialTL2/CCode.c ../../Control/PartialTL2/STM.hs -I../../../../rts ../../Control/STM_IO/STM.hs ../../Control/STM_IO/CmmHooks.cmm
-CHUNKED_FILES = ../../Control/Chunked/CmmHooks.cmm ../../Control/Chunked/CCode.c ../../Control/Chunked/STM.hs -I../../../../rts ../../Control/STM_IO/STM.hs ../../Control/STM_IO/CmmHooks.cmm
-FF_FILES = ../../Control/FastForward/CmmHooks.cmm ../../Control/FastForward/CCode.c ../../Control/FastForward/STM.hs -I../../../../rts ../../Control/STM_IO/STM.hs ../../Control/STM_IO/CmmHooks.cmm
-STMHASKELL_FILES = ../../Control/STM_IO/STM.hs ../../Control/STM_IO/CmmHooks.cmm ../../Control/STMHaskell/STM.hs
+ORDEREDREMSET_FILES = ../../Control/OrderedRemSet/CmmHooks.cmm ../../Control/OrderedRemSet/CCode.c ../../Control/OrderedRemSet/STM.hs -I../../../../rts ../../Control/Common/STM.hs ../../Control/Common/CmmHooks.cmm
+FULL_FILES = ../../Control/Full/CmmHooks.cmm ../../Control/Full/CCode.c ../../Control/Full/STM.hs -I../../../../rts ../../Control/Common/STM.hs ../../Control/Common/CmmHooks.cmm
+PARTIAL_FILES = ../../Control/Partial/CmmHooks.cmm ../../Control/Partial/CCode.c ../../Control/Partial/STM.hs -I../../../../rts ../../Control/Common/STM.hs ../../Control/Common/CmmHooks.cmm
+CPSFULL_FILES = ../../Control/CPSFull/CmmHooks.cmm ../../Control/CPSFull/CCode.c ../../Control/CPSFull/STM.hs -I../../../../rts ../../Control/Common/STM.hs ../../Control/Common/CmmHooks.cmm
+PTL2_FILES = ../../Control/PartialTL2/CmmHooks.cmm ../../Control/PartialTL2/CCode.c ../../Control/PartialTL2/STM.hs -I../../../../rts ../../Control/Common/STM.hs ../../Control/Common/CmmHooks.cmm
+CHUNKED_FILES = ../../Control/Chunked/CmmHooks.cmm ../../Control/Chunked/CCode.c ../../Control/Chunked/STM.hs -I../../../../rts ../../Control/Common/STM.hs ../../Control/Common/CmmHooks.cmm
+FF_FILES = ../../Control/FastForward/CmmHooks.cmm ../../Control/FastForward/CCode.c ../../Control/FastForward/STM.hs -I../../../../rts ../../Control/Common/STM.hs ../../Control/Common/CmmHooks.cmm
+STMHASKELL_FILES = ../../Control/Common/STM.hs ../../Control/Common/CmmHooks.cmm ../../Control/STMHaskell/STM.hs
 
 
 OPT = 

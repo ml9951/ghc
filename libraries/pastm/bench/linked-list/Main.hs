@@ -11,6 +11,8 @@ import Control.Concurrent(forkOn)
 import Text.Printf
 import System.Environment
 
+import Control.Common.STM
+
 import Dump
 
 data Opts = Opts
@@ -104,6 +106,7 @@ main = do
      writeFile (name ++ "Times.txt") strings
      s <- getSizeIO l
      putStrLn ("List size is " ++ show s)
+     printSTMProfile
      return()
 
 foreign import ccall unsafe "hs_gettime" getTime :: IO Double

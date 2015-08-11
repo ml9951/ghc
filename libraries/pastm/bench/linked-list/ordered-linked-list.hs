@@ -20,7 +20,7 @@ import Control.FastForward.STM
 import Control.Partial.STM
 #endif
 
-import Control.IO.STM
+import Control.Common.STM
 import Dump
 
 data List a = Node a (TVar (List a)) --{val :: a, next :: (TVar (List a))}

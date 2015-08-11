@@ -465,6 +465,13 @@ typedef struct StgPASTMStats_{
     StgInt64  fastForwards;
 } StgPASTMStats;
 
+typedef struct STMProfiling_{
+    unsigned long readTime;
+    unsigned long eagerValidationTime;
+    unsigned long commitValidationTime;
+    unsigned long commitTime;
+}STMProfiling;
+
 typedef struct {
     StgHeader                  header;
     StgClosure                *volatile current_value;

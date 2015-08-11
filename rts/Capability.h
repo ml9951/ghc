@@ -146,7 +146,9 @@ struct Capability_ {
     StgPTRecChunk * free_ptrec_chunks;
 
     StgPASTMStats pastmStats;
-
+    
+    STMProfiling profileSTM;
+    
 } // typedef Capability is defined in RtsAPI.h
   // We never want a Capability to overlap a cache line with anything
   // else, so round it up to a cache line size:
@@ -435,7 +437,7 @@ INLINE_HEADER rtsBool emptyInbox(Capability *cap)
 #endif
 
 void getStats(StgPASTMStats * stats);
-
+void printSTMProfile(void);
 
 #include "EndPrivate.h"
 
