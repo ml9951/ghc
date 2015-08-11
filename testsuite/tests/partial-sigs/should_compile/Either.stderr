@@ -1,5 +1,5 @@
 TYPE SIGNATURES
-  barry :: forall t. t -> (Either [Char] t, Either [Char] t)
+  barry :: forall w_a. w_a -> (Either [Char] w_a, Either [Char] w_a)
 TYPE CONSTRUCTORS
 COERCION AXIOMS
 Dependent modules: []

@@ -79,8 +79,7 @@ buildPDataDataCon orig_name vect_tc repr_tc repr
       fam_envs  <- readGEnv global_fam_inst_env
       liftDs $ buildDataCon fam_envs dc_name
                             False                  -- not infix
-                            (map (const no_bang) comp_tys)
-                            (Just $ map (const HsLazy) comp_tys)
+                            (map (const HsLazy) comp_tys)
                             []                     -- no field labels
                             tvs
                             []                     -- no existentials
@@ -89,8 +88,6 @@ buildPDataDataCon orig_name vect_tc repr_tc repr
                             comp_tys
                             (mkFamilyTyConApp repr_tc (mkTyVarTys tvs))
                             repr_tc
-  where
-    no_bang = HsSrcBang Nothing NoSrcUnpack NoSrcStrict
 
 
 -- buildPDatasTyCon -----------------------------------------------------------
@@ -121,8 +118,7 @@ buildPDatasDataCon orig_name vect_tc repr_tc repr
       fam_envs <- readGEnv global_fam_inst_env
       liftDs $ buildDataCon fam_envs dc_name
                             False                  -- not infix
-                            (map (const no_bang) comp_tys)
-                            (Just $ map (const HsLazy) comp_tys)
+                            (map (const HsLazy) comp_tys)
                             []                     -- no field labels
                             tvs
                             []                     -- no existentials
@@ -131,8 +127,6 @@ buildPDatasDataCon orig_name vect_tc repr_tc repr
                             comp_tys
                             (mkFamilyTyConApp repr_tc (mkTyVarTys tvs))
                             repr_tc
-  where
-     no_bang = HsSrcBang Nothing NoSrcUnpack NoSrcStrict
 
 
 -- Utils ----------------------------------------------------------------------

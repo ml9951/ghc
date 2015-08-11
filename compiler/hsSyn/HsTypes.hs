@@ -28,8 +28,7 @@ module HsTypes (
         HsTyLit(..),
         HsIPName(..), hsIPNameFS,
 
-        LBangType, BangType,
-        HsSrcBang(..), HsImplBang(..),
+        LBangType, BangType, HsBang(..), HsSrcBang, HsImplBang,
         SrcStrictness(..), SrcUnpackedness(..),
         getBangType, getBangStrictness,
 
@@ -64,7 +63,7 @@ import PlaceHolder ( PostTc,PostRn,DataId,PlaceHolder(..) )
 
 import Name( Name )
 import RdrName( RdrName )
-import DataCon( HsSrcBang(..), HsImplBang(..),
+import DataCon( HsBang(..), HsSrcBang, HsImplBang,
                 SrcStrictness(..), SrcUnpackedness(..) )
 import TysPrim( funTyConName )
 import Type
@@ -100,7 +99,7 @@ getBangType ty                    = ty
 
 getBangStrictness :: LHsType a -> HsSrcBang
 getBangStrictness (L _ (HsBangTy s _)) = s
-getBangStrictness _ = (HsSrcBang Nothing NoSrcUnpack NoSrcStrict)
+getBangStrictness _ = HsSrcBang Nothing NoSrcUnpack NoSrcStrictness
 
 {-
 ************************************************************************

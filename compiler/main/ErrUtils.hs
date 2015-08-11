@@ -104,25 +104,12 @@ type WarnMsg = ErrMsg
 
 data Severity
   = SevOutput
-  | SevFatal
-  | SevInteractive
-
   | SevDump
-    -- Log messagse intended for compiler developers
-    -- No file/line/column stuff
-
+  | SevInteractive
   | SevInfo
-    -- Log messages intended for end users.
-    -- No file/line/column stuff.
-
   | SevWarning
   | SevError
-    -- SevWarning and SevError are used for warnings and errors
-    --   o The message has a file/line/column heading,
-    --     plus "warning:" or "error:",
-    --     added by mkLocMessags
-    --   o Output is intended for end users
-
+  | SevFatal
 
 instance Show ErrMsg where
     show em = errMsgShortString em

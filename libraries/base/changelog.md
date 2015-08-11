@@ -19,22 +19,17 @@
 
   * `(,) a` now has a `Monad` instance
 
-  * `ZipList` now has `Foldable` and `Traversable` instances
-
-  * `Identity` now has a `Monoid` instance
-
-  * `()` now has a `Storable` instance
-
   * Redundant typeclass constraints have been removed:
      - `Data.Ratio.{denominator,numerator}` have no `Integral` constraint anymore
      - **TODO**
+
+  * New module `GHC.SrcLoc`
 
   * New `GHC.Generics.packageName` operation
 
   * New `GHC.Stack.CallStack` data type
 
-  * `Complex` now has `Generic`, `Generic1`, `Functor`, `Foldable`, `Traversable`,
-    `Applicative`, and `Monad` instances
+  * `Complex` now has a `Generic` instance
 
   * `System.Exit.ExitCode` now has a `Generic` instance
 
@@ -53,17 +48,11 @@
   * New function `GHC.IO.interruptible` used to correctly implement
     `Control.Exception.allowInterrupt` (#9516)
 
-  * Made `PatternMatchFail`, `RecSelError`, `RecConError`, `RecUpdError`,
-    `NoMethodError`, and `AssertionFailed` newtypes (#10738)
-
-## 4.8.1.0  *Jul 2015*
+## 4.8.1.0  *TBA*
 
   * Bundled with GHC 7.10.2
 
   * `Lifetime` is now exported from `GHC.Event`
-
-  * Implicit-parameter based source location support exposed in `GHC.SrcLoc`.
-    See GHC User's Manual for more information.
 
 ## 4.8.0.0  *Mar 2015*
 

@@ -118,7 +118,7 @@ allocationLimitExceeded = toException AllocationLimitExceeded
 -----
 
 -- |'assert' was applied to 'False'.
-newtype AssertionFailed = AssertionFailed String
+data AssertionFailed = AssertionFailed String
 
 instance Exception AssertionFailed
 

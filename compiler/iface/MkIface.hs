@@ -1331,7 +1331,7 @@ checkDependencies hsc_env summary iface
    this_pkg = thisPackage (hsc_dflags hsc_env)
 
    dep_missing (L _ (ImportDecl { ideclName = L _ mod, ideclPkgQual = pkg })) = do
-     find_res <- liftIO $ findImportedModule hsc_env mod (fmap sl_fs pkg)
+     find_res <- liftIO $ findImportedModule hsc_env mod (fmap snd pkg)
      let reason = moduleNameString mod ++ " changed"
      case find_res of
         FoundModule h -> check_mod reason (fr_mod h)
@@ -1710,10 +1710,7 @@ tyConToIfaceDecl env tycon
                     ifConArgTys  = map (tidyToIfaceType con_env2) arg_tys,
                     ifConFields  = map getOccName
                                        (dataConFieldLabels data_con),
-                    ifConStricts = map (toIfaceBang con_env2)
-                                       (dataConImplBangs data_con),
-                    ifConSrcStricts = map toIfaceSrcBang
-                                          (dataConSrcBangs data_con)}
+                    ifConStricts = map (toIfaceBang con_env2) (dataConImplBangs data_con) }
         where
           (univ_tvs, ex_tvs, eq_spec, theta, arg_tys, _) = dataConFullSig data_con
 
@@ -1735,9 +1732,7 @@ toIfaceBang _    HsLazy              = IfNoBang
 toIfaceBang _   (HsUnpack Nothing)   = IfUnpack
 toIfaceBang env (HsUnpack (Just co)) = IfUnpackCo (toIfaceCoercion (tidyCo env co))
 toIfaceBang _   HsStrict             = IfStrict
-
-toIfaceSrcBang :: HsSrcBang -> IfaceSrcBang
-toIfaceSrcBang (HsSrcBang _ unpk bang) = IfSrcBang unpk bang
+toIfaceBang _   (HsSrcBang {})       = panic "toIfaceBang"
 
 classToIfaceDecl :: TidyEnv -> Class -> (TidyEnv, IfaceDecl)
 classToIfaceDecl env clas

@@ -1,12 +1,12 @@
 -- (c) The University of Glasgow 2012
 
-{-# LANGUAGE CPP, DataKinds, DeriveDataTypeable, GADTs, KindSignatures, ScopedTypeVariables, StandaloneDeriving #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, GADTs, ScopedTypeVariables #-}
 
 -- | Module for coercion axioms, used to represent type family instances
 -- and newtypes
 
 module CoAxiom (
-       BranchFlag, Branched, Unbranched, BranchIndex, BranchList(..),
+       Branched, Unbranched, BranchIndex, BranchList(..),
        toBranchList, fromBranchList,
        toBranchedList, toUnbranchedList,
        brListLength, brListNth, brListMap, brListFoldr, brListMapM,
@@ -108,6 +108,13 @@ declaring whether it is known to be a singleton or not. The list of branches
 is stored using a special form of list, declared below, that ensures that the
 type variable is accurate.
 
+As of this writing (Dec 2012), it would not be appropriate to use a promoted
+type as the phantom type, so we use empty datatypes. We wish to have GHC
+remain compilable with GHC 7.2.1. If you are revising this code and GHC no
+longer needs to remain compatible with GHC 7.2.x, then please update this
+code to use promoted types.
+
+
 ************************************************************************
 *                                                                      *
                     Branch lists
@@ -118,17 +125,11 @@ type variable is accurate.
 type BranchIndex = Int  -- The index of the branch in the list of branches
                         -- Counting from zero
 
--- promoted data type
-data BranchFlag = Branched | Unbranched
-type Branched = 'Branched
-deriving instance Typeable 'Branched
-type Unbranched = 'Unbranched
-deriving instance Typeable 'Unbranched
--- By using type synonyms for the promoted constructors, we avoid needing
--- DataKinds and the promotion quote in client modules. This also means that
--- we don't need to export the term-level constructors, which should never be used.
+-- the phantom type labels
+data Unbranched deriving Typeable
+data Branched deriving Typeable
 
-data BranchList a (br :: BranchFlag) where
+data BranchList a br where
   FirstBranch :: a -> BranchList a br
   NextBranch :: a -> BranchList a br -> BranchList a Branched
 

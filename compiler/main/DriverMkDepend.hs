@@ -30,7 +30,6 @@ import Panic
 import SrcLoc
 import Data.List
 import FastString
-import BasicTypes ( StringLiteral(..) )
 
 import Exception
 import ErrUtils
@@ -227,7 +226,7 @@ processDeps dflags hsc_env excl_mods root hdl (AcyclicSCC node)
                 -- Emit a dependency for each import
 
         ; let do_imps is_boot idecls = sequence_
-                    [ do_imp loc is_boot (fmap sl_fs $ ideclPkgQual i) mod
+                    [ do_imp loc is_boot (fmap snd $ ideclPkgQual i) mod
                     | L loc i <- idecls,
                       let mod = unLoc (ideclName i),
                       mod `notElem` excl_mods ]

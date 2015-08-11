@@ -10,9 +10,9 @@ TcPat: Typechecking patterns
 
 module TcPat ( tcLetPat, TcSigFun
              , TcPragEnv, lookupPragEnv, emptyPragEnv
-             , TcSigInfo(..), TcIdSigInfo(..), TcPatSynInfo(..), TcIdSigBndr(..)
-             , findScopedTyVars, isPartialSig, noCompleteSig
-             , completeIdSigPolyId, completeSigPolyId_maybe, completeIdSigPolyId_maybe
+             , TcSigInfo(..), TcPatSynInfo(..)
+             , findScopedTyVars, isPartialSig
+             , completeSigPolyId, completeSigPolyId_maybe
              , LetBndrSpec(..), addInlinePrags
              , tcPat, tcPats, newNoSigLetBndr
              , addDataConStupidTheta, badFieldCon, polyPatSig ) where
@@ -145,43 +145,56 @@ emptyPragEnv = emptyNameEnv
 lookupPragEnv :: TcPragEnv -> Name -> [LSig Name]
 lookupPragEnv prag_fn n = lookupNameEnv prag_fn n `orElse` []
 
-data TcSigInfo = TcIdSig     TcIdSigInfo
-               | TcPatSynSig TcPatSynInfo
+data TcSigInfo
+  = TcSigInfo {
+        sig_name    :: Name,  -- The binder name of the type signature. When
+                              -- sig_id = Just id, then sig_name = idName id.
 
-data TcIdSigInfo
-  = TISI {
-        sig_bndr   :: TcIdSigBndr,
+        sig_poly_id :: Maybe TcId,
+             -- Just f <=> the type signature had no wildcards, so the precise,
+             --            complete polymorphic type is known.  In that case,
+             --            f is the polymorphic Id, with that type
+
+             -- Nothing <=> the type signature is partial (i.e. includes one or more
+             --             wildcards). In this case it doesn't make sense to give
+             --             the polymorphic Id, because we are going to /infer/ its
+             --             type, so we can't make the polymorphic Id ab-initio
+             --
+             -- See Note [Complete and partial type signatures]
 
         sig_tvs    :: [(Maybe Name, TcTyVar)],
                            -- Instantiated type and kind variables
                            -- Just n <=> this skolem is lexically in scope with name n
                            -- See Note [Binding scoped type variables]
 
+        sig_nwcs   :: [(Name, TcTyVar)],
+                           -- Instantiated wildcard variables
+                           -- If sig_poly_id = Just f, then sig_nwcs must be empty
+
+        sig_extra_cts :: Maybe SrcSpan,
+                           -- Just loc <=> An extra-constraints wildcard was present
+                           --              at location loc
+                           --   e.g.   f :: (Eq a, _) => a -> a
+                           -- Any extra constraints inferred during
+                           -- type-checking will be added to the sig_theta.
+                           -- If sig_poly_id = Just f, sig_extra_cts must be Nothing
+
         sig_theta  :: TcThetaType,  -- Instantiated theta
         sig_tau    :: TcSigmaType,  -- Instantiated tau
                                     -- See Note [sig_tau may be polymorphic]
 
-        sig_ctxt   :: UserTypeCtxt, -- FunSigCtxt or CheckSigCtxt
-        sig_loc    :: SrcSpan       -- Location of the type signature
+        sig_loc    :: SrcSpan,      -- The location of the signature
+
+        sig_warn_redundant :: Bool  -- True <=> report redundant constraints
+                                    --          when typechecking the value binding
+                                    --          for this type signature
+           -- This is usually True, but False for
+           --   * Record selectors (not important here)
+           --   * Class and instance methods.  Here the code may legitimately
+           --     be more polymorphic than the signature generated from the
+           --     class declaration
     }
-
-data TcIdSigBndr   -- See Note [Complete and partial type signatures]
-  = CompleteSig    -- A complete signature with no wildards,
-                   -- so the complete polymorphic type is known.
-        TcId          -- The polymoprhic Id with that type
-
-  | PartialSig     -- A partial type signature (i.e. includes one or more
-                   -- wildcards). In this case it doesn't make sense to give
-                   -- the polymorphic Id, because we are going to /infer/ its
-                   -- type, so we can't make the polymorphic Id ab-initio
-       { sig_name  :: Name              -- Name of the function
-       , sig_hs_ty :: LHsType Name      -- The original partial signatur
-       , sig_nwcs  :: [(Name, TcTyVar)] -- Instantiated wildcard variables
-       , sig_cts   :: Maybe SrcSpan     -- Just loc <=> An extra-constraints wildcard was present
-       }                                --              at location loc
-                                        --   e.g.   f :: (Eq a, _) => a -> a
-                                        -- Any extra constraints inferred during
-                                        -- type-checking will be added to the sig_theta.
+  | TcPatSynInfo TcPatSynInfo
 
 data TcPatSynInfo
   = TPSI {
@@ -211,56 +224,35 @@ findScopedTyVars hs_ty sig_ty inst_tvs
     scoped_names = mkNameSet (hsExplicitTvs hs_ty)
     (sig_tvs,_)  = tcSplitForAllTys sig_ty
 
-instance NamedThing TcIdSigInfo where
-    getName (TISI { sig_bndr = bndr }) = getName bndr
-
-instance NamedThing TcIdSigBndr where
-    getName (CompleteSig id)              = idName id
-    getName (PartialSig { sig_name = n }) = n
-
 instance NamedThing TcSigInfo where
-    getName (TcIdSig     idsi) = getName     idsi
-    getName (TcPatSynSig tpsi) = patsig_name tpsi
+    getName TcSigInfo{ sig_name = name } = name
+    getName (TcPatSynInfo tpsi) = patsig_name tpsi
+
 
 instance Outputable TcSigInfo where
-  ppr (TcIdSig     idsi) = ppr idsi
-  ppr (TcPatSynSig tpsi) = text "TcPatSynInfo" <+> ppr tpsi
-
-instance Outputable TcIdSigInfo where
-    ppr (TISI { sig_bndr = bndr, sig_tvs = tyvars
-              , sig_theta = theta, sig_tau = tau })
-        = ppr bndr <+> dcolon <+>
+    ppr (TcSigInfo { sig_name = name, sig_poly_id = mb_poly_id, sig_tvs = tyvars
+                   , sig_theta = theta, sig_tau = tau })
+        = maybe (ppr name) ppr mb_poly_id <+> dcolon <+>
           vcat [ pprSigmaType (mkSigmaTy (map snd tyvars) theta tau)
                , ppr (map fst tyvars) ]
-
-instance Outputable TcIdSigBndr where
-  ppr s_bndr = ppr (getName s_bndr)
+    ppr (TcPatSynInfo tpsi) = text "TcPatSynInfo" <+> ppr tpsi
 
 instance Outputable TcPatSynInfo where
     ppr (TPSI{ patsig_name = name}) = ppr name
 
-isPartialSig :: TcIdSigInfo -> Bool
-isPartialSig (TISI { sig_bndr = PartialSig {} }) = True
-isPartialSig _                                   = False
-
--- | No signature or a partial signature
-noCompleteSig :: Maybe TcSigInfo -> Bool
-noCompleteSig (Just (TcIdSig sig)) = isPartialSig sig
-noCompleteSig _                    = True
+isPartialSig :: TcSigInfo -> Bool
+isPartialSig (TcSigInfo { sig_poly_id = Nothing }) = True
+isPartialSig _ = False
 
 -- Helper for cases when we know for sure we have a complete type
 -- signature, e.g. class methods.
-completeIdSigPolyId :: TcIdSigInfo -> TcId
-completeIdSigPolyId (TISI { sig_bndr = CompleteSig id }) = id
-completeIdSigPolyId _ = panic "completeSigPolyId"
-
-completeIdSigPolyId_maybe :: TcIdSigInfo -> Maybe TcId
-completeIdSigPolyId_maybe (TISI { sig_bndr = CompleteSig id }) = Just id
-completeIdSigPolyId_maybe _                                    = Nothing
+completeSigPolyId :: TcSigInfo -> TcId
+completeSigPolyId (TcSigInfo { sig_poly_id = Just id }) = id
+completeSigPolyId _ = panic "completeSigPolyId"
 
 completeSigPolyId_maybe :: TcSigInfo -> Maybe TcId
-completeSigPolyId_maybe (TcIdSig sig)    = completeIdSigPolyId_maybe sig
-completeSigPolyId_maybe (TcPatSynSig {}) = Nothing
+completeSigPolyId_maybe (TcSigInfo { sig_poly_id = mb_id }) = mb_id
+completeSigPolyId_maybe (TcPatSynInfo {})                   = Nothing
 
 {-
 Note [Binding scoped type variables]
@@ -322,7 +314,7 @@ A type signature is partial when it contains one or more wildcards
   stored in sig_nwcs.
       f :: Bool -> _
       g :: Eq _a => _a -> _a -> Bool
-* Or an extra-constraints wildcard, stored in sig_cts:
+* Or an extra-constraints wildcard, stored in sig_extra_cts:
       h :: (Num a, _) => a -> a
 
 A type signature is a complete type signature when there are no
@@ -342,9 +334,9 @@ tcPatBndr :: PatEnv -> Name -> TcSigmaType -> TcM (TcCoercion, TcId)
 --
 tcPatBndr (PE { pe_ctxt = LetPat lookup_sig no_gen}) bndr_name pat_ty
           -- See Note [Typing patterns in pattern bindings]
-  | LetGblBndr prags   <- no_gen
-  , Just (TcIdSig sig) <- lookup_sig bndr_name
-  , Just poly_id <- completeIdSigPolyId_maybe sig
+  | LetGblBndr prags <- no_gen
+  , Just sig <- lookup_sig bndr_name
+  , Just poly_id <- sig_poly_id sig
   = do { bndr_id <- addInlinePrags poly_id (lookupPragEnv prags bndr_name)
        ; traceTc "tcPatBndr(gbl,sig)" (ppr bndr_id $$ ppr (idType bndr_id))
        ; co <- unifyPatType (idType bndr_id) pat_ty

@@ -54,7 +54,11 @@ module TcMType (
   zonkTcKind, defaultKindVarToStar,
   zonkEvVar, zonkWC, zonkSimples, zonkId, zonkCt, zonkSkolemInfo,
 
-  tcGetGlobalTyVars
+  tcGetGlobalTyVars,
+
+  --------------------------------
+  -- (Named) Wildcards
+  newWildcardVar, newWildcardVarMetaKind
   ) where
 
 #include "HsVersions.h"
@@ -100,7 +104,7 @@ kind_var_occ = mkOccName tvName "k"
 
 newMetaKindVar :: TcM TcKind
 newMetaKindVar = do { uniq <- newUnique
-                    ; details <- newMetaDetails TauTv
+                    ; details <- newMetaDetails (TauTv False)
                     ; let kv = mkTcTyVar (mkKindName uniq) superKind details
                     ; return (mkTyVarTy kv) }
 
@@ -284,11 +288,18 @@ newMetaTyVar meta_info kind
         ; let name = mkTcTyVarName uniq s
               s = case meta_info of
                         ReturnTv    -> fsLit "r"
-                        TauTv       -> fsLit "t"
+                        TauTv True  -> fsLit "w"
+                        TauTv False -> fsLit "t"
                         FlatMetaTv  -> fsLit "fmv"
                         SigTv       -> fsLit "a"
         ; details <- newMetaDetails meta_info
         ; return (mkTcTyVar name kind details) }
+
+newNamedMetaTyVar :: Name -> MetaInfo -> Kind -> TcM TcTyVar
+-- Make a new meta tyvar out of thin air
+newNamedMetaTyVar name meta_info kind
+  = do { details <- newMetaDetails meta_info
+       ; return (mkTcTyVar name kind details) }
 
 newSigTyVar :: Name -> Kind -> TcM TcTyVar
 newSigTyVar name kind
@@ -407,7 +418,7 @@ writeMetaTyVarRef tyvar ref ty
 -}
 
 newFlexiTyVar :: Kind -> TcM TcTyVar
-newFlexiTyVar kind = newMetaTyVar TauTv kind
+newFlexiTyVar kind = newMetaTyVar (TauTv False) kind
 
 newFlexiTyVarTy  :: Kind -> TcM TcType
 newFlexiTyVarTy kind = do
@@ -438,7 +449,7 @@ tcInstTyVarX :: TvSubst -> TKVar -> TcM (TvSubst, TcTyVar)
 -- an existing TyVar. We substitute kind variables in the kind.
 tcInstTyVarX subst tyvar
   = do  { uniq <- newUnique
-        ; details <- newMetaDetails TauTv
+        ; details <- newMetaDetails (TauTv False)
         ; let name   = mkSystemName uniq (getOccName tyvar)
                        -- See Note [Name of an instantiated type variable]
               kind   = substTy subst (tyVarKind tyvar)
@@ -566,13 +577,22 @@ skolemiseUnboundMetaTyVar tv details
         ; uniq <- newUnique      -- Remove it from TcMetaTyVar unique land
         ; kind <- zonkTcKind (tyVarKind tv)
         ; let tv_name = getOccName tv
-              final_name = mkInternalName uniq tv_name span
+              new_tv_name = if isWildcardVar tv
+                            then generaliseWildcardVarName tv_name
+                            else tv_name
+              final_name = mkInternalName uniq new_tv_name span
               final_kind = defaultKind kind
               final_tv   = mkTcTyVar final_name final_kind details
 
         ; traceTc "Skolemising" (ppr tv <+> ptext (sLit ":=") <+> ppr final_tv)
         ; writeMetaTyVar tv (mkTyVarTy final_tv)
         ; return final_tv }
+  where
+    -- If a wildcard type called _a is generalised, we rename it to w_a
+    generaliseWildcardVarName :: OccName -> OccName
+    generaliseWildcardVarName name | startsWithUnderscore name
+      = mkOccNameFS (occNameSpace name) (appendFS (fsLit "w") (occNameFS name))
+    generaliseWildcardVarName name = name
 
 {-
 Note [Zonking to Skolem]
@@ -949,3 +969,31 @@ tidySkolemInfo env (UnifyForAllSkol skol_tvs ty)
     ty'               = tidyType env2 ty
 
 tidySkolemInfo env info = (env, info)
+
+{-
+************************************************************************
+*                                                                      *
+        (Named) Wildcards
+*                                                                      *
+************************************************************************
+-}
+
+-- | Create a new meta var with the given kind. This meta var should be used
+-- to replace a wildcard in a type. Such a wildcard meta var can be
+-- distinguished from other meta vars with the 'isWildcardVar' function.
+newWildcardVar :: Name -> Kind -> TcM TcTyVar
+newWildcardVar name kind = newNamedMetaTyVar name (TauTv True) kind
+
+-- | Create a new meta var (which can unify with a type of any kind). This
+-- meta var should be used to replace a wildcard in a type. Such a wildcard
+-- meta var can be distinguished from other meta vars with the 'isWildcardVar'
+-- function.
+newWildcardVarMetaKind :: Name -> TcM TcTyVar
+newWildcardVarMetaKind name = do kind <- newMetaKindVar
+                                 newWildcardVar name kind
+
+-- | Return 'True' if the argument is a meta var created for a wildcard (by
+-- 'newWildcardVar' or 'newWildcardVarMetaKind').
+isWildcardVar :: TcTyVar -> Bool
+isWildcardVar tv | isTcTyVar tv, MetaTv (TauTv True) _ _ <- tcTyVarDetails tv = True
+isWildcardVar _ = False

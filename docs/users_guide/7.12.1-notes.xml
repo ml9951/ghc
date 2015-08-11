@@ -81,15 +81,6 @@
 		<literal>phantom</literal>, like it is in regular Haskell code.
 	      </para>
 	    </listitem>
-            <listitem>
-              <para>
-                Wildcards can be used in the type arguments of type/data
-                family instance declarations to indicate that the name of a
-                type variable doesn't matter. They will be replaced with new
-                unique type variables. See <xref
-                linkend="data-instance-declarations"/> for more details.
-              </para>
-            </listitem>
        </itemizedlist>
     </sect3>
 
@@ -110,17 +101,6 @@
 
                    When enabled, GHC also prints type-synonym-expanded types in
                    type errors.
-               </para>
-           </listitem>
-           <listitem>
-               <para>
-                   Added the option <option>-fcpr-anal</option>.
-
-                   When enabled, the demand analyser performs CPR analysis.
-                   It is implied by <option>-O</option>. Consequently,
-                   <option>-fcpr-off</option> is now removed, run with
-                   <option>-fno-cpr-anal</option> to get the old
-                   <option>-fcpr-off</option> behaviour.
                </para>
            </listitem>
        </itemizedlist>
@@ -176,16 +156,6 @@
                     and <literal>InfixT</literal> have also been introduced,
                     serving the same functions as their pattern and expression
                     counterparts.
-                </para>
-            </listitem>
-             <listitem>
-                 <para>
-                     Primitive chars (e.g., <literal>[| 'a'# |]</literal>) and
-                     primitive strings (e.g., <literal>[| "abc"# |]</literal>)
-                     can now be quoted with Template Haskell. The
-                     <literal>Lit</literal> data type also has a new
-                     constructor, <literal>CharPrimL</literal>, for primitive
-                     char literals.
                 </para>
             </listitem>
        </itemizedlist>
@@ -378,17 +348,7 @@
                 <para>
                     TODO FIXME.
                </para>
-            </listitem>
-            <listitem>
-              <para>
-                The <literal>HsBang</literal> type has been removed in
-                favour of <literal>HsSrcBang</literal> and
-                <literal>HsImplBang</literal>. Data constructors now
-                always carry around their strictness annotations as
-                the user wrote them, whether from an imported module
-                or not.
-              </para>
-            </listitem>
+           </listitem>
        </itemizedlist>
     </sect3>
 
@@ -509,17 +469,6 @@
                     instance.  To manually use this default implementation, you
                     can use the <literal>liftData</literal> function which is
                     now exported from <literal>Language.Haskell.TH.Syntax</literal>.
-               </para>
-          </listitem>
-           <listitem>
-               <para>
-                    <literal>Info</literal>'s constructors no longer have
-                    <literal>Fixity</literal> fields. A <literal>qReifyFixity
-                    </literal> function was added to the <literal>Quasi
-                    </literal> type class (as well as the <literal>reifyFixity
-                    </literal> function, specialized for <literal>Q</literal>)
-                    to allow lookup of fixity information for any given
-                    <literal>Name</literal>.
                </para>
            </listitem>
        </itemizedlist>

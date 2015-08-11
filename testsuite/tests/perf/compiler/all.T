@@ -416,7 +416,7 @@ test('T783',
             # 2014-09-03: 223377364 (Windows) better specialisation, raft of core-to-core optimisations
             # 2014-12-22: 235002220 (Windows) not sure why
 
-           (wordsize(64), 470738808, 10)]),
+           (wordsize(64), 548288760, 10)]),
             # prev:       349263216 (amd64/Linux)
             # 07/08/2012: 384479856 (amd64/Linux)
             # 29/08/2012: 436927840 (amd64/Linux)
@@ -437,8 +437,6 @@ test('T783',
 	    #    this test seems to be an extreme outlier.)
             # 2015-05-16: 548288760  (amd64/Linux)
 	    #   (improved sequenceBlocks in nativeCodeGen, #10422)
-            # 2015-08-07: 470738808  (amd64/Linux)
-	    #   (simplifying the switch plan code path for simple checks, #10677)
       extra_hc_opts('-static')
       ],
       compile,[''])
@@ -497,7 +495,7 @@ test('T5642',
            [(wordsize(32), 641085256, 10),
                      # sample from x86/Linux
             # prev:        650000000
-            # 2014-09-03:  753045568
+            # 2014-09-03:  753045568 
             # 2014-12-10:  641085256 Improvements in constraints solver
 
             (wordsize(64), 1282916024, 10)])
@@ -681,15 +679,3 @@ test('T9961',
       ],
      compile,
      ['-O'])
-
-test('T9233',
-    [ only_ways(['normal']),
-      compiler_stats_num_field('bytes allocated',
-        [(wordsize(64), 999826288, 5),
-	         # 999826288   4 Aug 2015   initial value
-	 (wordsize(32), 1, 5)   # Put in your value here if you hit this
-	]),
-      extra_clean(['T9233a.hi', 'T9233a.o'])
-    ],
-    multimod_compile,
-    ['T9233', '-v0 -O2 -fno-spec-constr'])

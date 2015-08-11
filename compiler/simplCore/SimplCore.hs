@@ -68,18 +68,15 @@ import Plugins          ( installCoreToDos )
 -}
 
 core2core :: HscEnv -> ModGuts -> IO ModGuts
-core2core hsc_env guts@(ModGuts { mg_module  = mod
-                                , mg_loc     = loc
-                                , mg_deps    = deps
-                                , mg_rdr_env = rdr_env })
+core2core hsc_env guts
   = do { us <- mkSplitUniqSupply 's'
        -- make sure all plugins are loaded
 
        ; let builtin_passes = getCoreToDo dflags
-             orph_mods = mkModuleSet (mod : dep_orphs deps)
+             orph_mods = mkModuleSet (mg_module guts : dep_orphs (mg_deps guts))
        ;
        ; (guts2, stats) <- runCoreM hsc_env hpt_rule_base us mod
-                                    orph_mods print_unqual loc $
+                                    orph_mods print_unqual $
                            do { all_passes <- addPluginPasses builtin_passes
                               ; runCorePasses all_passes guts }
 
@@ -90,14 +87,15 @@ core2core hsc_env guts@(ModGuts { mg_module  = mod
        ; return guts2 }
   where
     dflags         = hsc_dflags hsc_env
-    home_pkg_rules = hptRules hsc_env (dep_mods deps)
+    home_pkg_rules = hptRules hsc_env (dep_mods (mg_deps guts))
     hpt_rule_base  = mkRuleBase home_pkg_rules
-    print_unqual   = mkPrintUnqualified dflags rdr_env
+    mod            = mg_module guts
     -- mod: get the module out of the current HscEnv so we can retrieve it from the monad.
     -- This is very convienent for the users of the monad (e.g. plugins do not have to
     -- consume the ModGuts to find the module) but somewhat ugly because mg_module may
     -- _theoretically_ be changed during the Core pipeline (it's part of ModGuts), which
     -- would mean our cached value would go out of date.
+    print_unqual = mkPrintUnqualified dflags (mg_rdr_env guts)
 
 {-
 ************************************************************************

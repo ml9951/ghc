@@ -131,7 +131,7 @@ module Type (
         pprTvBndr, pprTvBndrs, pprForAll, pprUserForAll, pprSigmaType,
         pprTheta, pprThetaArrowTy, pprClassPred,
         pprKind, pprParendKind, pprSourceTyCon,
-        TyPrec(..), maybeParen,
+        TyPrec(..), maybeParen, pprSigmaTypeExtraCts,
 
         -- * Tidying type related things up for printing
         tidyType,      tidyTypes,

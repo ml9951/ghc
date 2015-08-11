@@ -1798,7 +1798,6 @@ tcRnExpr hsc_env rdr_expr
                                       {-# SCC "simplifyInfer" #-}
                                       simplifyInfer tclvl
                                                     False {- No MR for now -}
-                                                    []    {- No sig vars -}
                                                     [(fresh_it, res_ty)]
                                                     lie ;
     -- Wanted constraints from static forms
@@ -1847,7 +1846,8 @@ tcRnType hsc_env normalise rdr_type
 
         -- Now kind-check the type
         -- It can have any rank or kind
-       ; (ty, kind) <- tcWildcardBinders wcs $ \_ ->
+       ; nwc_tvs <- mapM newWildcardVarMetaKind wcs
+       ; (ty, kind) <- tcExtendTyVarEnv nwc_tvs $
                        tcLHsType rn_type
 
        -- Do kind generalisation; see Note [Kind-generalise in tcRnType]

@@ -1,4 +1,0 @@
-
-NamedWildcardInTypeFamilyInstanceLHS.hs:5:5: error:
-    Unexpected wild card: ‘_t’
-    In the declaration for type synonym ‘F’
