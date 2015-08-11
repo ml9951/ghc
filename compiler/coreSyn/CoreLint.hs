@@ -522,7 +522,7 @@ lintIdUnfolding bndr bndr_ty (CoreUnfolding { uf_tmpl = rhs, uf_src = src })
   = do { ty <- lintCoreExpr rhs
        ; checkTys bndr_ty ty (mkRhsMsg bndr (ptext (sLit "unfolding")) ty) }
 lintIdUnfolding  _ _ _
-  = return ()       -- Do not Lint unstable unfoldings, becuase that leads
+  = return ()       -- Do not Lint unstable unfoldings, because that leads
                     -- to exponential behaviour; c.f. CoreFVs.idUnfoldingVars
 
 {-
@@ -1905,7 +1905,8 @@ withoutAnnots pass guts = do
         liftIO =<< runCoreM <$> fmap removeFlag getHscEnv <*> getRuleBase <*>
                                 getUniqueSupplyM <*> getModule <*>
                                 getVisibleOrphanMods <*>
-                                getPrintUnqualified <*> pure corem
+                                getPrintUnqualified <*> getSrcSpanM <*>
+                                pure corem
   -- Nuke existing ticks in module.
   -- TODO: Ticks in unfoldings. Maybe change unfolding so it removes
   -- them in absence of @Opt_Debug@?
