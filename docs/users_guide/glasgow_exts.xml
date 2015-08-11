@@ -6099,6 +6099,24 @@ data instance GMap (Either a b) v = GMapEither (GMap a v) (GMap b v)
       can be any number.
     </para>
     <para>
+      When the name of a type argument of a data or newtype instance
+      declaration doesn't matter, it can be replaced with an underscore
+      (<literal>_</literal>). This is the same as writing a type variable with
+      a unique name.
+<programlisting>
+data family F a b :: *
+data instance F Int _ = Int
+-- Equivalent to
+data instance F Int b = Int
+</programlisting>
+      This resembles the wildcards that can be used in <xref
+      linkend="partial-type-signatures"/>. However, there are some
+      differences. Only anonymous wildcards are allowed in these instance
+      declarations, named and extra-constraints wildcards are not. No error
+      messages reporting the inferred types are generated, nor does the flag
+      <option>-XPartialTypeSignatures</option> have any effect.
+    </para>
+    <para>
       Data and newtype instance declarations are only permitted when an
       appropriate family declaration is in scope - just as a class instance declaration
       requires the class declaration to be visible.  Moreover, each instance
@@ -6229,7 +6247,18 @@ F Char [Int] Bool  -- OK!  Kind: *
 F IO Bool          -- WRONG: kind mismatch in the first argument
 F Bool             -- WRONG: unsaturated application
 </programlisting>
-      </para>
+    </para>
+
+    <para>
+      The result kind annotation is optional and defaults to
+      <literal>*</literal> (like argument kinds) if
+      omitted. Polykinded type families can be
+      declared using a parameter in the kind annotation:
+<programlisting>
+type family F a :: k
+</programlisting>
+In this case the kind parameter <literal>k</literal> is actually an implicit
+parameter of the type family.
     </sect3>
 
   <sect3 id="type-instance-declarations">
@@ -6248,6 +6277,13 @@ F Bool             -- WRONG: unsaturated application
 <programlisting>
 type instance Elem [e] = e
 </programlisting>
+    </para>
+
+    <para>
+      Type arguments can be replaced with underscores (<literal>_</literal>)
+      if the names of the arguments don't matter. This is the same as writing
+      type variables with unique names. The same rules apply as for <xref
+      linkend="data-instance-declarations"/>.
     </para>
 
     <para>
@@ -6340,7 +6376,7 @@ type instance G Int Char Float = Double  -- WRONG: must be two type parameters
 	are restricted to be <firstterm>compatible</firstterm>. Two type patterns
 	are compatible if
 <orderedlist>
-<listitem><para>all corresponding types in the patterns are <firstterm>apart</firstterm>, or</para></listitem>
+<listitem><para>all corresponding types and implicit kinds in the patterns are <firstterm>apart</firstterm>, or</para></listitem>
 <listitem><para>the two patterns unify producing a substitution, and the right-hand sides are equal under that substitution.</para></listitem>
 </orderedlist>
         Two types are considered <firstterm>apart</firstterm> if, for all possible
@@ -6367,7 +6403,17 @@ type instance G (Char, a) = [a]  -- ILLEGAL overlap, as [Char] /= [Int]
 </programlisting>
 	Note that this compatibility condition is independent of whether the type family
 	is associated or not, and it is not only a matter of consistency, but
-	one of type safety. </para>
+      one of type safety. </para>
+
+      <para>For a polykinded type family, the kinds are checked for
+      apartness just like types. For example, the following is accepted:
+<programlisting>
+type family J a :: k
+type instance J Int = Bool
+type instance J Int = Maybe
+</programlisting>
+      These instances are compatible because they differ in their implicit kind parameter; the first uses <literal>*</literal> while the second uses <literal>* -> *</literal>.</para>
+
 
 	<para>
 	  The definition for "compatible" uses a notion of "apart", whose definition
@@ -8820,9 +8866,8 @@ consider how one would parse this:
 <para>
 
 The type variables in the head of a <literal>class</literal> or <literal>instance</literal> declaration
-scope over the methods defined in the <literal>where</literal> part.  For example:
-
-
+scope over the methods defined in the <literal>where</literal> part.  You do not even need
+an explicit <literal>forall</literal>.  For example:
 <programlisting>
   class C a where
     op :: [a] -> a
@@ -8831,6 +8876,9 @@ scope over the methods defined in the <literal>where</literal> part.  For exampl
                 ys = reverse xs
             in
             head ys
+
+  instance C b => C [b] where
+    op xs = reverse (head (xs :: [[b]]))
 </programlisting>
 </para>
 </sect3>
@@ -9411,6 +9459,12 @@ foo (x :: _) = (x :: _)
 -- Inferred: forall w_. w_ -> w_
 </programlisting>
 
+<para>
+  Anonymous wildcards <emphasis>can</emphasis> occur in type or data instance
+  declarations. However, these declarations are not partial type signatures
+  and different rules apply. See <xref linkend="data-instance-declarations"/>
+  for more details.
+</para>
 
 <para>
 Partial type signatures can also be used in <xref linkend="template-haskell"/> splices.
@@ -9891,13 +9945,6 @@ module M where
             Typed holes (see
             <ulink url="https://ghc.haskell.org/trac/ghc/ticket/10267">
             Trac #10267</ulink>)
-            </para>
-          </listitem>
-          <listitem>
-            <para>
-            Partial type signatures (see
-            <ulink url="https://ghc.haskell.org/trac/ghc/ticket/10548">
-            Trac #10548</ulink>)
             </para>
           </listitem>
         </itemizedlist>

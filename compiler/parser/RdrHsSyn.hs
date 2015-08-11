@@ -35,7 +35,6 @@ module RdrHsSyn (
         mkExtName,           -- RdrName -> CLabelString
         mkGadtDecl,          -- [Located RdrName] -> LHsType RdrName -> ConDecl RdrName
         mkSimpleConDecl,
-        mkDeprecatedGadtRecordDecl,
         mkATDefault,
 
         -- Bunch of functions in the parser monad for
@@ -468,25 +467,6 @@ mkPatSynMatchGroup (L _ patsyn_name) (L _ decls) =
         parseErrorSDoc loc $
         text "pattern synonym 'where' clause must bind the pattern synonym's name" <+>
         quotes (ppr patsyn_name) $$ ppr decl
-
-mkDeprecatedGadtRecordDecl :: SrcSpan
-                           -> Located RdrName
-                           -> Located [LConDeclField RdrName]
-                           -> LHsType RdrName
-                           ->  P (LConDecl  RdrName)
--- This one uses the deprecated syntax
---    C { x,y ::Int } :: T a b
--- We give it a RecCon details right away
-mkDeprecatedGadtRecordDecl loc (L con_loc con) flds res_ty
-  = do { data_con <- tyConToDataCon con_loc con
-       ; return (L loc (ConDecl { con_old_rec  = True
-                                , con_names    = [data_con]
-                                , con_explicit = Implicit
-                                , con_qvars    = mkHsQTvs []
-                                , con_cxt      = noLoc []
-                                , con_details  = RecCon flds
-                                , con_res      = ResTyGADT loc res_ty
-                                , con_doc      = Nothing })) }
 
 mkSimpleConDecl :: Located RdrName -> [LHsTyVarBndr RdrName]
                 -> LHsContext RdrName -> HsConDeclDetails RdrName
@@ -1226,9 +1206,9 @@ mkInlinePragma src (inl, match_info) mb_act
 --
 mkImport :: Located CCallConv
          -> Located Safety
-         -> (Located (SourceText,FastString), Located RdrName, LHsType RdrName)
+         -> (Located StringLiteral, Located RdrName, LHsType RdrName)
          -> P (HsDecl RdrName)
-mkImport (L lc cconv) (L ls safety) (L loc (esrc,entity), v, ty)
+mkImport (L lc cconv) (L ls safety) (L loc (StringLiteral esrc entity), v, ty)
   | cconv == PrimCallConv                      = do
   let funcTarget = CFunction (StaticTarget esrc entity Nothing True)
       importSpec = CImport (L lc PrimCallConv) (L ls safety) Nothing funcTarget
@@ -1305,9 +1285,9 @@ parseCImport cconv safety nm str sourceText =
 -- construct a foreign export declaration
 --
 mkExport :: Located CCallConv
-         -> (Located (SourceText,FastString), Located RdrName, LHsType RdrName)
+         -> (Located StringLiteral, Located RdrName, LHsType RdrName)
          -> P (HsDecl RdrName)
-mkExport (L lc cconv) (L le (esrc,entity), v, ty) = do
+mkExport (L lc cconv) (L le (StringLiteral esrc entity), v, ty) = do
   return $ ForD (ForeignExport v ty noForeignExportCoercionYet
                  (CExport (L lc (CExportStatic esrc entity' cconv))
                           (L le (unpackFS entity))))
