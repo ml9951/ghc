@@ -48,7 +48,7 @@ newtype STM a = STM {unSTM :: forall r . --r is the type of the final result
 
 instance Monad STM where
     return a = STM $ \c -> \s -> c a s
-    m >>= k = STM $ \c -> \s -> unSTM m (\a -> \s' -> unSTM (k a) c s') s
+    m >>= k = {-# SCC ">>=" #-} STM $ \c -> \s -> unSTM m (\a -> \s' -> unSTM (k a) c s') s
 
 instance Applicative STM where
     (<*>) = ap
@@ -58,7 +58,7 @@ instance  Functor STM where
     fmap f m = m >>= (return . f)
 
 readTVar :: TVar a -> STM a
-readTVar (TVar tv) = STM $ \c -> \s-> case unsafeCoerce# readTVar# tv c s of
+readTVar (TVar tv) = {-# SCC "readTVar" #-} STM $ \c -> \s-> case ({-# SCC "readTVar#" #-} unsafeCoerce# readTVar# tv c s) of
                                         (# s', t #) -> c t s'
 
 writeTVar :: TVar a -> a -> STM ()

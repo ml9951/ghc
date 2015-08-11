@@ -44,7 +44,7 @@ newtype STM a = STM {unSTM :: State# RealWorld ->                               
 
 instance Monad STM where
     return a = STM $ \s -> (# s, a #)
-    m >>= k = STM $ \s -> case unSTM m s of
+    m >>= k = {-# SCC ">>=" #-} STM $ \s -> case unSTM m s of
                              (# s', t #) -> unSTM (k t) s'
 instance Applicative STM where
     (<*>) = ap
@@ -54,7 +54,7 @@ instance  Functor STM where
     fmap f m = m >>= (return . f)
 
 readTVar :: TVar a -> STM a
-readTVar (TVar tv) = STM $ \s-> unsafeCoerce# readTVar# tv s 
+readTVar (TVar tv) = {-# SCC "readTVar" #-} STM $ \s-> ({-# SCC "readTVar#" #-} unsafeCoerce# readTVar# tv s)
 
 writeTVar :: TVar a -> a -> STM ()
 writeTVar (TVar tv) a = STM $ \s -> 

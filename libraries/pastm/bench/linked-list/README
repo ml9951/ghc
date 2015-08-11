@@ -1,0 +1,7 @@
+you will need to do the following:
+
+git clone -b pure https://github.com/cchalmers/pcg-random.git
+
+cd pcg-random
+
+cabal install

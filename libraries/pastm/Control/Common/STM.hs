@@ -46,8 +46,12 @@ writeTVarIO :: TVar a -> a -> IO ()
 writeTVarIO (TVar tv) a = IO $ \s -> case unsafeCoerce# writeTVarIO# tv a s of 
                                           (# s', _ #) -> (# s', () #)
 
-
+#ifdef STMPROF
 printSTMProfile = IO $ \s -> dumpSTMProfile s
+#else
+printSTMProfile :: IO()
+printSTMProfile = return()
+#endif
 
 foreign import prim safe "stg_dumpSTMProfile" dumpSTMProfile
         :: State# RealWorld -> (# State# RealWorld, ()#)
