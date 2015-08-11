@@ -10,7 +10,7 @@ get everything checked out and built:
     cd ghc
     git remote add pstm-remote https://github.com/ml9951/ghc.git
     git fetch pstm-remote
-    git checkout pstm
+    git checkout pastm
     cp mk/build.mk.sample mk/build.mk #Uncomment the following line: "BuildFlavour = quick"
     perl boot
     ./configure
