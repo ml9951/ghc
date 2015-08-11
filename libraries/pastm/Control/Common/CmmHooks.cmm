@@ -1,0 +1,70 @@
+#include "Cmm.h"
+
+stg_tl2_newTVarIOzh (P_ init)
+{
+    W_ tv;
+
+    ALLOC_PRIM_P (SIZEOF_StgTL2TVar, stg_tl2_newTVarIOzh, init);
+
+    tv = Hp - SIZEOF_StgTL2TVar + WDS(1);
+    SET_HDR (tv, stg_TL2_TVAR_DIRTY_info, CCCS);
+
+    StgTL2TVar_current_value(tv) = init;
+    StgTL2TVar_stamp(tv) = 0;
+    StgTL2TVar_lock(tv) = 0;
+
+    return (tv);
+}
+
+stg_tl2_readTVarIOzh(P_ tvar)
+{
+    P_ result;
+
+    result = StgTL2TVar_current_value(tvar);
+    
+    return(result);
+}
+
+stg_tl2_writeTVarIOzh(P_ tvar, P_ a){
+    StgTL2TVar_current_value(tvar) = a;
+    ccall dirty_TL2_TVAR(MyCapability() "ptr", tvar "ptr");
+    return(tvar);
+}
+
+stg_norec_newTVarIOzh (P_ init)
+{
+    W_ tv;
+
+    ALLOC_PRIM_P (SIZEOF_StgTVar, stg_norec_newTVarIOzh, init);
+
+    tv = Hp - SIZEOF_StgTVar + WDS(1);
+    SET_HDR (tv, stg_TVAR_DIRTY_info, CCCS);
+
+    StgTVar_current_value(tv) = init;
+    StgTVar_first_watch_queue_entry(tv) = stg_END_STM_WATCH_QUEUE_closure;
+    StgTVar_num_updates(tv) = 0;
+
+    return (tv);
+}
+
+stg_norec_readTVarIOzh(P_ tvar)
+{
+    P_ result;
+
+    result = StgTVar_current_value(tvar);
+    
+    return(result);
+}
+
+stg_norec_writeTVarIOzh(P_ tvar, P_ a){
+    StgTVar_current_value(tvar) = a;
+    ccall dirty_TVAR(MyCapability() "ptr", tvar "ptr");
+
+    return(tvar);
+}
+
+stg_dumpSTMProfile(){
+    ccall printSTMProfile();
+    return();
+}
+
