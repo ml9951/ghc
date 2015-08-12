@@ -52,7 +52,7 @@ module DynFlags (
         dynFlagDependencies,
         tablesNextToCode, mkTablesNextToCode,
         SigOf, getSigOf,
-        checkOptLevel,
+        makeDynFlagsConsistent,
 
         Way(..), mkBuildTag, wayRTSOnly, addWay', updateWays,
         wayGeneralFlags, wayUnsetGeneralFlags,
@@ -378,6 +378,7 @@ data GeneralFlag
    | Opt_DictsStrict                     -- be strict in argument dictionaries
    | Opt_DmdTxDictSel              -- use a special demand transformer for dictionary selectors
    | Opt_Loopification                  -- See Note [Self-recursive tail calls]
+   | Opt_CprAnal
 
    -- Interface files
    | Opt_IgnoreInterfacePragmas
@@ -523,7 +524,8 @@ data WarningFlag =
    | Opt_WarnUnsafe
    | Opt_WarnSafe
    | Opt_WarnTrustworthySafe
-   | Opt_WarnPointlessPragmas
+   | Opt_WarnMissedSpecs
+   | Opt_WarnAllMissedSpecs
    | Opt_WarnUnsupportedCallingConventions
    | Opt_WarnUnsupportedLlvmVersion
    | Opt_WarnInlineRuleShadowing
@@ -1562,7 +1564,7 @@ defaultDynFlags mySettings =
         ufCreationThreshold = 750,
         ufUseThreshold      = 60,
         ufFunAppDiscount    = 60,
-        -- Be fairly keen to inline a fuction if that means
+        -- Be fairly keen to inline a function if that means
         -- we'll be able to pick the right method from a dictionary
         ufDictDiscount      = 30,
         ufKeenessFactor     = 1.5,
@@ -2906,7 +2908,8 @@ fWarningFlags = [
   flagSpec "warn-orphans"                     Opt_WarnOrphans,
   flagSpec "warn-overflowed-literals"         Opt_WarnOverflowedLiterals,
   flagSpec "warn-overlapping-patterns"        Opt_WarnOverlappingPatterns,
-  flagSpec "warn-pointless-pragmas"           Opt_WarnPointlessPragmas,
+  flagSpec "warn-missed-specialisations"      Opt_WarnMissedSpecs,
+  flagSpec "warn-all-missed-specialisations"  Opt_WarnAllMissedSpecs,
   flagSpec' "warn-safe"                       Opt_WarnSafe setWarnSafe,
   flagSpec "warn-trustworthy-safe"            Opt_WarnTrustworthySafe,
   flagSpec "warn-tabs"                        Opt_WarnTabs,
@@ -2965,6 +2968,7 @@ fFlags = [
   flagSpec "cmm-elim-common-blocks"           Opt_CmmElimCommonBlocks,
   flagSpec "cmm-sink"                         Opt_CmmSink,
   flagSpec "cse"                              Opt_CSE,
+  flagSpec "cpr-anal"                         Opt_CprAnal,
   flagSpec "defer-type-errors"                Opt_DeferTypeErrors,
   flagSpec "defer-typed-holes"                Opt_DeferTypedHoles,
   flagSpec "dicts-cheap"                      Opt_DictsCheap,
@@ -3357,6 +3361,7 @@ optLevelFlags -- see Note [Documenting optimisation flags]
     , ([1,2],   Opt_CrossModuleSpecialise)
     , ([1,2],   Opt_Strictness)
     , ([1,2],   Opt_UnboxSmallStrictFields)
+    , ([1,2],   Opt_CprAnal)
 
     , ([2],     Opt_LiberateCase)
     , ([2],     Opt_SpecConstr)
@@ -3386,7 +3391,6 @@ standardWarnings -- see Note [Documenting warning flags]
         Opt_WarnTypedHoles,
         Opt_WarnPartialTypeSignatures,
         Opt_WarnUnrecognisedPragmas,
-        Opt_WarnPointlessPragmas,
         Opt_WarnRedundantConstraints,
         Opt_WarnDuplicateExports,
         Opt_WarnOverflowedLiterals,
@@ -3400,7 +3404,8 @@ standardWarnings -- see Note [Documenting warning flags]
         Opt_WarnAlternativeLayoutRuleTransitional,
         Opt_WarnUnsupportedLlvmVersion,
         Opt_WarnContextQuantification,
-        Opt_WarnTabs
+        Opt_WarnTabs,
+        Opt_WarnMissedSpecs
       ]
 
 minusWOpts :: [WarningFlag]
@@ -3428,7 +3433,8 @@ minusWallOpts
         Opt_WarnOrphans,
         Opt_WarnUnusedDoBind,
         Opt_WarnTrustworthySafe,
-        Opt_WarnUntickedPromotedConstructors
+        Opt_WarnUntickedPromotedConstructors,
+        Opt_WarnAllMissedSpecs
       ]
 
 enableUnusedBinds :: DynP ()
@@ -4151,10 +4157,13 @@ tARGET_MAX_WORD dflags
       8 -> toInteger (maxBound :: Word64)
       w -> panic ("tARGET_MAX_WORD: Unknown platformWordSize: " ++ show w)
 
+-- | Resolve any internal inconsistencies in a set of 'DynFlags'.
+-- Returns the consistent 'DynFlags' as well as a list of warnings
+-- to report to the user.
+makeDynFlagsConsistent :: DynFlags -> (DynFlags, [Located String])
 -- Whenever makeDynFlagsConsistent does anything, it starts over, to
 -- ensure that a later change doesn't invalidate an earlier check.
 -- Be careful not to introduce potential loops!
-makeDynFlagsConsistent :: DynFlags -> (DynFlags, [Located String])
 makeDynFlagsConsistent dflags
  -- Disable -dynamic-too on Windows (#8228, #7134, #5987)
  | os == OSMinGW32 && gopt Opt_BuildDynamicToo dflags
@@ -4193,6 +4202,8 @@ makeDynFlagsConsistent dflags
    not (gopt Opt_PIC dflags)
     = loop (gopt_set dflags Opt_PIC)
            "Enabling -fPIC as it is always on for this platform"
+ | Left err <- checkOptLevel (optLevel dflags) dflags
+    = loop (updOptLevel 0 dflags) err
  | otherwise = (dflags, [])
     where loc = mkGeneralSrcSpan (fsLit "when making flags consistent")
           loop updated_dflags warning
@@ -4201,6 +4212,33 @@ makeDynFlagsConsistent dflags
           platform = targetPlatform dflags
           arch = platformArch platform
           os   = platformOS   platform
+
+{-
+Note [DynFlags consistency]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There are a number of number of DynFlags configurations which either
+do not make sense or lead to unimplemented or buggy codepaths in the
+compiler. makeDynFlagsConsistent is responsible for verifying the validity
+of a set of DynFlags, fixing any issues, and reporting them back to the
+caller.
+
+GHCi and -O
+---------------
+
+When using optimization, the compiler can introduce several things
+(such as unboxed tuples) into the intermediate code, which GHCi later
+chokes on since the bytecode interpreter can't handle this (and while
+this is arguably a bug these aren't handled, there are no plans to fix
+it.)
+
+While the driver pipeline always checks for this particular erroneous
+combination when parsing flags, we also need to check when we update
+the flags; this is because API clients may parse flags but update the
+DynFlags afterwords, before finally running code inside a session (see
+T10052 and #10052).
+
+-}
 
 --------------------------------------------------------------------------
 -- Do not use unsafeGlobalDynFlags!
