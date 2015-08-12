@@ -119,7 +119,7 @@ stg_full_readTVarzh (P_ tvar, P_ k)
 
     trec = StgTSO_ptrec(CurrentTSO);
     ("ptr" result) = ccall fa_stmReadTVar(MyCapability() "ptr", trec "ptr",
-					  tvar "ptr");
+					  tvar "ptr", k "ptr");
 
     if(result == PASTM_FAIL){
         jump stg_full_eagerFullAbort []; //full abort

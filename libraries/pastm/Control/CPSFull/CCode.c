@@ -99,7 +99,7 @@ static StgClosure * fa_validate(StgPTRecHeader * trec){
 }
 
 StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
-			    StgTVar * tvar){
+			    StgTVar * tvar, StgClosure * k){
     StgWriteSet * ws = trec->write_set;
 
     while(ws != TO_WRITE_SET(NO_PTREC)){
