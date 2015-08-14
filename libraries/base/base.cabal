@@ -208,6 +208,7 @@ Library
         GHC.ForeignPtr
         GHC.GHCi
         GHC.Generics
+        GHC.IP
         GHC.IO
         GHC.IO.Buffer
         GHC.IO.BufferedIO

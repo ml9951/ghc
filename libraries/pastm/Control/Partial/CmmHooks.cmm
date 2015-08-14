@@ -35,7 +35,7 @@ INFO_TABLE_RET(stg_partial_atomically_frame, ATOMICALLY_FRAME,
         return(frame_result);
     }
     if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint
-		trec = StgTSO_ptrec(CurrentTSO);
+	trec = StgTSO_ptrec(CurrentTSO);
 		
         ("ptr" trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", trec "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;

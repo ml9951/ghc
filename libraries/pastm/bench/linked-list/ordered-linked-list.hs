@@ -16,6 +16,8 @@ import Control.CPSFull.STM
 import Control.Chunked.STM
 #elif defined(FF)
 import Control.FastForward.STM
+#elif defined(PABORTNOFORALL)
+import Control.PartialNoForall.STM
 #else
 import Control.Partial.STM
 #endif

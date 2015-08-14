@@ -44,10 +44,6 @@ static volatile unsigned long version_clock = 0;
 
 //use -optc-DSTATS to enable statistics
 
-#ifdef STATS
-static StgPASTMStats stats = {0, 0, 0, 0, 0};
-#endif
-
 StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
     
     if(ptrec == NO_PTREC){

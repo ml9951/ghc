@@ -1,7 +1,5 @@
 #include "Rts.h"
 
-//#include "PartialAbortSTM.h"
-//#include "Trace.h"
 #include "rts/Threads.h"
 #include "sm/Storage.h"
 #include <stdio.h>
@@ -31,19 +29,17 @@
 static volatile unsigned long version_clock = 0;
 
 StgPTRecHeader * fa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
+    
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+	ptrec->read_set = TO_WITHOUTK(NO_PTREC);
+	ptrec->lastK = TO_WITHK(NO_PTREC);
+	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
+	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
     }
-
-    ptrec->read_set = TO_WITHOUTK(NO_PTREC);
-    ptrec->lastK = TO_WITHK(NO_PTREC);
-    ptrec->write_set = TO_WRITE_SET(NO_PTREC);
-
-    ptrec->tail = TO_WITHOUTK(NO_PTREC);
-
-    ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
-
+    
     //get a read version
     ptrec->read_version = version_clock;
     while((ptrec->read_version & 1) != 0){
@@ -192,6 +188,8 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 #ifdef STATS
     cap->pastmStats.numCommits = 0;
 #endif
+
+    clearTRec(trec);
 
     version_clock = snapshot + 2;//unlock clock
     return PASTM_SUCCESS;
