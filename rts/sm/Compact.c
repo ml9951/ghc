@@ -537,7 +537,7 @@ update_fwd_large( bdescr *bd )
         StgPTRecChunk * tc = (StgPTRecChunk *)p;
         thread_(&tc->prev_chunk);
         while(i < tc->next_entry_idx){
-            PTRecWithoutK * entry = &(tc->entries[i]);
+            PTRecWithoutK * entry = (PTRecWithoutK*)&(tc->entries[i]);
             if(entry->size == 3){ //checkpoint
                 thread_(&entry->tvar);
                 thread(&entry->read_value);
@@ -757,7 +757,7 @@ thread_obj (StgInfoTable *info, StgPtr p)
         StgPTRecChunk * tc = (StgPTRecChunk *)p;
         thread_(&tc->prev_chunk);
         while(i < tc->next_entry_idx){
-            PTRecWithoutK * entry = &(tc->entries[i]);
+            PTRecWithoutK * entry = (PTRecWithoutK*)&(tc->entries[i]);
             if(entry->size == 3){ //checkpoint
                 thread_(&entry->tvar);
                 thread(&entry->read_value);

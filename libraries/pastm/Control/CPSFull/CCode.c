@@ -3,7 +3,7 @@
 #include "rts/Threads.h"
 #include "sm/Storage.h"
 #include <stdio.h>
-
+#include "eventlog/EventLog.h"
 
 
 #define TRUE 1
@@ -38,6 +38,32 @@ StgPTRecHeader * fa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
 	ptrec->lastK = TO_WITHK(NO_PTREC);
 	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
 	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    }
+    
+    //get a read version
+    ptrec->read_version = version_clock;
+    while((ptrec->read_version & 1) != 0){
+        ptrec->read_version = version_clock;
+    }
+    ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ; 
+    ptrec->numK = 0;
+
+    return ptrec;
+}
+
+StgPTRecHeader * fa_stmStartTransactionWithEvent(Capability *cap, StgPTRecHeader * ptrec, StgWord event) {
+#ifdef TRACING  
+    postStartTX(cap, ((StgWord*)(event & (~7)))[1]);
+#endif
+
+    if(ptrec == NO_PTREC){
+	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
+    	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+    	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+    	ptrec->read_set = TO_WITHOUTK(NO_PTREC);
+    	ptrec->lastK = TO_WITHK(NO_PTREC);
+    	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
+    	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
     }
     
     //get a read version

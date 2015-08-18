@@ -113,7 +113,11 @@ char *EventDesc[]              = {
   [EVENT_COMMIT_PARTIAL_ABORT] = "Commit time partial abort for transaction",
   [EVENT_COMMIT_FULL_ABORT]    = "Commit time full abort for transaction",
   [EVENT_COMMIT_TX]            = "Commit transaction",
+  [EVENT_START_TX_WITH_INFO]   = "Start transaction with identifying information",
+  [EVENT_BEGIN_COMMIT]         = "Begin Validation", 
 };
+
+#define QUIET
 
 // Event type.
 
@@ -440,9 +444,14 @@ initEventLogging(void)
         case EVENT_COMMIT_PARTIAL_ABORT:
         case EVENT_COMMIT_FULL_ABORT:
         case EVENT_COMMIT_TX:
-            eventTypes[t].size = sizeof(StgWord64);
+        case EVENT_BEGIN_COMMIT:
+            eventTypes[t].size = 0;
             break;
 
+        case EVENT_START_TX_WITH_INFO:
+            eventTypes[t].size = sizeof(StgWord64);
+            break;
+            
         default:
             continue; /* ignore deprecated events */
         }
@@ -661,6 +670,18 @@ postSparkEvent (Capability *cap,
     default:
         barf("postSparkEvent: unknown event tag %d", tag);
     }
+}
+
+void postStartTX(Capability * cap, StgWord event){
+    EventsBuf * eb = &capEventBuf[cap->no];
+
+    if (!hasRoomForEvent(eb, EVENT_START_TX_WITH_INFO)) {
+        // Flush event buffer to make room for new event.
+        printAndClearEventBuf(eb);
+    }
+
+    postEventHeader(eb, EVENT_START_TX_WITH_INFO);
+    postWord64(eb, event);
 }
 
 void

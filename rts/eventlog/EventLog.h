@@ -87,6 +87,12 @@ void postWallClockTime (EventCapsetID capset);
 void postSparkEvent(Capability *cap, EventTypeNum tag, StgWord info1);
 
 /*
+ * Post a start transaction event, event is some 64 bit identifier 
+ * indicating what kind of transaction is being executed
+ */
+void postStartTX(Capability * cap, StgWord event);
+
+/*
  * Post an event with several counters relating to `par` sparks.
  */
 void postSparkCountersEvent (Capability *cap,

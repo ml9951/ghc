@@ -164,13 +164,14 @@
 #define EVENT_USER_MARKER         58 /* (marker_name) */
 #define EVENT_HACK_BUG_T9003      59 /* Hack: see trac #9003 */
 
-#define EVENT_START_TX            60
-#define EVENT_EAGER_PARTIAL_ABORT 61
-#define EVENT_EAGER_FULL_ABORT    62
-#define EVENT_COMMIT_PARTIAL_ABORT 63
-#define EVENT_COMMIT_FULL_ABORT   64
-#define EVENT_COMMIT_TX           65
-
+#define EVENT_START_TX             70
+#define EVENT_EAGER_PARTIAL_ABORT  71
+#define EVENT_EAGER_FULL_ABORT     72
+#define EVENT_COMMIT_PARTIAL_ABORT 73
+#define EVENT_COMMIT_FULL_ABORT    74
+#define EVENT_COMMIT_TX            75
+#define EVENT_START_TX_WITH_INFO   76
+#define EVENT_BEGIN_COMMIT         77
 /* Range 59 - 59 is available for new GHC and common events. */
 
 /* Range 60 - 80 is used by eden for parallel tracing
@@ -186,7 +187,7 @@
  * ranges higher than this are reserved but not currently emitted by ghc.
  * This must match the size of the EventDesc[] array in EventLog.c
  */
-#define NUM_GHC_EVENT_TAGS        66
+#define NUM_GHC_EVENT_TAGS        78
 
 #if 0  /* DEPRECATED EVENTS: */
 /* we don't actually need to record the thread, it's implicit */

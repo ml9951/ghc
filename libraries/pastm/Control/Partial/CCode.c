@@ -3,6 +3,8 @@
 #include "rts/Threads.h"
 #include "sm/Storage.h"
 #include <stdio.h>
+#include "rts/EventLogFormat.h"
+#include "eventlog/EventLog.h"
 
 #if defined(HAVE_MACH_ABSOLUTE_TIME)
 #  include <mach/mach_time.h>
@@ -45,17 +47,58 @@ static volatile unsigned long version_clock = 0;
 //use -optc-DSTATS to enable statistics
 
 StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
-    
+#ifdef TRACING  
+    postEvent (cap, EVENT_START_TX);
+#endif
+
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
-	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
-	ptrec->tail = TO_WITHOUTK(NO_PTREC);
-	ptrec->read_set = TO_WITHOUTK(NO_PTREC);
-	ptrec->lastK = TO_WITHK(NO_PTREC);
-	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
-	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+    	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+    	ptrec->read_set = TO_WITHOUTK(NO_PTREC);
+    	ptrec->lastK = TO_WITHK(NO_PTREC);
+    	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
+    	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
     }
     
+    //get a read version
+    ptrec->read_version = version_clock;
+    while((ptrec->read_version & 1) != 0){
+        ptrec->read_version = version_clock;
+    }
+    ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ; 
+    ptrec->numK = 0;
+
+    return ptrec;
+}
+
+StgPTRecHeader * pa_stmStartTransactionWithEvent(Capability *cap, StgPTRecHeader * ptrec, StgWord event) {
+#ifdef TRACING  
+    postStartTX(cap, ((StgWord*)(event & (~7)))[1]);
+#endif
+
+    if(ptrec == NO_PTREC){
+	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
+    	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+    	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+    	ptrec->read_set = TO_WITHOUTK(NO_PTREC);
+    	ptrec->lastK = TO_WITHK(NO_PTREC);
+    	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
+    	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    }
+    
+    //get a read version
+    ptrec->read_version = version_clock;
+    while((ptrec->read_version & 1) != 0){
+        ptrec->read_version = version_clock;
+    }
+    ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ; 
+    ptrec->numK = 0;
+
+    return ptrec;
+}
+
+StgPTRecHeader * pa_stmStartTransactionAfterAbort(Capability *cap, StgPTRecHeader * ptrec) {
     //get a read version
     ptrec->read_version = version_clock;
     while((ptrec->read_version & 1) != 0){
@@ -82,6 +125,9 @@ static StgBool shouldAbort = TRUE;
 #endif
 
 static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
+#ifdef TRACING
+    postEvent (cap, EVENT_BEGIN_COMMIT);
+#endif
     while(TRUE){
         unsigned long time = version_clock;
         if((time & 1) != 0){
@@ -243,31 +289,25 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     StgClosure * val = tvar->current_value;
 
     while(trec->read_version != version_clock){
-#ifdef STMPROF	
-	uint64_t startValidate = getThreadCPUTime();
-#endif
 	StgPTRecWithK * checkpoint = pa_validate(trec, cap);
         if(checkpoint != TO_WITHK(PASTM_SUCCESS)){
 #ifdef STATS
 	    if(checkpoint == TO_WITHK(PASTM_FAIL)){
 		cap->pastmStats.eagerFullAborts++;
-#ifdef STMPROF
-		cap->profileSTM.eagerValidationTime += TIMER_Now() - startValidate;
+#ifdef TRACING  
+		postEvent (cap, EVENT_EAGER_FULL_ABORT);
 #endif
 		return TO_CLOSURE(checkpoint);
 	    }
-	    cap->pastmStats.eagerPartialAborts++;
+#ifdef TRACING  
+	    postEvent (cap, EVENT_EAGER_PARTIAL_ABORT);
 #endif
-#ifdef STMPROF
-	    cap->profileSTM.eagerValidationTime += TIMER_Now() - startValidate;
+	    cap->pastmStats.eagerPartialAborts++;
 #endif
 	    return TO_CLOSURE(checkpoint);
         }
 #ifdef STATS
 	cap->pastmStats.tsExtensions++;
-#endif
-#ifdef STMPROF
-	cap->profileSTM.eagerValidationTime += TIMER_Now() - startValidate;
 #endif
 	val = tvar->current_value;
     }
@@ -388,10 +428,6 @@ void pa_stmWriteTVar(Capability *cap,
 
 StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
-#ifdef STMPROF
-    uint64_t startCommit = TIMER_Now();
-#endif 
-
 #ifdef ABORT
     StgPTRecWithK * checkpoint = pa_validate(trec, cap);
     if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
@@ -401,30 +437,24 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
     unsigned long snapshot = trec->read_version;
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
-#ifdef STMPROF
-	uint64_t startValidate = TIMER_Now();
-#endif
 	StgPTRecWithK * checkpoint = pa_validate(trec, cap);
         if(checkpoint != (StgPTRecWithK *) PASTM_SUCCESS){
 #ifdef STATS
 	    if(checkpoint == TO_WITHK(PASTM_FAIL)){
 		cap->pastmStats.commitTimeFullAborts++;
-#ifdef STMPROF
-		cap->profileSTM.commitValidationTime += TIMER_Now() - startValidate;
-#endif 
+#ifdef TRACING  
+		postEvent (cap, EVENT_COMMIT_FULL_ABORT);
+#endif
 		return checkpoint;
 	    }
 	    cap->pastmStats.commitTimePartialAborts++;
 #endif
-#ifdef STMPROF
-	    cap->profileSTM.commitValidationTime += TIMER_Now() - startValidate;
-#endif 
+#ifdef TRACING  
+	    postEvent (cap, EVENT_COMMIT_PARTIAL_ABORT);
+#endif
 	    return checkpoint;
         }
         snapshot = trec->read_version;
-#ifdef STMPROF
-	cap->profileSTM.commitValidationTime += TIMER_Now() - startValidate;
-#endif 
     }
     
     StgWriteSet * one, * two;
@@ -458,9 +488,9 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     trec->tail = TO_WITHOUTK(NO_PTREC);
     
     version_clock = snapshot + 2;//unlock clock
-#ifdef STMPROF
-    cap->profileSTM.commitTime += TIMER_Now() - startCommit;
-#endif 
+
+    postEvent (cap, EVENT_COMMIT_TX);
+
     return (StgPTRecWithK *)PASTM_SUCCESS;
 }
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards #-}
+
 
 import Prelude hiding (reads)
 import GHC.Conc(numCapabilities)
@@ -44,7 +44,7 @@ threadLoop l opts i g = do
            else if prob < fromIntegral (reads opts + writes opts)
                 then do add l r; threadLoop l opts (i-1) g
                 else do 
-                     size <- getSize l
+                     size <- getSizeIO l
                      deleteIndex l (r `mod` fromIntegral size)
                      threadLoop l opts (i-1) g
 

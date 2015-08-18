@@ -15,7 +15,6 @@
 -- Portability :  non-portable (requires PASTM)
 --
 -- Software Transactional Memory: a modular composable concurrency
--- abstraction.  
 --
 --  * This contains the core STM operations
 --
@@ -25,7 +24,8 @@ module Control.Partial.STM
 (
     readTVar,
     writeTVar,
-    atomically,
+    atomically,         
+    atomically',                    
     STM(..),
     printStats,
     retry,
@@ -38,8 +38,9 @@ where
 
 
 import GHC.Conc.Sync(TVar(..))
-import GHC.Base(State#, RealWorld, IO(..), ap, newTVar#, TVar#)
-import GHC.Prim(Any, unsafeCoerce# )
+import GHC.Base(State#, RealWorld, IO(..), ap, newTVar#, TVar#, Int(I#))
+import GHC.Prim(Any, unsafeCoerce#, Int#)
+
 
 newtype STM a = STM {unSTM :: forall r . --r is the type of the final result
                                  (a -> State# RealWorld -> (# State# RealWorld, r #)) -> --Continuation
@@ -76,6 +77,8 @@ initK a s = (# s, a #)
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c initK) s)
 
+atomically' :: STM a -> Word -> IO a
+atomically' (STM c) event = IO $ \s -> unsafeCoerce# atomically'# (c initK) event s
 
 -- |Retry execution of the current memory transaction because it has seen
 -- values in TVars which mean that it should not continue (e.g. the TVars
@@ -94,6 +97,9 @@ orElse :: STM a -> STM a -> STM a
 orElse (STM m) e = STM $ \c -> \s ->    
         case unsafeCoerce# pcatchRetry# (m (unsafeCoerce# popRetry#)) (unSTM e initK) s of
                (# s', t #) -> c t s'
+
+foreign import prim safe "stg_partial_atomicallyzhWithEvent" atomically'#
+        :: Any() -> Any() -> State# RealWorld -> (# State# s, Any() #)
 
 foreign import prim safe "stg_partial_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)

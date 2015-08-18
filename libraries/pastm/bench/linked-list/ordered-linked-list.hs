@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-} 
+{-# LANGUAGE CPP, MagicHash #-} 
 module LinkedList(newList, add, find, delete, deleteIndex, ListHandle, getSize, printStats, getSizeIO, addIO)
 where
 
@@ -22,13 +22,23 @@ import Control.PartialNoForall.STM
 import Control.Partial.STM
 #endif
 
+-----------------------------------------------------------------------------
+-- This file file annotates transactions for logging with the following mapping:
+--   1# --> insert
+--   2# --> find
+--   3# --> delete
+--   4# --> increment / decrement
+-----------------------------------------------------------------------------
+
+import Foreign.C.String
 import Control.Common.STM
 import Dump
+--import GHC.Prim(Int#)
 
-data List a = Node a (TVar (List a)) --{val :: a, next :: (TVar (List a))}
+data List a = Node a (TVar (List a)) 
             | Null
-            | Head (TVar (List a)) --{next :: (TVar (List a))}
-
+            | Head (TVar (List a))
+            
 data ListHandle a = ListHandle (TVar (List a)) (TVar Int) --{hd :: TVar (List a), size :: TVar Int}
 
 getSize (ListHandle hd size) = atomically $ readTVar size
@@ -44,9 +54,9 @@ newList = atomically $ do
 inc size n = do
     x <- readTVar size
     writeTVar size (x+n)
-
+    
 add :: Ord a => ListHandle a -> a -> IO()
-add (ListHandle hd size) v = do atomically (addLoop hd); atomically (inc size 1)
+add (ListHandle hd size) v = do atomically' (addLoop hd) 1 ; atomically' (inc size 1) 4
     where
     addLoop l = do
             raw <- readTVar l
@@ -63,7 +73,7 @@ add (ListHandle hd size) v = do atomically (addLoop hd); atomically (inc size 1)
                            writeTVar l (Node v newNode)
 
 find :: Eq a => ListHandle a -> a -> IO Bool
-find (ListHandle hd size) v = atomically (findLoop hd)
+find (ListHandle hd size) v = atomically' (findLoop hd) 2
      where
      findLoop l = do
               raw <- readTVar l
@@ -77,9 +87,9 @@ find (ListHandle hd size) v = atomically (findLoop hd)
 
 delete :: Ord a => ListHandle a -> a -> IO Bool
 delete (ListHandle hd size) v = do 
-       res <- atomically (readTVar hd >>= \(Head n) -> deleteLoop n hd); 
+       res <- atomically' (readTVar hd >>= \(Head n) -> deleteLoop n hd) 3; 
        if res
-       then atomically (inc size (-1)) >>= \_ -> return res
+       then atomically' (inc size (-1)) 4 >>= \_ -> return res
        else return res
        where
        deleteLoop l prev = do
@@ -99,9 +109,9 @@ next (Head n) = n
 next (Node _ n) = n
 
 deleteIndex (ListHandle hd size) v = do
-            res <- atomically (readTVar hd >>= \(Head n) -> deleteLoop n hd v)      
+            res <- atomically' (readTVar hd >>= \(Head n) -> deleteLoop n hd v) 3 
             if res 
-            then atomically (inc size (-1)) >>= \_ -> return res
+            then atomically' (inc size (-1)) 4 >>= \_ -> return res
             else return res
             where
             deleteLoop l prev 0 = do

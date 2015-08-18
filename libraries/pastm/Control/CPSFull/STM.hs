@@ -26,6 +26,7 @@ module Control.CPSFull.STM
     readTVar,
     writeTVar,
     atomically,
+    atomically',
     STM(..),
     printStats,
     TVar(..),    
@@ -74,13 +75,15 @@ initK a s = (# s, a #)
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c initK) s)
 
+atomically' :: STM a -> Word -> IO a
+atomically' (STM c) event = IO $ \s -> unsafeCoerce# atomically'# (c initK) event s
+
 
 foreign import prim "stg_full_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
-{-         FFI won't accept this type...
-        :: (State# RealWorld -> (# State# RealWorld , b #) )
-            -> State# RealWorld -> (# State# RealWorld, b #)
--} 
+
+foreign import prim safe "stg_full_atomicallyzhWithEvent" atomically'#
+        :: Any() -> Any() -> State# RealWorld -> (# State# s, Any() #)
 
 foreign import prim "stg_full_readTVarzh" readTVar#
         :: TVar# s a -> Any() -> State# s -> (# State# s, a #)

@@ -67,4 +67,3 @@ stg_dumpSTMProfile(){
     ccall printSTMProfile();
     return();
 }
-

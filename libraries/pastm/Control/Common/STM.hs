@@ -26,7 +26,7 @@ module Control.Common.STM
     newTVarIO,   
     readTVarIO, 
     writeTVarIO,
-    TVar(..),    
+    TVar(..),   
     printSTMProfile
 )
 where
@@ -34,6 +34,7 @@ where
 import GHC.Base(State#, RealWorld, IO(..), ap, TVar#)
 import GHC.Prim(Any, unsafeCoerce#)
 import GHC.Conc.Sync(TVar(..))
+import Foreign.C.String
 
 readTVarIO :: TVar a -> IO a
 readTVarIO (TVar tv) = IO $ \s -> unsafeCoerce# readTVarIO# tv s 

@@ -37,7 +37,7 @@ INFO_TABLE_RET(stg_partial_atomically_frame, ATOMICALLY_FRAME,
     if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint
 	trec = StgTSO_ptrec(CurrentTSO);
 		
-        ("ptr" trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", trec "ptr");
+        ("ptr" trec) = ccall pa_stmStartTransactionAfterAbort(MyCapability() "ptr", trec "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
 
@@ -91,6 +91,31 @@ stg_partial_atomicallyzh (P_ stm)
         (stm);
 }
 
+stg_partial_atomicallyzhWithEvent(P_ stm, P_ event){
+    P_ old_trec;
+    P_ new_trec;
+    P_ code, next_invariant, frame_result;
+    
+    MAYBE_GC_PP(stg_partial_atomicallyzhWithEvent, stm, event);
+
+    STK_CHK_GEN();
+
+    old_trec = StgTSO_ptrec(CurrentTSO);
+
+    /* Start the memory transcation */
+    ("ptr" new_trec) = ccall pa_stmStartTransactionWithEvent(MyCapability() "ptr", old_trec "ptr", event "ptr");
+    StgTSO_ptrec(CurrentTSO) = new_trec;
+
+    code = stm;
+    next_invariant = END_INVARIANT_CHECK_QUEUE;
+    frame_result = NO_TREC;
+
+    jump stg_ap_v_fast
+        (ATOMICALLY_FRAME_FIELDS(,,stg_partial_atomically_frame_info, CCCS, 0,
+                                 code,next_invariant,frame_result))
+        (stm);
+}
+
 stg_partial_eagerFullAbort
 {
     W_ frame;
@@ -111,6 +136,8 @@ stg_partial_eagerFullAbort
        Sp = stack->sp;
        SpLim = stack->stack + RESERVED_STACK_WORDS;
        HpAlloc = 0;
+    //Hopefully PP doesn't stand for pointer pointer, and if it does
+    //hopefully it doesn't matter that I am passing in a non-pointer
        --   HpAlloc is assumed to be set to non-zero only by a failed
        --   heap check, see HeapStackCheck.cmm:GC_GENERIC
        p_findAtomicallyFrameHelper will set the tso->stackobj->sp to point to the 
@@ -182,8 +209,8 @@ stg_partial_readTVarzh (P_ tvar, P_ k)
 
     trec = StgTSO_ptrec(CurrentTSO);
     ("ptr" result) = ccall pa_stmReadTVar(MyCapability() "ptr", trec "ptr",
-										  tvar "ptr", k "ptr");
-
+					  tvar "ptr", k "ptr");
+    
     if(result == PASTM_FAIL){
         jump stg_partial_eagerFullAbort []; //full abort
     }
@@ -269,4 +296,7 @@ stg_partial_catchRetryzh (P_ first_code,     /* :: STM a */
     
     jump stg_ap_v_fast (first_code);
 }
+
+
+
 
