@@ -256,27 +256,8 @@ static StgPTRecWithK * pa_validate(StgPTRecHeader * trec, Capability * cap){
     }
 }
 
-STATIC_INLINE uint64_t TIMER_Now ()
-{
-#if defined(HAVE_MACH_ABSOLUTE_TIME)
-    return mach_absolute_time();
-#elif defined(HAVE_CLOCK_GETTIME)
-    struct timespec t;
-    clock_gettime (CLOCK_REALTIME, &t);
-    return (NS_PER_SECOND * (uint64_t)t.tv_sec) + (uint64_t)t.tv_nsec;
-#else
-    struct timeval t;
-    gettimeofday (&t, 0);
-    return (NS_PER_SECOND * (uint64_t)t.tv_sec) + (US_PER_NANOSECOND * (uint64_t)t.tv_usec);
-#endif
-}
-
 StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
 			    StgTVar * tvar, StgClosure * k){
-#ifdef STMPROF
-    uint64_t startRead = TIMER_Now();
-#endif
-    
     StgWriteSet * ws = trec->write_set;
     while(ws != TO_WRITE_SET(NO_PTREC)){
         if(ws->tvar == tvar){

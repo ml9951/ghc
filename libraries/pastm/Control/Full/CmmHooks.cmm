@@ -71,6 +71,31 @@ stg_full_atomicallyzh (P_ stm)
         (stm);
 }
 
+stg_full_atomicallyzhWithEvent(P_ stm, P_ event){
+    P_ old_trec;
+    P_ new_trec;
+    P_ code, next_invariant, frame_result;
+    
+    MAYBE_GC_PP(stg_full_atomicallyzhWithEvent, stm, event);
+
+    STK_CHK_GEN();
+
+    old_trec = StgTSO_ptrec(CurrentTSO);
+
+    /* Start the memory transcation */
+    ("ptr" new_trec) = ccall fa_stmStartTransactionWithEvent(MyCapability() "ptr", old_trec "ptr", event "ptr");
+    StgTSO_ptrec(CurrentTSO) = new_trec;
+
+    code = stm;
+    next_invariant = END_INVARIANT_CHECK_QUEUE;
+    frame_result = NO_TREC;
+
+    jump stg_ap_v_fast
+        (ATOMICALLY_FRAME_FIELDS(,,stg_full_atomically_frame_info, CCCS, 0,
+                                 code,next_invariant,frame_result))
+        (stm);
+}
+
 stg_full_eagerFullAbort
 {
     W_ frame;

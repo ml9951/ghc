@@ -78,12 +78,11 @@ atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c initK) s)
 atomically' :: STM a -> Word -> IO a
 atomically' (STM c) event = IO $ \s -> unsafeCoerce# atomically'# (c initK) event s
 
-
-foreign import prim "stg_full_atomicallyzh" atomically# 
-        :: Any() -> State# s -> (# State# s, Any() #)
-
 foreign import prim safe "stg_full_atomicallyzhWithEvent" atomically'#
         :: Any() -> Any() -> State# RealWorld -> (# State# s, Any() #)
+        
+foreign import prim "stg_full_atomicallyzh" atomically# 
+        :: Any() -> State# s -> (# State# s, Any() #)
 
 foreign import prim "stg_full_readTVarzh" readTVar#
         :: TVar# s a -> Any() -> State# s -> (# State# s, a #)

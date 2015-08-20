@@ -28,12 +28,11 @@ module Control.Full.STM
     atomically,
     STM(..),
     printStats,
+    atomically',
     TVar(..),    
     newTVar       
 )
 where
-
-
 
 import GHC.Conc.Sync(TVar(..))
 import GHC.Base(State#, RealWorld, IO(..), ap, newTVar#, TVar#)
@@ -68,25 +67,11 @@ newTVar x = STM $ \s -> case newTVar# x s of
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> unsafeCoerce# atomically# c s)
 
-{-
--- |Retry execution of the current memory transaction because it has seen
--- values in TVars which mean that it should not continue (e.g. the TVars
--- represent a shared buffer that is now empty).  The implementation may
--- block the thread until one of the TVars that it has read from has been
--- udpated. (GHC only)
-retry :: STM a
-retry = STM $ \c -> \s# -> pretry# s#
+atomically' :: STM a -> Word -> IO a
+atomically' (STM c) event = IO $ \s -> unsafeCoerce# atomically'# c event s
 
--- |Compose two alternative STM actions (GHC only).  If the first action
--- completes without retrying then it forms the result of the orElse.
--- Otherwise, if the first action retries, then the second action is
--- tried in its place.  If both actions retry then the orElse as a
--- whole retries.
-orElse :: STM a -> STM a -> STM a
-orElse (STM m) e = STM $ \c -> \s -> 
-       let m' = m c -- :: State# RealWorld -> (# State$ RealWorld, r #)
-       in pcatchRetry# m' (unSTM e c) (\a -> m') s
--}
+foreign import prim safe "stg_full_atomicallyzhWithEvent" atomically'#
+        :: Any() -> Any() -> State# RealWorld -> (# State# s, Any() #)
 
 foreign import prim "stg_full_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)

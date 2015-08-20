@@ -1,22 +1,23 @@
-function [] = time_stats(events, tags)
+function [times, allCores] = time_stats(events, tags, tagMapping)
 
 times = cell(size(events));
 for i = 1:length(events)
     core = events{i};
     startStops = core(core(:, tags.Type) >= 0 | core(:, tags.Type) == tags.Commit, :);
-    
-    times{i} = [startStops(1:2:end, tags.Type), startStops(2:2:end, 1) - startStops(1:2:end, 1)];
-    
+    times{i} = [startStops(1:2:end, tags.Type), ...
+                startStops(2:2:end, 1) - startStops(1:2:end, 1), ...
+                startStops(1:2:end, tags.Time), ...
+                zeros(size(startStops, 1) / 2, 1) + i];
 end
 
-header = 'Core  |  ';
-types = unique(times{1}(:, 1));
+allCores = cell2mat(times);
 
-for i = types'
-    header = [header 'Operation ' num2str(i) '  |  ' ];
+if nargin > 2
+    labels = tagMapping(allCores(:, 1), :);
+else
+    labels = allCores(:, 1);
 end
 
-fprintf([header '\n']);
-
-
+boxplot(allCores(:, 2) / 1000000, labels);
+ylabel('Time in Milliseconds')
 end

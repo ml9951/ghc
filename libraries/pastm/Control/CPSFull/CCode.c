@@ -29,6 +29,9 @@
 static volatile unsigned long version_clock = 0;
 
 StgPTRecHeader * fa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
+#ifdef TRACING  
+    postEvent (cap, EVENT_START_TX);
+#endif
     
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
@@ -86,7 +89,10 @@ void clearTRec(StgPTRecHeader * trec){
 static StgBool shouldAbort = TRUE;
 #endif
 
-static StgClosure * fa_validate(StgPTRecHeader * trec){
+static StgClosure * fa_validate(Capability * cap, StgPTRecHeader * trec){
+#ifdef TRACING
+    postEvent (cap, EVENT_BEGIN_COMMIT);
+#endif
     while(TRUE){
         unsigned long time = version_clock;
         if((time & 1) != 0){
@@ -134,10 +140,13 @@ StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     //Not found in write set
     StgClosure * val = tvar->current_value;
     while(trec->read_version != version_clock){
-        StgClosure * res = fa_validate(trec);
+        StgClosure * res = fa_validate(cap, trec);
         if(res == PASTM_FAIL){
 #ifdef STATS
 	    cap->pastmStats.eagerFullAborts++;
+#endif
+#ifdef TRACING
+	    postEvent(cap, EVENT_EAGER_FULL_ABORT);
 #endif
             return PASTM_FAIL;
         }
@@ -173,7 +182,7 @@ void fa_stmWriteTVar(Capability *cap,
 StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
 #ifdef ABORT
-    StgClosure * checkpoint = fa_validate(trec);
+    StgClosure * checkpoint = fa_validate(cap, trec);
     if(checkpoint != PASTM_SUCCESS){
 	return checkpoint;
     }
@@ -181,10 +190,13 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 
     unsigned long snapshot = trec->read_version;
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
-        StgClosure * res = fa_validate(trec);
+        StgClosure * res = fa_validate(cap, trec);
         if(res != PASTM_SUCCESS){
 #ifdef STATS
 	    cap->pastmStats.commitTimeFullAborts++;
+#endif
+#ifdef TRACING  
+	    postEvent (cap, EVENT_COMMIT_FULL_ABORT);
 #endif
             //The validate function sets up the trec with the appropriate read/write sets
             return res;
@@ -218,6 +230,11 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     clearTRec(trec);
 
     version_clock = snapshot + 2;//unlock clock
+
+#ifdef TRACING  
+    postEvent (cap, EVENT_COMMIT_TX);
+#endif
+		
     return PASTM_SUCCESS;
 }
 
