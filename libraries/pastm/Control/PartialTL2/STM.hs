@@ -36,8 +36,7 @@ where
 import GHC.Base(State#, RealWorld, IO(..), ap, TVar#)
 import GHC.Prim(Any, unsafeCoerce#)
 import GHC.Conc.Sync(TVar(..))
-
-import Dump
+import Control.Common.STM(newTVar#)
 
 newtype STM a = STM {unSTM :: forall r . --r is the type of the final result
                                  (a -> State# RealWorld -> (# State# RealWorld, r #)) -> --Continuation
@@ -65,7 +64,7 @@ writeTVar (TVar tv) a = STM $ \c -> \s ->
                (# s', tv #) -> c () s'
 
 newTVar :: a -> STM (TVar a)
-newTVar x = STM $ \c -> \s -> case unsafeCoerce# newTL2TVar# x s of
+newTVar x = STM $ \c -> \s -> case unsafeCoerce# newTVar# x s of
                                 (# s', tv #) -> c (TVar tv) s'
 
 initK :: a -> State# RealWorld -> (# State# RealWorld, a #)
@@ -74,16 +73,13 @@ initK a s = (# s, a #)
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c initK) s)
 
-foreign import prim safe "stg_partial_atomicallyzh" atomically# 
+foreign import prim safe "stg_ptl2_atomicallyzh" atomically# 
         :: Any() -> State# RealWorld -> (# State# RealWorld, Any() #)
 
-foreign import prim safe "stg_partial_readTVarzh" readTVar#
+foreign import prim safe "stg_ptl2_readTVarzh" readTVar#
         :: Any() -> Any() -> State# RealWorld -> (# State# RealWorld, a #)
 
-foreign import prim safe "stg_partial_writeTVarzh" writeTVar#
+foreign import prim safe "stg_ptl2_writeTVarzh" writeTVar#
         :: Any() -> Any() -> State# RealWorld -> (# State# RealWorld, a #)
 
-foreign import ccall "pa_printSTMStats" printStats :: IO ()
-
-foreign import prim safe "stg_newTL2TVarzh" newTL2TVar#
-        :: Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #) 
+foreign import ccall "c_ptl2_printSTMStats" printStats :: IO ()
