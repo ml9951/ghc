@@ -4,7 +4,7 @@ where
 
 #ifdef STMHASKELL
 import Control.STMHaskell.STM     --full abort STM haskell
-#elif defined(FABORT)
+#elif defined(NOREC)
 import Control.NoRec.STM           --full abort STM (NoRec)
 #elif defined(ORDERED)
 import Control.Ordered.STM
@@ -23,14 +23,6 @@ import Control.FullTL2.STM
 #else
 #error No STM Specified
 #endif
-
------------------------------------------------------------------------------
--- This file file annotates transactions for logging with the following mapping:
---   1# --> insert
---   2# --> find
---   3# --> delete
---   4# --> increment / decrement
------------------------------------------------------------------------------
 
 import Foreign.C.String
 import Control.Common.STM

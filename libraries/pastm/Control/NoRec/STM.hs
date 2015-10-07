@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, MagicHash, UnboxedTuples, Rank2Types, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes#-}
+{-# LANGUAGE CPP, MagicHash, UnboxedTuples, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes#-}
 
 #if __GLASGOW_HASKELL__ >= 701
 {-# LANGUAGE Trustworthy #-}
@@ -21,14 +21,13 @@
 --
 -----------------------------------------------------------------------------
 
-module Control.Full.STM
+module Control.NoRec.STM
 (
     readTVar,
     writeTVar,
     atomically,
     STM(..),
     printStats,
-    atomically',
     TVar(..),    
     newTVar       
 )
@@ -43,7 +42,7 @@ newtype STM a = STM {unSTM :: State# RealWorld ->                               
 
 instance Monad STM where
     return a = STM $ \s -> (# s, a #)
-    m >>= k = {-# SCC ">>=" #-} STM $ \s -> case unSTM m s of
+    m >>= k =  STM $ \s -> case unSTM m s of
                              (# s', t #) -> unSTM (k t) s'
 instance Applicative STM where
     (<*>) = ap
@@ -53,7 +52,7 @@ instance  Functor STM where
     fmap f m = m >>= (return . f)
 
 readTVar :: TVar a -> STM a
-readTVar (TVar tv) = {-# SCC "readTVar" #-} STM $ \s-> ({-# SCC "readTVar#" #-} unsafeCoerce# readTVar# tv s)
+readTVar (TVar tv) =  STM $ \s-> unsafeCoerce# readTVar# tv s
 
 writeTVar :: TVar a -> a -> STM ()
 writeTVar (TVar tv) a = STM $ \s -> 
@@ -67,24 +66,18 @@ newTVar x = STM $ \s -> case newTVar# x s of
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> unsafeCoerce# atomically# c s)
 
-atomically' :: STM a -> Word -> IO a
-atomically' (STM c) event = IO $ \s -> unsafeCoerce# atomically'# c event s
-
-foreign import prim safe "stg_full_atomicallyzhWithEvent" atomically'#
-        :: Any() -> Any() -> State# RealWorld -> (# State# s, Any() #)
-
-foreign import prim "stg_full_atomicallyzh" atomically# 
+foreign import prim "stg_norec_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
 {-         FFI won't accept this type...
         :: (State# RealWorld -> (# State# RealWorld , b #) )
             -> State# RealWorld -> (# State# RealWorld, b #)
 -} 
 
-foreign import prim "stg_full_readTVarzh" readTVar#
+foreign import prim "stg_norec_readTVarzh" readTVar#
         :: TVar# s a -> State# s -> (# State# s, a #)
 
-foreign import prim "stg_full_writeTVarzh" writeTVar#
+foreign import prim "stg_norec_writeTVarzh" writeTVar#
         :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
 
 
-foreign import ccall "fa_printSTMStats" printStats :: IO()
+foreign import ccall "c_norec_printSTMStats" printStats :: IO()

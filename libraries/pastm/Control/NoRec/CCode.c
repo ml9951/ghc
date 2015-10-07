@@ -4,12 +4,6 @@
 #include <stdio.h>
 #include "eventlog/EventLog.h"
 
-#define US_PER_NANOSECOND     1000
-#define MS_PER_SECOND  	      1000
-#define US_PER_SECOND	      (1000 * MS_PER_SECOND)
-#define NS_PER_SECOND	      (1000 * US_PER_SECOND)
-
-
 #define TRUE 1
 #define FALSE 0
 #define KBOUND 20
@@ -22,7 +16,6 @@
 #define TO_CLOSURE(x) ((StgClosure*)x)
 #define TO_OR_ELSE(x) ((StgPTRecOrElse *)x)
 
-
 #define PASTM_SUCCESS              ((StgClosure*)(void*)&stg_PA_STM_SUCCESS_closure)
 #define PASTM_FAIL                 ((StgClosure*)(void*)&stg_PA_STM_FAIL_closure)
 #define NO_PTREC                   ((StgPTRecHeader *)(void *)&stg_NO_PTREC_closure)
@@ -32,7 +25,7 @@
 
 static volatile unsigned long version_clock = 0;
 
-StgPTRecHeader * fa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
+StgPTRecHeader * norec_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
 #ifdef TRACING  
     postEvent (cap, EVENT_START_TX);
 #endif
@@ -60,38 +53,12 @@ StgPTRecHeader * fa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
     return ptrec;
 }
 
-StgPTRecHeader * fa_stmStartTransactionWithEvent(Capability *cap, StgPTRecHeader * ptrec, StgWord event) {
-#ifdef TRACING  
-    postStartTX(cap, ((StgWord*)(event & (~7)))[1]);
-#endif
-
-    if(ptrec == NO_PTREC){
-	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
-    	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
-    	ptrec->tail = TO_WITHOUTK(NO_PTREC);
-    	ptrec->read_set = TO_WITHOUTK(NO_PTREC);
-    	ptrec->lastK = TO_WITHK(NO_PTREC);
-    	ptrec->write_set = TO_WRITE_SET(NO_PTREC);
-    	ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
-    }
-    
-    //get a read version
-    ptrec->read_version = version_clock;
-    while((ptrec->read_version & 1) != 0){
-        ptrec->read_version = version_clock;
-    }
-    ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ; 
-    ptrec->numK = 0;
-
-    return ptrec;
-}
-
 void clearTRec(StgPTRecHeader * trec){
     trec->read_set = TO_WITHOUTK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
 }
 
-static StgClosure * fa_validate(Capability * cap, StgPTRecHeader * trec){
+static StgClosure * norec_validate(Capability * cap, StgPTRecHeader * trec){
 #ifdef TRACING
     postEvent (cap, EVENT_BEGIN_COMMIT);
 #endif
@@ -119,7 +86,7 @@ static StgClosure * fa_validate(Capability * cap, StgPTRecHeader * trec){
     }
 }
 
-StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
+StgClosure * norec_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
 			    StgTVar * tvar){
     StgWriteSet * ws = trec->write_set;
 
@@ -133,7 +100,7 @@ StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     //Not found in write set
     StgClosure * val = tvar->current_value;
     while(trec->read_version != version_clock){
-        StgClosure * res = fa_validate(cap, trec);
+        StgClosure * res = norec_validate(cap, trec);
         if(res == PASTM_FAIL){
 #ifdef STATS
 	    cap->pastmStats.eagerFullAborts++;
@@ -159,7 +126,7 @@ StgClosure * fa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     return val;
 }
 
-void fa_stmWriteTVar(Capability *cap,
+void norec_stmWriteTVar(Capability *cap,
                     StgPTRecHeader *trec,
                     StgTVar *tvar,
                     StgClosure *new_value) {
@@ -171,10 +138,10 @@ void fa_stmWriteTVar(Capability *cap,
     trec->write_set = newEntry;
 }
 
-StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+StgClosure * norec_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     unsigned long snapshot = trec->read_version;
     while (cas(&version_clock, snapshot, snapshot+1) != snapshot){ 
-        StgClosure * res = fa_validate(cap, trec);
+        StgClosure * res = norec_validate(cap, trec);
         if(res != PASTM_SUCCESS){
 #ifdef STATS
 	    cap->pastmStats.commitTimeFullAborts++;
@@ -187,11 +154,11 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
         }
         snapshot = trec->read_version;
     }
-   
+
+    //reverse the write set, so that new modifications overwrite old ones
     StgWriteSet * one, * two;
     one = TO_WRITE_SET(NO_PTREC);
     two = trec->write_set;
-    
     while(two != TO_WRITE_SET(NO_PTREC)){
         StgWriteSet * temp = two->next;
 	two->next = one;
@@ -220,7 +187,7 @@ StgClosure * fa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
     return PASTM_SUCCESS;
 }
 
-void fa_printSTMStats(){
+void c_norec_printSTMStats(){
 #ifdef STATS
     StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
     getStats(&stats);
