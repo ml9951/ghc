@@ -494,8 +494,8 @@ wanteds = concat
           ,closureSize  C "StgTL2TVar"
 
           ,closureField C "StgTL2TVar" "current_value"
-          ,closureField C "StgTL2TVar" "stamp"
-          ,closureField C "StgTL2TVar" "lock"
+          ,closureField C "StgTL2TVar" "currentStamp"
+          ,closureField C "StgTL2TVar" "oldStamp"
 
           ,closureSize  C "StgCatchSTMFrame"
           ,closureField C "StgCatchSTMFrame" "handler"

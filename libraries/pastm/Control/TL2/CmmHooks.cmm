@@ -13,7 +13,7 @@
     p_ result
 
 
-INFO_TABLE_RET(stg_partial_atomically_frame, ATOMICALLY_FRAME,
+INFO_TABLE_RET(stg_tl2_atomically_frame, ATOMICALLY_FRAME,
                // layout of the frame, and bind the field names
                ATOMICALLY_FRAME_FIELDS(W_,P_,
                                        info_ptr, p1, p2,
@@ -28,7 +28,7 @@ INFO_TABLE_RET(stg_partial_atomically_frame, ATOMICALLY_FRAME,
     trec = StgTSO_ptrec(CurrentTSO);
 
     /* We've got no more invariants to check, try to commit */
-    ("ptr" checkpoint) = ccall pa_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
+    ("ptr" checkpoint) = ccall tl2_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
 
     if(checkpoint == PASTM_SUCCESS){ //Validation succeeded
         StgTSO_ptrec(CurrentTSO) = NO_PTREC;
@@ -38,7 +38,7 @@ INFO_TABLE_RET(stg_partial_atomically_frame, ATOMICALLY_FRAME,
     if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint
 		trec = StgTSO_ptrec(CurrentTSO);
 		
-        ("ptr" trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", trec "ptr");
+        ("ptr" trec) = ccall tl2_stmStartTransaction(MyCapability() "ptr", trec "ptr");
         StgTSO_ptrec(CurrentTSO) = trec;
         next_invariant = END_INVARIANT_CHECK_QUEUE;
 
@@ -65,21 +65,21 @@ INFO_TABLE_RET(stg_partial_atomically_frame, ATOMICALLY_FRAME,
     }
 }
 
-stg_partial_atomicallyzh (P_ stm)
+stg_tl2_atomicallyzh (P_ stm)
 {
     P_ old_trec;
     P_ new_trec;
     P_ code, next_invariant, frame_result;
 
     // stmStartTransaction may allocate
-    MAYBE_GC_P(stg_partial_atomicallyzh, stm);
+    MAYBE_GC_P(stg_tl2_atomicallyzh, stm);
 
     STK_CHK_GEN();
 
     old_trec = StgTSO_ptrec(CurrentTSO);
 
     /* Start the memory transcation */
-    ("ptr" new_trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
+    ("ptr" new_trec) = ccall tl2_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
     StgTSO_ptrec(CurrentTSO) = new_trec;
 
     code = stm;
@@ -87,12 +87,12 @@ stg_partial_atomicallyzh (P_ stm)
     frame_result = NO_TREC;
 
     jump stg_ap_v_fast
-        (ATOMICALLY_FRAME_FIELDS(,,stg_partial_atomically_frame_info, CCCS, 0,
+        (ATOMICALLY_FRAME_FIELDS(,,stg_tl2_atomically_frame_info, CCCS, 0,
                                  code,next_invariant,frame_result))
         (stm);
 }
 
-stg_partial_eagerFullAbort
+stg_tl2_eagerFullAbort
 {
     W_ frame;
     P_ code; 
@@ -156,7 +156,7 @@ stg_partial_eagerFullAbort
  *   independent.
  *************************************************************************/
 //Pass the checkpoint in R1
-stg_partial_eagerPartialAbort
+stg_tl2_eagerPartialAbort
 {
     P_ k;
     P_ val;
@@ -172,83 +172,42 @@ stg_partial_eagerPartialAbort
 
 }
 
-stg_partial_readTVarzh (P_ tvar, P_ k)
+stg_tl2_readTVarzh (P_ tvar, P_ k)
 {
     P_ trec;
     P_ result;
     W_ header;
     
     // Call to stmReadTVar may allocate
-    MAYBE_GC_PP (stg_partial_readTVarzh, tvar, k);
+    MAYBE_GC_PP (stg_tl2_readTVarzh, tvar, k);
 
     trec = StgTSO_ptrec(CurrentTSO);
-    ("ptr" result) = ccall pa_stmReadTVar(MyCapability() "ptr", trec "ptr",
+    ("ptr" result) = ccall tl2_stmReadTVar(MyCapability() "ptr", trec "ptr",
 					  tvar "ptr", k "ptr");
 
     if(result == PASTM_FAIL){
-        jump stg_partial_eagerFullAbort []; //full abort
+        jump stg_tl2_eagerFullAbort []; //full abort
     }
     
     header = StgHeader_info(result);
 
     if(header == stg_PTREC_WITHK_info){
-        jump stg_partial_eagerPartialAbort(result);
+        jump stg_tl2_eagerPartialAbort(result);
     }
 
     return (result);
 }
 
-/*
-counterTL2`stg_partial_readTVarzh:
-    0x100004510 <+0>:   movq   0x378(%r13), %rax
-    0x100004517 <+7>:   cmpq   $0x0, 0x10(%rax)
-    0x10000451c <+12>:  je     0x100004587               ; <+119>
-    0x10000451e <+14>:  leaq   0x52988b(%rip), %rax      ; g0
-    0x100004525 <+21>:  movq   (%rax), %rax
-    0x100004528 <+24>:  movq   0x38(%rax), %rax
-    0x10000452c <+28>:  leaq   0x52989d(%rip), %rcx      ; large_alloc_lim
-    0x100004533 <+35>:  cmpq   (%rcx), %rax
-    0x100004536 <+38>:  jae    0x100004587               ; <+119>
-    0x100004538 <+40>:  movq   0x368(%r13), %rax
-    0x10000453f <+47>:  movq   0x58(%rax), %rax
-    0x100004543 <+51>:  leaq   0x236(%rip), %rcx         ; pa_stmReadTVar at CCode.c:133
-    0x10000454a <+58>:  leaq   -0x18(%r13), %rdx
-    0x10000454e <+62>:  movq   %rdx, %rdi
-    0x100004551 <+65>:  movq   %rax, %rsi
-    0x100004554 <+68>:  movq   %rbx, %rdx
-    0x100004557 <+71>:  movq   %rcx, %rax
-    0x10000455a <+74>:  movq   %r14, %rcx
-    0x10000455d <+77>:  subq   $0x8, %rsp
-    0x100004561 <+81>:  movq   %rax, %rbx
-    0x100004564 <+84>:  xorl   %eax, %eax
-    0x100004566 <+86>:  callq  *%rbx
-->  0x100004568 <+88>:  addq   $0x8, %rsp
-    0x10000456c <+92>:  cmpq   0x4a4b45(%rip), %rax      ; (void *)0x00000001005219b0: stg_PA_STM_FAIL_closure
-    0x100004573 <+99>:  je     0x10000459f               ; <+143>
-    0x100004575 <+101>: movq   (%rax), %rbx
-    0x100004578 <+104>: cmpq   0x4a4b49(%rip), %rbx      ; (void *)0x000000010047a500: stg_PTREC_WITHK_info
-    0x10000457f <+111>: je     0x1000045a5               ; <+149>
-    0x100004581 <+113>: movq   %rax, %rbx
-    0x100004584 <+116>: jmpq   *(%rbp)
-    0x100004587 <+119>: movq   $0x0, 0x388(%r13)
-    0x100004592 <+130>: leaq   -0x89(%rip), %rsi         ; <+0>
-    0x100004599 <+137>: jmpq   *0x4a4cd1(%rip)           ; (void *)0x0000000100474348: stg_gc_prim_pp
-    0x10000459f <+143>: jmpq   *0x4a4d43(%rip)           ; (void *)0x0000000100004388: stg_partial_eagerFullAbort
-    0x1000045a5 <+149>: movq   %rax, %rbx
-    0x1000045a8 <+152>: jmpq   *0x4a4d42(%rip)           ; (void *)0x0000000100004448: stg_partial_eagerPartialAbort
-    0x1000045ae <+158>: nop 
-*/
-
-stg_partial_writeTVarzh (P_ tvar,     /* :: TVar a */
+stg_tl2_writeTVarzh (P_ tvar,     /* :: TVar a */
 			 P_ new_value /* :: a      */)
 {
     W_ trec;
 
     // Call to stmWriteTVar may allocate
-    MAYBE_GC_PP (stg_partial_writeTVarzh, tvar, new_value);
+    MAYBE_GC_PP (stg_tl2_writeTVarzh, tvar, new_value);
 
     trec = StgTSO_ptrec(CurrentTSO);
-    ccall pa_stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
+    ccall tl2_stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
 						  new_value "ptr");
     return (tvar);
 }
@@ -265,15 +224,11 @@ stg_newTL2TVarzh (P_ init)
     SET_HDR (tv, stg_TL2_TVAR_DIRTY_info, CCCS);
 
     StgTL2TVar_current_value(tv) = init;
-    StgTL2TVar_stamp(tv) = 0;
-    StgTL2TVar_lock(tv) = 0;
+    StgTL2TVar_currentStamp(tv) = 0;
+    StgTL2TVar_oldStamp(tv) = 0;
 
     return (tv);
 }
 
-stg_readTL2TVarIOzh(P_ tvar)
-{
-    P_ result;
-    result = StgTL2TVar_current_value(tvar);
-    return(result);
-}
+
+

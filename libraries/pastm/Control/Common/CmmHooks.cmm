@@ -10,8 +10,8 @@ stg_tl2_newTVarIOzh (P_ init)
     SET_HDR (tv, stg_TL2_TVAR_DIRTY_info, CCCS);
 
     StgTL2TVar_current_value(tv) = init;
-    StgTL2TVar_stamp(tv) = 0;
-    StgTL2TVar_lock(tv) = 0;
+    StgTL2TVar_currentStamp(tv) = 0;
+    StgTL2TVar_oldStamp(tv) = 0;
 
     return (tv);
 }

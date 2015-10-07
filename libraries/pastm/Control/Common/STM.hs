@@ -27,7 +27,8 @@ module Control.Common.STM
     readTVarIO, 
     writeTVarIO,
     TVar(..),   
-    printSTMProfile
+    printSTMProfile,
+    newTVar#
 )
 where
 
@@ -40,7 +41,7 @@ readTVarIO :: TVar a -> IO a
 readTVarIO (TVar tv) = IO $ \s -> unsafeCoerce# readTVarIO# tv s 
 
 newTVarIO :: a -> IO (TVar a)
-newTVarIO x = IO $ \s -> case unsafeCoerce# newTL2TVar# x s of
+newTVarIO x = IO $ \s -> case unsafeCoerce# newTVar# x s of
                               (# s', tv #) -> (# s', TVar tv #)
 
 writeTVarIO :: TVar a -> a -> IO ()
@@ -58,7 +59,7 @@ foreign import prim safe "stg_dumpSTMProfile" dumpSTMProfile
         :: State# RealWorld -> (# State# RealWorld, ()#)
 
 #if defined(TL2) || defined(PTL2)
-foreign import prim safe "stg_tl2_newTVarIOzh" newTL2TVar#
+foreign import prim safe "stg_tl2_newTVarIOzh" newTVar#
         :: Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #) 
 
 foreign import prim safe "stg_tl2_readTVarIOzh" readTVarIO#
@@ -68,7 +69,7 @@ foreign import prim safe "stg_tl2_writeTVarIOzh" writeTVarIO#
         :: TVar# RealWorld a -> Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #)
 
 #else
-foreign import prim safe "stg_norec_newTVarIOzh" newTL2TVar#
+foreign import prim safe "stg_norec_newTVarIOzh" newTVar#
         :: Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #) 
 
 foreign import prim safe "stg_norec_readTVarIOzh" readTVarIO#

@@ -18,6 +18,8 @@ import Control.Chunked.STM
 import Control.FastForward.STM
 #elif defined(PABORT)
 import Control.NoRec.STM
+#elif defined(TL2)
+import Control.FullTL2.STM
 #else
 #error No STM Specified
 #endif
@@ -62,7 +64,7 @@ mkEvent size item typ =  (shift (fromIntegral size) 34) .|. (shift (fromIntegral
 
 --add :: Ord a => ListHandle a -> a -> IO()
 add :: ListHandle Int -> Int -> IO()
-add (ListHandle hd size) v = do s <- readIORef size;  atomically' (addLoop hd) (mkEvent s v 1) ; atomicModifyIORef size (\s -> (s+1, ()))
+add (ListHandle hd size) v = do s <- readIORef size;  atomically (addLoop hd) ; atomicModifyIORef size (\s -> (s+1, ()))
     where
     addLoop l = do
             raw <- readTVar l
@@ -80,7 +82,7 @@ add (ListHandle hd size) v = do s <- readIORef size;  atomically' (addLoop hd) (
 
 --find :: Eq a => ListHandle a -> a -> IO Bool
 find :: ListHandle Int -> Int -> IO Bool
-find (ListHandle hd size) v = do s <- readIORef size; atomically' (findLoop hd) (mkEvent s v 2)
+find (ListHandle hd size) v = do s <- readIORef size; atomically (findLoop hd)
      where
      findLoop l = do
               raw <- readTVar l
@@ -94,7 +96,7 @@ find (ListHandle hd size) v = do s <- readIORef size; atomically' (findLoop hd) 
 
 delete :: Ord a => ListHandle a -> a -> IO Bool
 delete (ListHandle hd size) v = do 
-       res <- atomically' (readTVar hd >>= \(Head n) -> deleteLoop n hd) 3; 
+       res <- atomically (readTVar hd >>= \(Head n) -> deleteLoop n hd) ; 
        if res
        then atomicModifyIORef size (\s -> (s+1, res)) --atomically' (inc size (-1)) 4 >>= \_ -> return res
        else return res
@@ -117,7 +119,7 @@ next (Node _ n) = n
 
 deleteIndex (ListHandle hd size) v = do
             s <- readIORef size
-            res <- atomically' (readTVar hd >>= \(Head n) -> deleteLoop n hd v) (mkEvent s v 3) 
+            res <- atomically (readTVar hd >>= \(Head n) -> deleteLoop n hd v)
             if res 
             then atomicModifyIORef size (\s -> (s+1, res)) --atomically' (inc size (-1)) 4 >>= \_ -> return res
             else return res
