@@ -82,6 +82,7 @@ import qualified Stream
 
 import Data.List
 import Data.Maybe
+import Data.Ord         ( comparing )
 import Control.Exception
 #if __GLASGOW_HASKELL__ < 709
 import Control.Applicative (Applicative(..))
@@ -428,12 +429,15 @@ cmmNativeGens dflags this_mod modLoc ncgImpl h dbgMap us
              cmmNativeGen dflags this_mod modLoc ncgImpl us fileIds dbgMap
                           cmm count
 
-        let newFileIds = fileIds' `minusUFM` fileIds
+        -- Generate .file directives for every new file that has been
+        -- used. Note that it is important that we generate these in
+        -- ascending order, as Clang's 3.6 assembler complains.
+        let newFileIds = sortBy (comparing snd) $ eltsUFM $ fileIds' `minusUFM` fileIds
             pprDecl (f,n) = ptext (sLit "\t.file ") <> ppr n <+>
                             doubleQuotes (ftext f)
 
         emitNativeCode dflags h $ vcat $
-          map pprDecl (eltsUFM newFileIds) ++
+          map pprDecl newFileIds ++
           map (pprNatCmmDecl ncgImpl) native
 
         -- force evaluation all this stuff to avoid space leaks
@@ -1046,12 +1050,12 @@ cmmStmtConFold stmt
                  args' <- mapM (cmmExprConFold DataReference) args
                  return $ CmmUnsafeForeignCall target' regs args'
 
-        CmmCondBranch test true false
+        CmmCondBranch test true false likely
            -> do test' <- cmmExprConFold DataReference test
                  return $ case test' of
                    CmmLit (CmmInt 0 _) -> CmmBranch false
                    CmmLit (CmmInt _ _) -> CmmBranch true
-                   _other -> CmmCondBranch test' true false
+                   _other -> CmmCondBranch test' true false likely
 
         CmmSwitch expr ids
            -> do expr' <- cmmExprConFold DataReference expr

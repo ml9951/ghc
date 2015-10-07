@@ -47,7 +47,7 @@ import Type
 import Kind (returnsConstraintKind)
 import Coercion hiding (substCo)
 import TysWiredIn ( eqBoxDataCon, coercibleDataCon, mkListTy
-                  , mkBoxedTupleTy, stringTy, typeNatKind, typeSymbolKind )
+                  , mkBoxedTupleTy, charTy, typeNatKind, typeSymbolKind )
 import Id
 import MkId(proxyHashId)
 import Class
@@ -1014,7 +1014,7 @@ dsEvCallStack cs = do
   let srcLocTy     = mkTyConTy srcLocTyCon
   let mkSrcLoc l =
         liftM (mkCoreConApps srcLocDataCon)
-              (sequence [ mkStringExprFS (packageKeyFS $ modulePackageKey m)
+              (sequence [ mkStringExpr (showPpr df $ modulePackageKey m)
                         , mkStringExprFS (moduleNameFS $ moduleName m)
                         , mkStringExprFS (srcSpanFile l)
                         , return $ mkIntExprInt df (srcSpanStartLine l)
@@ -1023,7 +1023,10 @@ dsEvCallStack cs = do
                         , return $ mkIntExprInt df (srcSpanEndCol l)
                         ])
 
-  let callSiteTy = mkBoxedTupleTy [stringTy, srcLocTy]
+  -- Be careful to use [Char] instead of String here to avoid
+  -- unnecessary dependencies on GHC.Base, particularly when
+  -- building GHC.Err.absentError
+  let callSiteTy = mkBoxedTupleTy [mkListTy charTy, srcLocTy]
 
   matchId         <- newSysLocalDs $ mkListTy callSiteTy
 

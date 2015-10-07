@@ -28,6 +28,9 @@ module TcRnTypes(
         IfGblEnv(..), IfLclEnv(..),
         tcVisibleOrphanMods,
 
+        -- Frontend types (shouldn't really be here)
+        FrontendResult(..),
+
         -- Renamer types
         ErrCtxt, RecFieldEnv(..),
         ImportAvails(..), emptyImportAvails, plusImportAvails,
@@ -325,6 +328,18 @@ data DsMetaVal
 *                                                                      *
 ************************************************************************
 -}
+
+-- | 'FrontendResult' describes the result of running the
+-- frontend of a Haskell module.  Usually, you'll get
+-- a 'FrontendTypecheck', since running the frontend involves
+-- typechecking a program, but for an hs-boot merge you'll
+-- just get a ModIface, since no actual typechecking occurred.
+--
+-- This data type really should be in HscTypes, but it needs
+-- to have a TcGblEnv which is only defined here.
+data FrontendResult
+        = FrontendTypecheck TcGblEnv
+        | FrontendMerge     ModIface
 
 -- | 'TcGblEnv' describes the top-level of the module at the
 -- point at which the typechecker is finished work.
@@ -1146,7 +1161,6 @@ data Ct
        --   * isTypeFamilyTyCon cc_fun
        --   * typeKind (F xis) = tyVarKind fsk
        --   * always Nominal role
-       --   * always Given or Wanted, never Derived
       cc_ev     :: CtEvidence,  -- See Note [Ct/evidence invariant]
       cc_fun    :: TyCon,       -- A type function
 

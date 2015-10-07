@@ -111,6 +111,7 @@
 #elif defined(cygwin32_HOST_OS) || defined (mingw32_HOST_OS)
 #  define OBJFORMAT_PEi386
 #  include <windows.h>
+#  include <shfolder.h> /* SHGetFolderPathW */
 #  include <math.h>
 #elif defined(darwin_HOST_OS)
 #  define OBJFORMAT_MACHO
@@ -162,7 +163,7 @@ Mutex linker_mutex;
  * This protects unloaded_objects.  We have a separate mutex for this, because
  * the GC needs to access unloaded_objects in checkUnload, while the linker only
  * needs to access unloaded_objects in unloadObj(), so this allows most linker
- * operations proceed concurrently with the GC. 
+ * operations proceed concurrently with the GC.
  */
 Mutex linker_unloaded_mutex;
 #endif
@@ -227,7 +228,10 @@ static int ocGetNames_PEi386    ( ObjectCode* oc );
 static int ocResolve_PEi386     ( ObjectCode* oc );
 static int ocRunInit_PEi386     ( ObjectCode* oc );
 static void *lookupSymbolInDLLs ( unsigned char *lbl );
-static void zapTrailingAtSign   ( unsigned char *sym );
+/* See Note [mingw-w64 name decoration scheme] */
+#ifndef x86_64_HOST_ARCH
+ static void zapTrailingAtSign   ( unsigned char *sym );
+#endif
 static char *allocateImageAndTrampolines (
    pathchar* arch_name, char* member_name,
 #if defined(x86_64_HOST_ARCH)
@@ -509,7 +513,6 @@ typedef struct _RtsSymbolVal {
       SymI_HasProto(strcpy)                              \
       SymI_HasProto(strncpy)                             \
       SymI_HasProto(abort)                               \
-      RTS_WIN32_ONLY(SymI_NeedsProto(_alloca))           \
       SymI_HasProto(isxdigit)                            \
       SymI_HasProto(isupper)                             \
       SymI_HasProto(ispunct)                             \
@@ -560,251 +563,239 @@ typedef struct _RtsSymbolVal {
       SymI_HasProto(rts_InstallConsoleEvent)             \
       SymI_HasProto(rts_ConsoleHandlerDone)              \
       SymI_NeedsProto(mktime)                            \
-      RTS_WIN32_ONLY(SymI_NeedsProto(_imp___timezone))   \
-      RTS_WIN32_ONLY(SymI_NeedsProto(_imp___tzname))     \
-      RTS_WIN32_ONLY(SymI_NeedsProto(_imp__tzname))      \
-      RTS_WIN32_ONLY(SymI_NeedsProto(_imp___iob))        \
-      RTS_WIN32_ONLY(SymI_NeedsProto(_imp___osver))      \
       SymI_NeedsProto(localtime)                         \
       SymI_NeedsProto(gmtime)                            \
       SymI_NeedsProto(opendir)                           \
       SymI_NeedsProto(readdir)                           \
       SymI_NeedsProto(rewinddir)                         \
-      RTS_WIN32_ONLY(SymI_NeedsProto(_imp____mb_cur_max)) \
-      RTS_WIN32_ONLY(SymI_NeedsProto(_imp___pctype))     \
-      RTS_WIN32_ONLY(SymI_NeedsProto(__chkstk))          \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp___iob_func))  \
+      RTS_WIN32_ONLY(SymI_NeedsProto(__chkstk_ms))       \
       RTS_WIN64_ONLY(SymI_NeedsProto(___chkstk_ms))      \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_localeconv))  \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_islower))     \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_isspace))     \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_isxdigit))    \
-      RTS_WIN64_ONLY(SymI_HasProto(close))               \
-      RTS_WIN64_ONLY(SymI_HasProto(read))                \
-      RTS_WIN64_ONLY(SymI_HasProto(dup))                 \
-      RTS_WIN64_ONLY(SymI_HasProto(dup2))                \
-      RTS_WIN64_ONLY(SymI_HasProto(write))               \
+      SymI_NeedsProto(localeconv)                        \
+      SymI_HasProto(close)                               \
+      SymI_HasProto(read)                                \
+      SymI_HasProto(dup)                                 \
+      SymI_HasProto(dup2)                                \
+      SymI_HasProto(write)                               \
       SymI_NeedsProto(getpid)                            \
-      RTS_WIN64_ONLY(SymI_HasProto(access))              \
+      SymI_HasProto(access)                              \
       SymI_HasProto(chmod)                               \
-      RTS_WIN64_ONLY(SymI_HasProto(creat))               \
-      RTS_WIN64_ONLY(SymI_HasProto(umask))               \
+      SymI_HasProto(creat)                               \
+      SymI_HasProto(umask)                               \
       SymI_HasProto(unlink)                              \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__errno))      \
-      RTS_WIN64_ONLY(SymI_NeedsProto(ftruncate64))       \
-      RTS_WIN64_ONLY(SymI_HasProto(setmode))             \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__wstat64))    \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__fstat64))    \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__wsopen))     \
+      SymI_HasProto(_errno)                              \
+      SymI_NeedsProto(ftruncate64)                       \
+      SymI_HasProto(setmode)                             \
+      SymI_HasProto(_wstat64)                            \
+      SymI_HasProto(_fstat64)                            \
+      SymI_HasProto(_wsopen)                             \
+      RTS_WIN32_ONLY(SymI_HasProto(_imp___environ))      \
       RTS_WIN64_ONLY(SymI_HasProto(__imp__environ))      \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetFileAttributesA))          \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetFileInformationByHandle))  \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetFileType))                 \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetLastError))                \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_QueryPerformanceFrequency))   \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_QueryPerformanceCounter))     \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetTickCount))                \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_WaitForSingleObject))         \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_PeekConsoleInputA))           \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_ReadConsoleInputA))           \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_PeekNamedPipe))               \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__isatty))                     \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_select))                      \
-      RTS_WIN64_ONLY(SymI_HasProto(isatty))                              \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__get_osfhandle))              \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetConsoleMode))              \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_SetConsoleMode))              \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_FlushConsoleInputBuffer))     \
-      RTS_WIN64_ONLY(SymI_HasProto(free))                                \
-      RTS_WIN64_ONLY(SymI_NeedsProto(raise))                             \
-      RTS_WIN64_ONLY(SymI_NeedsProto(_getpid))                           \
-      RTS_WIN64_ONLY(SymI_HasProto(getc))                                \
-      RTS_WIN64_ONLY(SymI_HasProto(ungetc))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(puts))                                \
-      RTS_WIN64_ONLY(SymI_HasProto(putc))                                \
-      RTS_WIN64_ONLY(SymI_HasProto(putchar))                             \
-      RTS_WIN64_ONLY(SymI_HasProto(fputc))                               \
-      RTS_WIN64_ONLY(SymI_HasProto(fread))                               \
-      RTS_WIN64_ONLY(SymI_HasProto(fwrite))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(ferror))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(printf))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(fprintf))                             \
-      RTS_WIN64_ONLY(SymI_HasProto(sprintf))                             \
-      RTS_WIN64_ONLY(SymI_HasProto(vsprintf))                            \
-      RTS_WIN64_ONLY(SymI_HasProto(sscanf))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(ldexp))                               \
-      RTS_WIN64_ONLY(SymI_HasProto(strlen))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(strnlen))                             \
-      RTS_WIN64_ONLY(SymI_HasProto(strchr))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(strtol))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(strerror))                            \
-      RTS_WIN64_ONLY(SymI_HasProto(memchr))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(memcmp))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(wcscpy))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(wcslen))                              \
-      RTS_WIN64_ONLY(SymI_HasProto(_lseeki64))                           \
-      RTS_WIN64_ONLY(SymI_HasProto(_wchmod))                             \
-      RTS_WIN64_ONLY(SymI_HasProto(closesocket))                         \
-      RTS_WIN64_ONLY(SymI_HasProto(send))                                \
-      RTS_WIN64_ONLY(SymI_HasProto(recv))                                \
-      RTS_WIN64_ONLY(SymI_HasProto(bsearch))                             \
-      RTS_WIN64_ONLY(SymI_HasProto(CommandLineToArgvW))                  \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateBitmap))                        \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateBitmapIndirect))                \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateCompatibleBitmap))              \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateDIBPatternBrushPt))             \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateDIBitmap))                      \
-      RTS_WIN64_ONLY(SymI_HasProto(SetBitmapDimensionEx))                \
-      RTS_WIN64_ONLY(SymI_HasProto(GetBitmapDimensionEx))                \
-      RTS_WIN64_ONLY(SymI_HasProto(GetStockObject))                      \
-      RTS_WIN64_ONLY(SymI_HasProto(GetObjectW))                          \
-      RTS_WIN64_ONLY(SymI_HasProto(DeleteObject))                        \
-      RTS_WIN64_ONLY(SymI_HasProto(SetDIBits))                           \
-      RTS_WIN64_ONLY(SymI_HasProto(GetDIBits))                           \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateSolidBrush))                    \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateHatchBrush))                    \
-      RTS_WIN64_ONLY(SymI_HasProto(CreatePatternBrush))                  \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateFontW))                         \
-      RTS_WIN64_ONLY(SymI_HasProto(AngleArc)) \
-      RTS_WIN64_ONLY(SymI_HasProto(Arc)) \
-      RTS_WIN64_ONLY(SymI_HasProto(ArcTo)) \
-      RTS_WIN64_ONLY(SymI_HasProto(BeginPath)) \
-      RTS_WIN64_ONLY(SymI_HasProto(BitBlt)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CancelDC)) \
-      RTS_WIN64_ONLY(SymI_HasProto(Chord)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CloseFigure)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CombineRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateCompatibleDC)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateEllipticRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateEllipticRgnIndirect)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CreatePen)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CreatePolygonRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateRectRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateRectRgnIndirect)) \
-      RTS_WIN64_ONLY(SymI_HasProto(CreateRoundRectRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(DeleteDC)) \
-      RTS_WIN64_ONLY(SymI_HasProto(Ellipse)) \
-      RTS_WIN64_ONLY(SymI_HasProto(EndPath)) \
-      RTS_WIN64_ONLY(SymI_HasProto(EqualRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(ExtSelectClipRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(FillPath)) \
-      RTS_WIN64_ONLY(SymI_HasProto(FillRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(FlattenPath)) \
-      RTS_WIN64_ONLY(SymI_HasProto(FrameRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetArcDirection)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetBkColor)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetBkMode)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetBrushOrgEx)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetCurrentObject)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetDCOrgEx)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetGraphicsMode)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetMiterLimit)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetPolyFillMode)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetRgnBox)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetStretchBltMode)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetTextAlign)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetTextCharacterExtra)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetTextColor)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetTextExtentPoint32W)) \
-      RTS_WIN64_ONLY(SymI_HasProto(InvertRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(LineTo)) \
-      RTS_WIN64_ONLY(SymI_HasProto(MaskBlt)) \
-      RTS_WIN64_ONLY(SymI_HasProto(MoveToEx)) \
-      RTS_WIN64_ONLY(SymI_HasProto(OffsetRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(PaintRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(PathToRegion)) \
-      RTS_WIN64_ONLY(SymI_HasProto(Pie)) \
-      RTS_WIN64_ONLY(SymI_HasProto(PlgBlt)) \
-      RTS_WIN64_ONLY(SymI_HasProto(PolyBezier)) \
-      RTS_WIN64_ONLY(SymI_HasProto(PolyBezierTo)) \
-      RTS_WIN64_ONLY(SymI_HasProto(Polygon)) \
-      RTS_WIN64_ONLY(SymI_HasProto(Polyline)) \
-      RTS_WIN64_ONLY(SymI_HasProto(PolylineTo)) \
-      RTS_WIN64_ONLY(SymI_HasProto(PtInRegion)) \
-      RTS_WIN64_ONLY(SymI_HasProto(Rectangle)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RectInRegion)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RestoreDC)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RoundRect)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SaveDC)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SelectClipPath)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SelectClipRgn)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SelectObject)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SelectPalette)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetArcDirection)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetBkColor)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetBkMode)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetBrushOrgEx)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetGraphicsMode)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetMiterLimit)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetPolyFillMode)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetStretchBltMode)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetTextAlign)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetTextCharacterExtra)) \
-      RTS_WIN64_ONLY(SymI_HasProto(SetTextColor)) \
-      RTS_WIN64_ONLY(SymI_HasProto(StretchBlt)) \
-      RTS_WIN64_ONLY(SymI_HasProto(StrokeAndFillPath)) \
-      RTS_WIN64_ONLY(SymI_HasProto(StrokePath)) \
-      RTS_WIN64_ONLY(SymI_HasProto(TextOutW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(timeGetTime)) \
-      RTS_WIN64_ONLY(SymI_HasProto(WidenPath)) \
-      RTS_WIN64_ONLY(SymI_HasProto(GetFileSecurityW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegCloseKey)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegConnectRegistryW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegCreateKeyExW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegCreateKeyW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegDeleteKeyW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegDeleteValueW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegEnumKeyW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegEnumValueW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegFlushKey)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegLoadKeyW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegNotifyChangeKeyValue)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegOpenKeyExW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegOpenKeyW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegQueryInfoKeyW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegQueryValueExW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegQueryValueW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegReplaceKeyW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegRestoreKeyW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegSaveKeyW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegSetValueExW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegSetValueW)) \
-      RTS_WIN64_ONLY(SymI_HasProto(RegUnLoadKeyW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(SHGetFolderPathW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_SetWindowLongPtrW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetWindowLongPtrW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_MenuItemFromPoint)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_ChildWindowFromPoint)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_ChildWindowFromPointEx)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_DeleteObject)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_UnmapViewOfFile)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_CloseHandle)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_FreeLibrary)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetMessageW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_TranslateMessage)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_DispatchMessageW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_DefWindowProcW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetDIBits)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GlobalAlloc)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GlobalFree)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_CreateFileW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_WriteFile)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_CreateCompatibleBitmap)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_SelectObject)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_Polygon)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_FormatMessageW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__localtime64)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__tzname)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__timezone)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_CreatePipe)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_SetHandleInformation)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetStdHandle)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetCurrentProcess)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_DuplicateHandle)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_CreateProcessW)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_TerminateProcess)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp__open_osfhandle)) \
-      RTS_WIN64_ONLY(SymI_NeedsProto(__imp_GetExitCodeProcess)) \
+      RTS_WIN32_ONLY(SymI_HasProto(_imp___iob))          \
+      RTS_WIN64_ONLY(SymI_HasProto(__iob_func))          \
+      SymI_HasProto(GetFileAttributesA)                  \
+      SymI_HasProto(GetFileInformationByHandle)          \
+      SymI_HasProto(GetFileType)                         \
+      SymI_HasProto(GetLastError)                        \
+      SymI_HasProto(QueryPerformanceFrequency)           \
+      SymI_HasProto(QueryPerformanceCounter)             \
+      SymI_HasProto(GetTickCount)                        \
+      SymI_HasProto(WaitForSingleObject)                 \
+      SymI_HasProto(PeekConsoleInputA)                   \
+      SymI_HasProto(ReadConsoleInputA)                   \
+      SymI_HasProto(PeekNamedPipe)                       \
+      SymI_HasProto(select)                              \
+      SymI_HasProto(isatty)                              \
+      SymI_HasProto(_get_osfhandle)                      \
+      SymI_HasProto(GetConsoleMode)                      \
+      SymI_HasProto(SetConsoleMode)                      \
+      SymI_HasProto(FlushConsoleInputBuffer)             \
+      SymI_HasProto(free)                                \
+      SymI_NeedsProto(raise)                             \
+      SymI_NeedsProto(_getpid)                           \
+      SymI_HasProto(getc)                                \
+      SymI_HasProto(ungetc)                              \
+      SymI_HasProto(puts)                                \
+      SymI_HasProto(putc)                                \
+      SymI_HasProto(putchar)                             \
+      SymI_HasProto(fputc)                               \
+      SymI_HasProto(fread)                               \
+      SymI_HasProto(fwrite)                              \
+      SymI_HasProto(ferror)                              \
+      SymI_HasProto(printf)                              \
+      SymI_HasProto(fprintf)                             \
+      SymI_HasProto(sprintf)                             \
+      SymI_HasProto(vsprintf)                            \
+      SymI_HasProto(sscanf)                              \
+      SymI_HasProto(ldexp)                               \
+      SymI_HasProto(strlen)                              \
+      SymI_HasProto(strnlen)                             \
+      SymI_HasProto(strchr)                              \
+      SymI_HasProto(strtol)                              \
+      SymI_HasProto(strerror)                            \
+      SymI_HasProto(memchr)                              \
+      SymI_HasProto(memcmp)                              \
+      SymI_HasProto(wcscpy)                              \
+      SymI_HasProto(wcslen)                              \
+      SymI_HasProto(_lseeki64)                           \
+      SymI_HasProto(_wchmod)                             \
+      SymI_HasProto(closesocket)                         \
+      SymI_HasProto(send)                                \
+      SymI_HasProto(recv)                                \
+      SymI_HasProto(bsearch)                             \
+      SymI_HasProto(CommandLineToArgvW)                  \
+      SymI_HasProto(CreateBitmap)                        \
+      SymI_HasProto(CreateBitmapIndirect)                \
+      SymI_HasProto(CreateCompatibleBitmap)              \
+      SymI_HasProto(CreateDIBPatternBrushPt)             \
+      SymI_HasProto(CreateDIBitmap)                      \
+      SymI_HasProto(SetBitmapDimensionEx)                \
+      SymI_HasProto(GetBitmapDimensionEx)                \
+      SymI_HasProto(GetStockObject)                      \
+      SymI_HasProto(GetObjectW)                          \
+      SymI_HasProto(DeleteObject)                        \
+      SymI_HasProto(SetDIBits)                           \
+      SymI_HasProto(GetDIBits)                           \
+      SymI_HasProto(CreateSolidBrush)                    \
+      SymI_HasProto(CreateHatchBrush)                    \
+      SymI_HasProto(CreatePatternBrush)                  \
+      SymI_HasProto(CreateFontW)                         \
+      SymI_HasProto(AngleArc)                            \
+      SymI_HasProto(Arc)                                 \
+      SymI_HasProto(ArcTo)                               \
+      SymI_HasProto(BeginPath)                           \
+      SymI_HasProto(BitBlt)                              \
+      SymI_HasProto(CancelDC)                            \
+      SymI_HasProto(Chord)                               \
+      SymI_HasProto(CloseFigure)                         \
+      SymI_HasProto(CombineRgn)                          \
+      SymI_HasProto(CreateCompatibleDC)                  \
+      SymI_HasProto(CreateEllipticRgn)                   \
+      SymI_HasProto(CreateEllipticRgnIndirect)           \
+      SymI_HasProto(CreatePen)                           \
+      SymI_HasProto(CreatePolygonRgn)                    \
+      SymI_HasProto(CreateRectRgn)                       \
+      SymI_HasProto(CreateRectRgnIndirect)               \
+      SymI_HasProto(CreateRoundRectRgn)                  \
+      SymI_HasProto(DeleteDC)                            \
+      SymI_HasProto(Ellipse)                             \
+      SymI_HasProto(EndPath)                             \
+      SymI_HasProto(EqualRgn)                            \
+      SymI_HasProto(ExtSelectClipRgn)                    \
+      SymI_HasProto(FillPath)                            \
+      SymI_HasProto(FillRgn)                             \
+      SymI_HasProto(FlattenPath)                         \
+      SymI_HasProto(FrameRgn)                            \
+      SymI_HasProto(GetArcDirection)                     \
+      SymI_HasProto(GetBkColor)                          \
+      SymI_HasProto(GetBkMode)                           \
+      SymI_HasProto(GetBrushOrgEx)                       \
+      SymI_HasProto(GetCurrentObject)                    \
+      SymI_HasProto(GetDCOrgEx)                          \
+      SymI_HasProto(GetGraphicsMode)                     \
+      SymI_HasProto(GetMiterLimit)                       \
+      SymI_HasProto(GetPolyFillMode)                     \
+      SymI_HasProto(GetRgnBox)                           \
+      SymI_HasProto(GetStretchBltMode)                   \
+      SymI_HasProto(GetTextAlign)                        \
+      SymI_HasProto(GetTextCharacterExtra)               \
+      SymI_HasProto(GetTextColor)                        \
+      SymI_HasProto(GetTextExtentPoint32W)               \
+      SymI_HasProto(InvertRgn)                           \
+      SymI_HasProto(LineTo)                              \
+      SymI_HasProto(MaskBlt)                             \
+      SymI_HasProto(MoveToEx)                            \
+      SymI_HasProto(OffsetRgn)                           \
+      SymI_HasProto(PaintRgn)                            \
+      SymI_HasProto(PathToRegion)                        \
+      SymI_HasProto(Pie)                                 \
+      SymI_HasProto(PlgBlt)                              \
+      SymI_HasProto(PolyBezier)                          \
+      SymI_HasProto(PolyBezierTo)                        \
+      SymI_HasProto(Polygon)                             \
+      SymI_HasProto(Polyline)                            \
+      SymI_HasProto(PolylineTo)                          \
+      SymI_HasProto(PtInRegion)                          \
+      SymI_HasProto(Rectangle)                           \
+      SymI_HasProto(RectInRegion)                        \
+      SymI_HasProto(RestoreDC)                           \
+      SymI_HasProto(RoundRect)                           \
+      SymI_HasProto(SaveDC)                              \
+      SymI_HasProto(SelectClipPath)                      \
+      SymI_HasProto(SelectClipRgn)                       \
+      SymI_HasProto(SelectObject)                        \
+      SymI_HasProto(SelectPalette)                       \
+      SymI_HasProto(SetArcDirection)                     \
+      SymI_HasProto(SetBkColor)                          \
+      SymI_HasProto(SetBkMode)                           \
+      SymI_HasProto(SetBrushOrgEx)                       \
+      SymI_HasProto(SetGraphicsMode)                     \
+      SymI_HasProto(SetMiterLimit)                       \
+      SymI_HasProto(SetPolyFillMode)                     \
+      SymI_HasProto(SetStretchBltMode)                   \
+      SymI_HasProto(SetTextAlign)                        \
+      SymI_HasProto(SetTextCharacterExtra)               \
+      SymI_HasProto(SetTextColor)                        \
+      SymI_HasProto(StretchBlt)                          \
+      SymI_HasProto(StrokeAndFillPath)                   \
+      SymI_HasProto(StrokePath)                          \
+      SymI_HasProto(TextOutW)                            \
+      SymI_HasProto(timeGetTime)                         \
+      SymI_HasProto(WidenPath)                           \
+      SymI_HasProto(GetFileSecurityW)                    \
+      SymI_HasProto(RegCloseKey)                         \
+      SymI_HasProto(RegConnectRegistryW)                 \
+      SymI_HasProto(RegCreateKeyExW)                     \
+      SymI_HasProto(RegCreateKeyW)                       \
+      SymI_HasProto(RegDeleteKeyW)                       \
+      SymI_HasProto(RegDeleteValueW)                     \
+      SymI_HasProto(RegEnumKeyW)                         \
+      SymI_HasProto(RegEnumValueW)                       \
+      SymI_HasProto(RegFlushKey)                         \
+      SymI_HasProto(RegLoadKeyW)                         \
+      SymI_HasProto(RegNotifyChangeKeyValue)             \
+      SymI_HasProto(RegOpenKeyExW)                       \
+      SymI_HasProto(RegOpenKeyW)                         \
+      SymI_HasProto(RegQueryInfoKeyW)                    \
+      SymI_HasProto(RegQueryValueExW)                    \
+      SymI_HasProto(RegQueryValueW)                      \
+      SymI_HasProto(RegReplaceKeyW)                      \
+      SymI_HasProto(RegRestoreKeyW)                      \
+      SymI_HasProto(RegSaveKeyW)                         \
+      SymI_HasProto(RegSetValueExW)                      \
+      SymI_HasProto(RegSetValueW)                        \
+      SymI_HasProto(RegUnLoadKeyW)                       \
+      SymI_HasProto(SHGetFolderPathW)                    \
+      RTS_WIN32_ONLY(SymI_HasProto(SetWindowLongW))      \
+      RTS_WIN32_ONLY(SymI_HasProto(GetWindowLongW))      \
+      RTS_WIN64_ONLY(SymI_HasProto(SetWindowLongPtrW))   \
+      RTS_WIN64_ONLY(SymI_HasProto(GetWindowLongPtrW))   \
+      SymI_HasProto(MenuItemFromPoint)                   \
+      SymI_HasProto(ChildWindowFromPoint)                \
+      SymI_HasProto(ChildWindowFromPointEx)              \
+      SymI_HasProto(UnmapViewOfFile)                     \
+      SymI_HasProto(CloseHandle)                         \
+      SymI_HasProto(FreeLibrary)                         \
+      SymI_HasProto(GetMessageW)                         \
+      SymI_HasProto(TranslateMessage)                    \
+      SymI_HasProto(DispatchMessageW)                    \
+      SymI_HasProto(DefWindowProcW)                      \
+      SymI_HasProto(GlobalAlloc)                         \
+      SymI_HasProto(GlobalFree)                          \
+      SymI_HasProto(CreateFileW)                         \
+      SymI_HasProto(WriteFile)                           \
+      SymI_HasProto(FormatMessageW)                      \
+      SymI_NeedsProto(_localtime64)                      \
+      SymI_NeedsProto(_tzname)                           \
+      SymI_NeedsProto(_timezone)                         \
+      SymI_HasProto(CreatePipe)                          \
+      SymI_HasProto(SetHandleInformation)                \
+      SymI_HasProto(GetStdHandle)                        \
+      SymI_HasProto(GetCurrentProcess)                   \
+      SymI_HasProto(DuplicateHandle)                     \
+      SymI_HasProto(CreateProcessW)                      \
+      SymI_HasProto(TerminateProcess)                    \
+      SymI_HasProto(_open_osfhandle)                     \
+      SymI_HasProto(GetExitCodeProcess)                  \
       RTS_MINGW_GETTIMEOFDAY_SYM                         \
       SymI_NeedsProto(closedir)
 
@@ -2111,14 +2102,10 @@ static void* lookupSymbol_ (char *lbl)
 #       elif defined(OBJFORMAT_PEi386)
         void* sym;
 
-        sym = lookupSymbolInDLLs((unsigned char*)lbl);
-        if (sym != NULL) {
-            return sym;
-        };
-
-        // Also try looking up the symbol without the @N suffix.  Some
-        // DLLs have the suffixes on their symbols, some don't.
-        zapTrailingAtSign ( (unsigned char*)lbl );
+/* See Note [mingw-w64 name decoration scheme] */
+#ifndef x86_64_HOST_ARCH
+         zapTrailingAtSign ( (unsigned char*)lbl );
+#endif
         sym = lookupSymbolInDLLs((unsigned char*)lbl);
         return sym; // might be NULL if not found
 
@@ -2401,6 +2388,7 @@ void freeObjectCode (ObjectCode *oc)
       stgFree(ia);
       ia = ia_next;
     }
+    indirects = NULL;
 
 #endif
 
@@ -3643,21 +3631,17 @@ ocFlushInstructionCache( ObjectCode *oc )
 
 
 /* --------------------------------------------------------------------------
- * PEi386 specifics (Win32 targets)
+ * PEi386(+) specifics (Win32 targets)
  * ------------------------------------------------------------------------*/
 
 /* The information for this linker comes from
       Microsoft Portable Executable
       and Common Object File Format Specification
-      revision 5.1 January 1998
-   which SimonM says comes from the MS Developer Network CDs.
+      revision 8.3 February 2013
 
-   It can be found there (on older CDs), but can also be found
-   online at:
+   It can be found online at:
 
-      http://www.microsoft.com/hwdev/hardware/PECOFF.asp
-
-   (this is Rev 6.0 from February 1999).
+      https://msdn.microsoft.com/en-us/windows/hardware/gg463119.aspx
 
    Things move, so if that fails, try searching for it via
 
@@ -3678,6 +3662,17 @@ ocFlushInstructionCache( ObjectCode *oc )
 
    John Levine's book "Linkers and Loaders" contains useful
    info on PE too.
+
+   The PE specification doesn't specify how to do the actual
+   relocations. For this reason, and because both PE and ELF are
+   based on COFF, the relocations for the PEi386+ code is based on
+   the ELF relocations for the equivalent relocation type.
+
+   The ELF ABI can be found at
+
+   http://www.x86-64.org/documentation/abi.pdf
+
+   The current code is based on version 0.99.6 - October 2013
 */
 
 
@@ -3754,27 +3749,31 @@ typedef
 /* Note use of MYIMAGE_* since IMAGE_* are already defined in
    windows.h -- for the same purpose, but I want to know what I'm
    getting, here. */
-#define MYIMAGE_FILE_RELOCS_STRIPPED     0x0001
-#define MYIMAGE_FILE_EXECUTABLE_IMAGE    0x0002
-#define MYIMAGE_FILE_DLL                 0x2000
-#define MYIMAGE_FILE_SYSTEM              0x1000
-#define MYIMAGE_FILE_BYTES_REVERSED_HI   0x8000
-#define MYIMAGE_FILE_BYTES_REVERSED_LO   0x0080
-#define MYIMAGE_FILE_32BIT_MACHINE       0x0100
+#define MYIMAGE_FILE_RELOCS_STRIPPED        0x0001
+#define MYIMAGE_FILE_EXECUTABLE_IMAGE       0x0002
+#define MYIMAGE_FILE_DLL                    0x2000
+#define MYIMAGE_FILE_SYSTEM                 0x1000
+#define MYIMAGE_FILE_BYTES_REVERSED_HI      0x8000
+#define MYIMAGE_FILE_BYTES_REVERSED_LO      0x0080
+#define MYIMAGE_FILE_32BIT_MACHINE          0x0100
 
 /* From PE spec doc, section 5.4.2 and 5.4.4 */
-#define MYIMAGE_SYM_CLASS_EXTERNAL       2
-#define MYIMAGE_SYM_CLASS_STATIC         3
-#define MYIMAGE_SYM_UNDEFINED            0
+#define MYIMAGE_SYM_CLASS_EXTERNAL          2
+#define MYIMAGE_SYM_CLASS_STATIC            3
+#define MYIMAGE_SYM_UNDEFINED               0
 
-/* From PE spec doc, section 4.1 */
-#define MYIMAGE_SCN_CNT_CODE             0x00000020
-#define MYIMAGE_SCN_CNT_INITIALIZED_DATA 0x00000040
-#define MYIMAGE_SCN_LNK_NRELOC_OVFL      0x01000000
+/* From PE spec doc, section 3.1 */
+#define MYIMAGE_SCN_CNT_CODE                0x00000020
+#define MYIMAGE_SCN_CNT_INITIALIZED_DATA    0x00000040
+#define MYIMAGE_SCN_CNT_UNINITIALIZED_DATA  0x00000080
+#define MYIMAGE_SCN_LNK_COMDAT              0x00001000
+#define MYIMAGE_SCN_LNK_NRELOC_OVFL         0x01000000
+#define MYIMAGE_SCN_LNK_REMOVE              0x00000800
+#define MYIMAGE_SCN_MEM_DISCARDABLE         0x02000000
 
 /* From PE spec doc, section 5.2.1 */
-#define MYIMAGE_REL_I386_DIR32           0x0006
-#define MYIMAGE_REL_I386_REL32           0x0014
+#define MYIMAGE_REL_I386_DIR32              0x0006
+#define MYIMAGE_REL_I386_REL32              0x0014
 
 static int verifyCOFFHeader ( COFF_header *hdr, pathchar *filename);
 
@@ -3994,6 +3993,8 @@ findPEi386SectionCalled ( ObjectCode* oc,  UChar* name, UChar* strtab )
    return NULL;
 }
 
+/* See Note [mingw-w64 name decoration scheme] */
+#ifndef x86_64_HOST_ARCH
 static void
 zapTrailingAtSign ( UChar* sym )
 {
@@ -4008,6 +4009,30 @@ zapTrailingAtSign ( UChar* sym )
    if (j > 0 && sym[j] == '@' && j != i) sym[j] = 0;
 #  undef my_isdigit
 }
+#endif
+
+/* See Note [mingw-w64 name decoration scheme] */
+#ifndef x86_64_HOST_ARCH
+#define STRIP_LEADING_UNDERSCORE 1
+#else
+#define STRIP_LEADING_UNDERSCORE 0
+#endif
+
+/*
+  Note [mingw-w64 name decoration scheme]
+
+  What's going on with name decoration? Well, original code
+  have some crufty and ad-hocish paths related mostly to very old
+  mingw gcc/binutils/runtime combinations. Now mingw-w64 offers pretty
+  uniform and MS-compatible decoration scheme across its tools and runtime.
+
+  The scheme is pretty straightforward: on 32 bit objects symbols are exported
+  with underscore prepended (and @ + stack size suffix appended for stdcall
+  functions), on 64 bits no underscore is prepended and no suffix is appended
+  because we have no stdcall convention on 64 bits.
+
+  See #9218
+*/
 
 static void *
 lookupSymbolInDLLs ( UChar *lbl )
@@ -4018,17 +4043,10 @@ lookupSymbolInDLLs ( UChar *lbl )
     for (o_dll = opened_dlls; o_dll != NULL; o_dll = o_dll->next) {
         /* debugBelch("look in %ls for %s\n", o_dll->name, lbl); */
 
-        if (lbl[0] == '_') {
-            /* HACK: if the name has an initial underscore, try stripping
-               it off & look that up first. I've yet to verify whether there's
-               a Rule that governs whether an initial '_' *should always* be
-               stripped off when mapping from import lib name to the DLL name.
-            */
-            sym = GetProcAddress(o_dll->instance, (char*)(lbl+1));
-            if (sym != NULL) {
-                /*debugBelch("found %s in %s\n", lbl+1,o_dll->name);*/
-                return sym;
-            }
+        sym = GetProcAddress(o_dll->instance, (char*)(lbl+STRIP_LEADING_UNDERSCORE));
+        if (sym != NULL) {
+            /*debugBelch("found %s in %s\n", lbl+1,o_dll->name);*/
+            return sym;
         }
 
         /* Ticket #2283.
@@ -4039,7 +4057,7 @@ lookupSymbolInDLLs ( UChar *lbl )
              the same semantics as in __imp_foo = GetProcAddress(..., "foo")
          */
         if (sym == NULL && strncmp ((const char*)lbl, "__imp_", 6) == 0) {
-            sym = GetProcAddress(o_dll->instance, (char*)(lbl+6));
+            sym = GetProcAddress(o_dll->instance, (char*)(lbl+6+STRIP_LEADING_UNDERSCORE));
             if (sym != NULL) {
                 IndirectAddr* ret;
                 ret = stgMallocBytes( sizeof(IndirectAddr), "lookupSymbolInDLLs" );
@@ -4048,7 +4066,7 @@ lookupSymbolInDLLs ( UChar *lbl )
                 indirects = ret;
                 IF_DEBUG(linker,
                   debugBelch("warning: %s from %S is linked instead of %s",
-                             (char*)(lbl+6), o_dll->name, (char*)lbl));
+                             (char*)(lbl+6+STRIP_LEADING_UNDERSCORE), o_dll->name, (char*)lbl));
                 return (void*) & ret->addr;
                }
         }
@@ -4349,8 +4367,9 @@ ocGetNames_PEi386 ( ObjectCode* oc )
       UChar* end;
       UInt32 sz;
 
+      /* By default consider all section as CODE or DATA, which means we want to load them. */
       SectionKind kind
-         = SECTIONKIND_OTHER;
+          = SECTIONKIND_CODE_OR_RODATA;
       COFF_section* sectab_i
          = (COFF_section*)
            myindex ( sizeof_COFF_section, sectab, i );
@@ -4359,31 +4378,20 @@ ocGetNames_PEi386 ( ObjectCode* oc )
 
       IF_DEBUG(linker, debugBelch("section name = %s\n", secname ));
 
-#     if 0
-      /* I'm sure this is the Right Way to do it.  However, the
-         alternative of testing the sectab_i->Name field seems to
-         work ok with Cygwin.
-
-         EZY: We should strongly consider using this style, because
-         it lets us pick up sections that should be added (e.g.
-         for a while the linker did not work due to missing .eh_frame
-         in this section.)
-      */
+      /* The PE file section flag indicates whether the section contains code or data. */
       if (sectab_i->Characteristics & MYIMAGE_SCN_CNT_CODE ||
           sectab_i->Characteristics & MYIMAGE_SCN_CNT_INITIALIZED_DATA)
          kind = SECTIONKIND_CODE_OR_RODATA;
-#     endif
 
-      if (0==strcmp(".text",(char*)secname) ||
-          0==strcmp(".text.startup",(char*)secname) ||
-          0==strcmp(".text.unlikely", (char*)secname) ||
-          0==strcmp(".rdata",(char*)secname)||
-          0==strcmp(".eh_frame", (char*)secname)||
-          0==strcmp(".rodata",(char*)secname))
-         kind = SECTIONKIND_CODE_OR_RODATA;
-      if (0==strcmp(".data",(char*)secname) ||
-          0==strcmp(".bss",(char*)secname))
+      /* Check next if it contains any uninitialized data */
+      if (sectab_i->Characteristics & MYIMAGE_SCN_CNT_UNINITIALIZED_DATA)
          kind = SECTIONKIND_RWDATA;
+
+      /* Finally check if it can be discarded. This will also ignore .debug sections */
+      if (sectab_i->Characteristics & MYIMAGE_SCN_MEM_DISCARDABLE ||
+          sectab_i->Characteristics & MYIMAGE_SCN_LNK_REMOVE)
+          kind = SECTIONKIND_OTHER;
+
       if (0==strcmp(".ctors", (char*)secname))
          kind = SECTIONKIND_INIT_ARRAY;
 
@@ -4394,32 +4402,7 @@ ocGetNames_PEi386 ( ObjectCode* oc )
       start = ((UChar*)(oc->image)) + sectab_i->PointerToRawData;
       end   = start + sz - 1;
 
-      if (kind == SECTIONKIND_OTHER
-          /* Ignore sections called which contain stabs debugging
-             information. */
-          && 0 != strcmp(".stab", (char*)secname)
-          && 0 != strcmp(".stabstr", (char*)secname)
-          /* Ignore sections called which contain exception information. */
-          && 0 != strncmp(".pdata", (char*)secname, 6)
-          && 0 != strncmp(".xdata", (char*)secname, 6)
-          /* ignore section generated from .ident */
-          && 0!= strncmp(".debug", (char*)secname, 6)
-          /* ignore unknown section that appeared in gcc 3.4.5(?) */
-          && 0!= strcmp(".reloc", (char*)secname)
-          && 0 != strcmp(".rdata$zzz", (char*)secname)
-          /* ignore linker directive sections */
-          && 0 != strcmp(".drectve", (char*)secname)
-         ) {
-          IF_DEBUG(linker, debugBelch("Unknown PEi386 section name `%s' (while processing: %" PATH_FMT")", secname, oc->fileName));
-      }
-
       if (kind != SECTIONKIND_OTHER && end >= start) {
-          if ((((size_t)(start)) % 4) != 0) {
-              errorBelch("Misaligned section %s: %p", (char*)secname, start);
-              stgFree(secname);
-              return 0;
-          }
-
          addSection(oc, kind, start, end);
          addProddableBlock(oc, start, end - start + 1);
       }
@@ -4436,17 +4419,15 @@ ocGetNames_PEi386 ( ObjectCode* oc )
    for (i = 0; i < oc->n_symbols; i++)
       oc->symbols[i] = NULL;
 
-   i = 0;
-   while (1) {
+   for (i = 0; i < oc->n_symbols; i++) {
       COFF_symbol* symtab_i;
-      if (i >= (Int32)(hdr->NumberOfSymbols)) break;
       symtab_i = (COFF_symbol*)
                  myindex ( sizeof_COFF_symbol, symtab, i );
 
       addr  = NULL;
 
-      if (symtab_i->StorageClass == MYIMAGE_SYM_CLASS_EXTERNAL
-          && symtab_i->SectionNumber != MYIMAGE_SYM_UNDEFINED) {
+      HsBool isWeak = HS_BOOL_FALSE;
+      if (symtab_i->SectionNumber != MYIMAGE_SYM_UNDEFINED) {
          /* This symbol is global and defined, viz, exported */
          /* for MYIMAGE_SYMCLASS_EXTERNAL
                 && !MYIMAGE_SYM_UNDEFINED,
@@ -4457,9 +4438,17 @@ ocGetNames_PEi386 ( ObjectCode* oc )
             = (COFF_section*) myindex ( sizeof_COFF_section,
                                         sectab,
                                         symtab_i->SectionNumber-1 );
-         addr = ((UChar*)(oc->image))
-                + (sectabent->PointerToRawData
-                   + symtab_i->Value);
+         if (symtab_i->StorageClass == MYIMAGE_SYM_CLASS_EXTERNAL
+            || (   symtab_i->StorageClass == MYIMAGE_SYM_CLASS_STATIC
+                && sectabent->Characteristics & MYIMAGE_SCN_LNK_COMDAT)
+            ) {
+                 addr = ((UChar*)(oc->image))
+                        + (sectabent->PointerToRawData
+                           + symtab_i->Value);
+                 if (sectabent->Characteristics & MYIMAGE_SCN_LNK_COMDAT) {
+                    isWeak = HS_BOOL_TRUE;
+              }
+         }
       }
       else
       if (symtab_i->SectionNumber == MYIMAGE_SYM_UNDEFINED
@@ -4482,7 +4471,7 @@ ocGetNames_PEi386 ( ObjectCode* oc )
          /* cstring_from_COFF_symbol_name always succeeds. */
          oc->symbols[i] = (char*)sname;
          if (! ghciInsertSymbolTable(oc->fileName, symhash, (char*)sname, addr,
-                                     HS_BOOL_FALSE, oc)) {
+                                     isWeak, oc)) {
              return 0;
          }
       } else {
@@ -4510,7 +4499,6 @@ ocGetNames_PEi386 ( ObjectCode* oc )
       }
 
       i += symtab_i->NumberOfAuxSymbols;
-      i++;
    }
 
    return 1;
@@ -4601,16 +4589,15 @@ ocResolve_PEi386 ( ObjectCode* oc )
 
       char *secname = cstring_from_section_name(sectab_i->Name, strtab);
 
-      /* Ignore sections called which contain stabs debugging
-         information. */
-      if (0 == strcmp(".stab", (char*)secname)
-          || 0 == strcmp(".stabstr", (char*)secname)
-          || 0 == strncmp(".pdata", (char*)secname, 6)
-          || 0 == strncmp(".xdata", (char*)secname, 6)
-          || 0 == strncmp(".debug", (char*)secname, 6)
-          || 0 == strcmp(".rdata$zzz", (char*)secname)) {
-          stgFree(secname);
-          continue;
+      /* Ignore sections called which contain stabs debugging information. */
+      if (    0 == strcmp(".stab", (char*)secname)
+           || 0 == strcmp(".stabstr", (char*)secname)
+           || 0 == strncmp(".pdata", (char*)secname, 6)
+           || 0 == strncmp(".xdata", (char*)secname, 6)
+           || 0 == strncmp(".debug", (char*)secname, 6)
+           || 0 == strcmp(".rdata$zzz", (char*)secname)) {
+           stgFree(secname);
+           continue;
       }
 
       stgFree(secname);
@@ -4728,8 +4715,17 @@ ocResolve_PEi386 ( ObjectCode* oc )
                *(UInt32 *)pP = ((UInt32)S) + A - ((UInt32)(size_t)pP) - 4;
                break;
 #elif defined(x86_64_HOST_ARCH)
-            case 2:  /* R_X86_64_32 */
-            case 17: /* R_X86_64_32S */
+            case 1: /* R_X86_64_64 (ELF constant 1) - IMAGE_REL_AMD64_ADDR64 (PE constant 1) */
+               {
+                   UInt64 A;
+                   checkProddableBlock(oc, pP, 8);
+                   A = *(UInt64*)pP;
+                   *(UInt64 *)pP = ((UInt64)S) + ((UInt64)A);
+                   break;
+               }
+            case 2: /* R_X86_64_32 (ELF constant 10) - IMAGE_REL_AMD64_ADDR32 (PE constant 2) */
+            case 3: /* R_X86_64_32S (ELF constant 11) - IMAGE_REL_AMD64_ADDR32NB (PE constant 3) */
+            case 17: /* R_X86_64_32S ELF constant, no PE mapping. See note [ELF constant in PE file] */
                {
                    size_t v;
                    v = S + ((size_t)A);
@@ -4739,14 +4735,14 @@ ocResolve_PEi386 ( ObjectCode* oc )
                        /* And retry */
                        v = S + ((size_t)A);
                        if (v >> 32) {
-                           barf("R_X86_64_32[S]: High bits are set in %zx for %s",
+                           barf("IMAGE_REL_AMD64_ADDR32[NB]: High bits are set in %zx for %s",
                                 v, (char *)symbol);
                        }
                    }
                    *(UInt32 *)pP = (UInt32)v;
                    break;
                }
-            case 4: /* R_X86_64_PC32 */
+            case 4: /* R_X86_64_PC32 (ELF constant 2) - IMAGE_REL_AMD64_REL32 (PE constant 4) */
                {
                    intptr_t v;
                    v = ((intptr_t)S) + ((intptr_t)(Int32)A) - ((intptr_t)pP) - 4;
@@ -4757,20 +4753,12 @@ ocResolve_PEi386 ( ObjectCode* oc )
                        /* And retry */
                        v = ((intptr_t)S) + ((intptr_t)(Int32)A) - ((intptr_t)pP) - 4;
                        if ((v >> 32) && ((-v) >> 32)) {
-                           barf("R_X86_64_PC32: High bits are set in %zx for %s",
+                           barf("IMAGE_REL_AMD64_REL32: High bits are set in %zx for %s",
                                 v, (char *)symbol);
                        }
                    }
                    *(UInt32 *)pP = (UInt32)v;
                    break;
-               }
-            case 1: /* R_X86_64_64 */
-               {
-                 UInt64 A;
-                 checkProddableBlock(oc, pP, 8);
-                 A = *(UInt64*)pP;
-                 *(UInt64 *)pP = ((UInt64)S) + ((UInt64)A);
-                 break;
                }
 #endif
             default:
@@ -4785,6 +4773,21 @@ ocResolve_PEi386 ( ObjectCode* oc )
    IF_DEBUG(linker, debugBelch("completed %" PATH_FMT, oc->fileName));
    return 1;
 }
+
+/*
+  Note [ELF constant in PE file]
+
+  For some reason, the PE files produced by GHC contain a linux
+  relocation constant 17 (0x11) in the object files. As far as I (Phyx-) can tell
+  this constant doesn't seem like it's coming from GHC, or at least I could not find
+  anything in the .s output that GHC produces which specifies the relocation type.
+
+  This leads me to believe that this is a bug in GAS. However because this constant is
+  there we must deal with it. This is done by mapping it to the equivalent in behaviour PE
+  relocation constant 0x03.
+
+  See #9907
+*/
 
 static int
 ocRunInit_PEi386 ( ObjectCode *oc )

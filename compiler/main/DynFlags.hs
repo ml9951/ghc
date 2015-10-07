@@ -71,7 +71,7 @@ module DynFlags (
         versionedAppDir,
         extraGccViaCFlags, systemPackageConfig,
         pgm_L, pgm_P, pgm_F, pgm_c, pgm_s, pgm_a, pgm_l, pgm_dll, pgm_T,
-        pgm_sysman, pgm_windres, pgm_libtool, pgm_lo, pgm_lc,
+        pgm_windres, pgm_libtool, pgm_lo, pgm_lc,
         opt_L, opt_P, opt_F, opt_c, opt_a, opt_l,
         opt_windres, opt_lo, opt_lc,
 
@@ -338,6 +338,7 @@ data GeneralFlag
    | Opt_PrintExplicitKinds
    | Opt_PrintUnicodeSyntax
    | Opt_PrintExpandedSynonyms
+   | Opt_PrintPotentialInstances
 
    -- optimisation opts
    | Opt_CallArity
@@ -601,6 +602,7 @@ data ExtensionFlag
    | Opt_PolyKinds                -- Kind polymorphism
    | Opt_DataKinds                -- Datatype promotion
    | Opt_InstanceSigs
+   | Opt_ApplicativeDo
 
    | Opt_StandaloneDeriving
    | Opt_DeriveDataTypeable
@@ -611,6 +613,7 @@ data ExtensionFlag
    | Opt_DeriveGeneric            -- Allow deriving Generic/1
    | Opt_DefaultSignatures        -- Allow extra signatures for defmeths
    | Opt_DeriveAnyClass           -- Allow deriving any class
+   | Opt_DeriveLift               -- Allow deriving Lift
 
    | Opt_TypeSynonymInstances
    | Opt_FlexibleContexts
@@ -973,7 +976,6 @@ data Settings = Settings {
   sPgm_l                 :: (String,[Option]),
   sPgm_dll               :: (String,[Option]),
   sPgm_T                 :: String,
-  sPgm_sysman            :: String,
   sPgm_windres           :: String,
   sPgm_libtool           :: String,
   sPgm_lo                :: (String,[Option]), -- LLVM: opt llvm optimiser
@@ -1030,8 +1032,6 @@ pgm_dll               :: DynFlags -> (String,[Option])
 pgm_dll dflags = sPgm_dll (settings dflags)
 pgm_T                 :: DynFlags -> String
 pgm_T dflags = sPgm_T (settings dflags)
-pgm_sysman            :: DynFlags -> String
-pgm_sysman dflags = sPgm_sysman (settings dflags)
 pgm_windres           :: DynFlags -> String
 pgm_windres dflags = sPgm_windres (settings dflags)
 pgm_libtool           :: DynFlags -> String
@@ -2292,7 +2292,7 @@ dynamic_flags = [
 #ifdef linux_HOST_OS
                               addOptl "-rdynamic"
 #elif defined (mingw32_HOST_OS)
-                              addOptl "-export-all-symbols"
+                              addOptl "-Wl,--export-all-symbols"
 #else
     -- ignored for compat w/ gcc:
                               id
@@ -3014,6 +3014,7 @@ fFlags = [
   flagSpec "print-explicit-kinds"             Opt_PrintExplicitKinds,
   flagSpec "print-unicode-syntax"             Opt_PrintUnicodeSyntax,
   flagSpec "print-expanded-synonyms"          Opt_PrintExpandedSynonyms,
+  flagSpec "print-potential-instances"        Opt_PrintPotentialInstances,
   flagSpec "prof-cafs"                        Opt_AutoSccsOnIndividualCafs,
   flagSpec "prof-count-entries"               Opt_ProfCountEntries,
   flagSpec "regs-graph"                       Opt_RegsGraph,
@@ -3133,6 +3134,7 @@ xFlags = [
   flagSpec "DeriveFoldable"                   Opt_DeriveFoldable,
   flagSpec "DeriveFunctor"                    Opt_DeriveFunctor,
   flagSpec "DeriveGeneric"                    Opt_DeriveGeneric,
+  flagSpec "DeriveLift"                       Opt_DeriveLift,
   flagSpec "DeriveTraversable"                Opt_DeriveTraversable,
   flagSpec "DisambiguateRecordFields"         Opt_DisambiguateRecordFields,
   flagSpec "DoAndIfThenElse"                  Opt_DoAndIfThenElse,
@@ -3159,6 +3161,7 @@ xFlags = [
   flagSpec' "IncoherentInstances"             Opt_IncoherentInstances
                                               setIncoherentInsts,
   flagSpec "InstanceSigs"                     Opt_InstanceSigs,
+  flagSpec "ApplicativeDo"                    Opt_ApplicativeDo,
   flagSpec "InterruptibleFFI"                 Opt_InterruptibleFFI,
   flagSpec "JavaScriptFFI"                    Opt_JavaScriptFFI,
   flagSpec "KindSignatures"                   Opt_KindSignatures,
@@ -3716,7 +3719,7 @@ clearPkgConf = upd $ \s -> s { extraPkgConfs = const [] }
 
 parseModuleName :: ReadP ModuleName
 parseModuleName = fmap mkModuleName
-                $ munch1 (\c -> isAlphaNum c || c `elem` ".")
+                $ munch1 (\c -> isAlphaNum c || c `elem` "_.")
 
 parsePackageFlag :: (String -> PackageArg) -- type of argument
                  -> String                 -- string to parse
@@ -4179,6 +4182,10 @@ makeDynFlagsConsistent dflags
       else let dflags' = dflags { hscTarget = HscLlvm }
                warn = "Compiler not unregisterised, so using LLVM rather than compiling via C"
            in loop dflags' warn
+ | gopt Opt_Hpc dflags && hscTarget dflags == HscInterpreted
+    = let dflags' = gopt_unset dflags Opt_Hpc
+          warn = "Hpc can't be used with byte-code interpreter. Ignoring -fhpc."
+      in loop dflags' warn
  | hscTarget dflags == HscAsm &&
    platformUnregisterised (targetPlatform dflags)
     = loop (dflags { hscTarget = HscC })

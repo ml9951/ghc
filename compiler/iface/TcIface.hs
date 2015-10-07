@@ -351,20 +351,23 @@ tc_iface_decl _ _ (IfaceSynonym {ifName = occ_name, ifTyVars = tv_bndrs,
      ; rhs_kind <- tcIfaceKind kind     -- Note [Synonym kind loop]
      ; rhs      <- forkM (mk_doc tc_name) $
                    tcIfaceType rhs_ty
-     ; tycon    <- buildSynonymTyCon tc_name tyvars roles rhs rhs_kind
+     ; let tycon = buildSynonymTyCon tc_name tyvars roles rhs rhs_kind
      ; return (ATyCon tycon) }
    where
      mk_doc n = ptext (sLit "Type synonym") <+> ppr n
 
 tc_iface_decl parent _ (IfaceFamily {ifName = occ_name, ifTyVars = tv_bndrs,
                                      ifFamFlav = fam_flav,
-                                     ifFamKind = kind })
+                                     ifFamKind = kind,
+                                     ifResVar = res, ifFamInj = inj })
    = bindIfaceTyVars_AT tv_bndrs $ \ tyvars -> do
      { tc_name  <- lookupIfaceTop occ_name
      ; rhs_kind <- tcIfaceKind kind     -- Note [Synonym kind loop]
      ; rhs      <- forkM (mk_doc tc_name) $
                    tc_fam_flav fam_flav
-     ; tycon    <- buildFamilyTyCon tc_name tyvars rhs rhs_kind parent
+     ; res_name <- traverse (newIfaceName . mkTyVarOccFS) res
+     ; let tycon = buildFamilyTyCon tc_name tyvars res_name rhs rhs_kind
+                                    parent inj
      ; return (ATyCon tycon) }
    where
      mk_doc n = ptext (sLit "Type synonym") <+> ppr n
@@ -424,7 +427,7 @@ tc_iface_decl _parent ignore_prags
                       Just def -> forkM (mk_at_doc tc)                 $
                                   extendIfaceTyVarEnv (tyConTyVars tc) $
                                   do { tc_def <- tcIfaceType def
-                                     ; return (Just tc_def) }
+                                     ; return (Just (tc_def, noSrcSpan)) }
                   -- Must be done lazily in case the RHS of the defaults mention
                   -- the type constructor being defined here
                   -- e.g.   type AT a; type AT b = AT [b]   Trac #8002
@@ -447,7 +450,7 @@ tc_iface_decl _ _ (IfaceAxiom { ifName = ax_occ, ifTyCon = tc
                              , co_ax_name     = tc_name
                              , co_ax_tc       = tc_tycon
                              , co_ax_role     = role
-                             , co_ax_branches = toBranchList tc_branches
+                             , co_ax_branches = manyBranches tc_branches
                              , co_ax_implicit = False }
        ; return (ACoAxiom axiom) }
 

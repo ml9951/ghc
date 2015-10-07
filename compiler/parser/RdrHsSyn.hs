@@ -213,13 +213,13 @@ mkTyFamInstEqn lhs rhs
                  ann) }
 
 mkDataFamInst :: SrcSpan
-         -> NewOrData
-         -> Maybe (Located CType)
-         -> Located (Maybe (LHsContext RdrName), LHsType RdrName)
-         -> Maybe (LHsKind RdrName)
-         -> [LConDecl RdrName]
-         -> Maybe (Located [LHsType RdrName])
-         -> P (LInstDecl RdrName)
+              -> NewOrData
+              -> Maybe (Located CType)
+              -> Located (Maybe (LHsContext RdrName), LHsType RdrName)
+              -> Maybe (LHsKind RdrName)
+              -> [LConDecl RdrName]
+              -> Maybe (Located [LHsType RdrName])
+              -> P (LInstDecl RdrName)
 mkDataFamInst loc new_or_data cType (L _ (mcxt, tycl_hdr)) ksig data_cons maybe_deriv
   = do { (tc, tparams,ann) <- checkTyClHdr False tycl_hdr
        ; mapM_ (\a -> a loc) ann -- Add any API Annotations to the top SrcSpan
@@ -237,15 +237,18 @@ mkTyFamInst loc eqn
 
 mkFamDecl :: SrcSpan
           -> FamilyInfo RdrName
-          -> LHsType RdrName   -- LHS
-          -> Maybe (LHsKind RdrName) -- Optional kind signature
+          -> LHsType RdrName                   -- LHS
+          -> Located (FamilyResultSig RdrName) -- Optional result signature
+          -> Maybe (LInjectivityAnn RdrName)   -- Injectivity annotation
           -> P (LTyClDecl RdrName)
-mkFamDecl loc info lhs ksig
-  = do { (tc, tparams,ann) <- checkTyClHdr False lhs
+mkFamDecl loc info lhs ksig injAnn
+  = do { (tc, tparams, ann) <- checkTyClHdr False lhs
        ; mapM_ (\a -> a loc) ann -- Add any API Annotations to the top SrcSpan
        ; tyvars <- checkTyVarsP (ppr info) equals_or_where tc tparams
-       ; return (L loc (FamDecl (FamilyDecl { fdInfo = info, fdLName = tc
-                                            , fdTyVars = tyvars, fdKindSig = ksig }))) }
+       ; return (L loc (FamDecl (FamilyDecl{ fdInfo      = info, fdLName = tc
+                                           , fdTyVars    = tyvars
+                                           , fdResultSig = ksig
+                                           , fdInjectivityAnn = injAnn }))) }
   where
     equals_or_where = case info of
                         DataFamily          -> empty
@@ -1116,8 +1119,8 @@ checkCmdLStmt :: ExprLStmt RdrName -> P (CmdLStmt RdrName)
 checkCmdLStmt = locMap checkCmdStmt
 
 checkCmdStmt :: SrcSpan -> ExprStmt RdrName -> P (CmdStmt RdrName)
-checkCmdStmt _ (LastStmt e r) =
-    checkCommand e >>= (\c -> return $ LastStmt c r)
+checkCmdStmt _ (LastStmt e s r) =
+    checkCommand e >>= (\c -> return $ LastStmt c s r)
 checkCmdStmt _ (BindStmt pat e b f) =
     checkCommand e >>= (\c -> return $ BindStmt pat c b f)
 checkCmdStmt _ (BodyStmt e t g ty) =
@@ -1175,7 +1178,8 @@ mkRecConstrOrUpdate (L l (HsVar c)) _ (fs,dd)
   | isRdrDataCon c
   = return (RecordCon (L l c) noPostTcExpr (mk_rec_fields fs dd))
 mkRecConstrOrUpdate exp _ (fs,dd)
-  = return (RecordUpd exp (mk_rec_fields fs dd) [] [] [])
+  = return (RecordUpd exp (mk_rec_fields fs dd)
+                      PlaceHolder PlaceHolder PlaceHolder)
 
 mk_rec_fields :: [LHsRecField id arg] -> Bool -> HsRecFields id arg
 mk_rec_fields fs False = HsRecFields { rec_flds = fs, rec_dotdot = Nothing }

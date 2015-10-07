@@ -62,7 +62,6 @@ char *EventDesc[]              = {
   [EVENT_MIGRATE_THREAD]       = "Migrate thread",
   [EVENT_THREAD_WAKEUP]        = "Wakeup thread",
   [EVENT_THREAD_LABEL]         = "Thread label",
-  [EVENT_STARTUP]              = "Create capabilities",
   [EVENT_CAP_CREATE]           = "Create capability",
   [EVENT_CAP_DELETE]           = "Delete capability",
   [EVENT_CAP_DISABLE]          = "Disable capability",
@@ -142,6 +141,9 @@ static void closeBlockMarker(EventsBuf *ebuf);
 
 static StgBool hasRoomForEvent(EventsBuf *eb, EventTypeNum eNum);
 static StgBool hasRoomForVariableEvent(EventsBuf *eb, nat payload_bytes);
+
+static void ensureRoomForEvent(EventsBuf *eb, EventTypeNum tag);
+static int ensureRoomForVariableEvent(EventsBuf *eb, StgWord16 size);
 
 static inline void postWord8(EventsBuf *eb, StgWord8 i)
 {
@@ -319,7 +321,6 @@ initEventLogging(void)
                                + sizeof(EventThreadID);
             break;
 
-        case EVENT_STARTUP:         // (cap_count)
         case EVENT_CAP_CREATE:      // (cap)
         case EVENT_CAP_DELETE:      // (cap)
         case EVENT_CAP_ENABLE:      // (cap)
@@ -570,6 +571,7 @@ abortEventLogging(void)
         fclose(event_log_file);
     }
 }
+
 /*
  * Post an event message to the capability's eventlog buffer.
  * If the buffer is full, prints out the buffer and clears it.
@@ -584,11 +586,7 @@ postSchedEvent (Capability *cap,
     EventsBuf *eb;
 
     eb = &capEventBuf[cap->no];
-
-    if (!hasRoomForEvent(eb, tag)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(eb);
-    }
+    ensureRoomForEvent(eb, tag);
 
     postEventHeader(eb, tag);
 
@@ -636,11 +634,7 @@ postSparkEvent (Capability *cap,
     EventsBuf *eb;
 
     eb = &capEventBuf[cap->no];
-
-    if (!hasRoomForEvent(eb, tag)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(eb);
-    }
+    ensureRoomForEvent(eb, tag);
 
     postEventHeader(eb, tag);
 
@@ -692,11 +686,7 @@ postSparkCountersEvent (Capability *cap,
     EventsBuf *eb;
 
     eb = &capEventBuf[cap->no];
-
-    if (!hasRoomForEvent(eb, EVENT_SPARK_COUNTERS)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(eb);
-    }
+    ensureRoomForEvent(eb, EVENT_SPARK_COUNTERS);
 
     postEventHeader(eb, EVENT_SPARK_COUNTERS);
     /* EVENT_SPARK_COUNTERS (crt,dud,ovf,cnv,gcd,fiz,rem) */
@@ -714,11 +704,7 @@ postCapEvent (EventTypeNum  tag,
               EventCapNo    capno)
 {
     ACQUIRE_LOCK(&eventBufMutex);
-
-    if (!hasRoomForEvent(&eventBuf, tag)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(&eventBuf);
-    }
+    ensureRoomForEvent(&eventBuf, tag);
 
     postEventHeader(&eventBuf, tag);
 
@@ -744,11 +730,7 @@ void postCapsetEvent (EventTypeNum tag,
                       StgWord info)
 {
     ACQUIRE_LOCK(&eventBufMutex);
-
-    if (!hasRoomForEvent(&eventBuf, tag)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(&eventBuf);
-    }
+    ensureRoomForEvent(&eventBuf, tag);
 
     postEventHeader(&eventBuf, tag);
     postCapsetID(&eventBuf, capset);
@@ -874,11 +856,7 @@ void postWallClockTime (EventCapsetID capset)
 
     getUnixEpochTime(&sec, &nsec);  /* Get the wall clock time */
     ts = time_ns();                 /* Get the eventlog timestamp */
-
-    if (!hasRoomForEvent(&eventBuf, EVENT_WALL_CLOCK_TIME)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(&eventBuf);
-    }
+    ensureRoomForEvent(&eventBuf, EVENT_WALL_CLOCK_TIME);
 
     /* Normally we'd call postEventHeader(), but that generates its own
        timestamp, so we go one level lower so we can write out the
@@ -905,11 +883,7 @@ void postHeapEvent (Capability    *cap,
     EventsBuf *eb;
 
     eb = &capEventBuf[cap->no];
-
-    if (!hasRoomForEvent(eb, tag)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(eb);
-    }
+    ensureRoomForEvent(eb, tag);
 
     postEventHeader(eb, tag);
 
@@ -936,11 +910,7 @@ void postEventHeapInfo (EventCapsetID heap_capset,
                         W_          blockSize)
 {
     ACQUIRE_LOCK(&eventBufMutex);
-
-    if (!hasRoomForEvent(&eventBuf, EVENT_HEAP_INFO_GHC)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(&eventBuf);
-    }
+    ensureRoomForEvent(&eventBuf, EVENT_HEAP_INFO_GHC);
 
     postEventHeader(&eventBuf, EVENT_HEAP_INFO_GHC);
     /* EVENT_HEAP_INFO_GHC (heap_capset, n_generations,
@@ -969,11 +939,7 @@ void postEventGcStats  (Capability    *cap,
     EventsBuf *eb;
 
     eb = &capEventBuf[cap->no];
-
-    if (!hasRoomForEvent(eb, EVENT_GC_STATS_GHC)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(eb);
-    }
+    ensureRoomForEvent(eb, EVENT_GC_STATS_GHC);
 
     postEventHeader(eb, EVENT_GC_STATS_GHC);
     /* EVENT_GC_STATS_GHC (heap_capset, generation,
@@ -994,11 +960,7 @@ void postTaskCreateEvent (EventTaskId taskId,
                           EventKernelThreadId tid)
 {
     ACQUIRE_LOCK(&eventBufMutex);
-
-    if (!hasRoomForEvent(&eventBuf, EVENT_TASK_CREATE)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(&eventBuf);
-    }
+    ensureRoomForEvent(&eventBuf, EVENT_TASK_CREATE);
 
     postEventHeader(&eventBuf, EVENT_TASK_CREATE);
     /* EVENT_TASK_CREATE (taskID, cap, tid) */
@@ -1014,11 +976,7 @@ void postTaskMigrateEvent (EventTaskId taskId,
                            EventCapNo new_capno)
 {
     ACQUIRE_LOCK(&eventBufMutex);
-
-    if (!hasRoomForEvent(&eventBuf, EVENT_TASK_MIGRATE)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(&eventBuf);
-    }
+    ensureRoomForEvent(&eventBuf, EVENT_TASK_MIGRATE);
 
     postEventHeader(&eventBuf, EVENT_TASK_MIGRATE);
     /* EVENT_TASK_MIGRATE (taskID, cap, new_cap) */
@@ -1032,11 +990,7 @@ void postTaskMigrateEvent (EventTaskId taskId,
 void postTaskDeleteEvent (EventTaskId taskId)
 {
     ACQUIRE_LOCK(&eventBufMutex);
-
-    if (!hasRoomForEvent(&eventBuf, EVENT_TASK_DELETE)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(&eventBuf);
-    }
+    ensureRoomForEvent(&eventBuf, EVENT_TASK_DELETE);
 
     postEventHeader(&eventBuf, EVENT_TASK_DELETE);
     /* EVENT_TASK_DELETE (taskID) */
@@ -1051,12 +1005,7 @@ postEvent (Capability *cap, EventTypeNum tag)
     EventsBuf *eb;
 
     eb = &capEventBuf[cap->no];
-
-    if (!hasRoomForEvent(eb, tag)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(eb);
-    }
-
+    ensureRoomForEvent(eb, tag);
     postEventHeader(eb, tag);
 }
 
@@ -1066,11 +1015,7 @@ postEventAtTimestamp (Capability *cap, EventTimestamp ts, EventTypeNum tag)
     EventsBuf *eb;
 
     eb = &capEventBuf[cap->no];
-
-    if (!hasRoomForEvent(eb, tag)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(eb);
-    }
+    ensureRoomForEvent(eb, tag);
 
     /* Normally we'd call postEventHeader(), but that generates its own
        timestamp, so we go one level lower so we can write out
@@ -1092,10 +1037,7 @@ void postLogMsg(EventsBuf *eb, EventTypeNum type, char *msg, va_list ap)
         size = BUF;
     }
 
-    if (!hasRoomForVariableEvent(eb, size)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(eb);
-    }
+    ensureRoomForVariableEvent(eb, size);
 
     postEventHeader(eb, type);
     postPayloadSize(eb, size);
@@ -1112,22 +1054,6 @@ void postMsg(char *msg, va_list ap)
 void postCapMsg(Capability *cap, char *msg, va_list ap)
 {
     postLogMsg(&capEventBuf[cap->no], EVENT_LOG_MSG, msg, ap);
-}
-
-void postEventStartup(EventCapNo n_caps)
-{
-    ACQUIRE_LOCK(&eventBufMutex);
-
-    if (!hasRoomForEvent(&eventBuf, EVENT_STARTUP)) {
-        // Flush event buffer to make room for new event.
-        printAndClearEventBuf(&eventBuf);
-    }
-
-    // Post a STARTUP event with the number of capabilities
-    postEventHeader(&eventBuf, EVENT_STARTUP);
-    postCapNo(&eventBuf, n_caps);
-
-    RELEASE_LOCK(&eventBufMutex);
 }
 
 void postUserEvent(Capability *cap, EventTypeNum type, char *msg)
@@ -1197,9 +1123,7 @@ void closeBlockMarker (EventsBuf *ebuf)
 
 void postBlockMarker (EventsBuf *eb)
 {
-    if (!hasRoomForEvent(eb, EVENT_BLOCK_MARKER)) {
-        printAndClearEventBuf(eb);
-    }
+    ensureRoomForEvent(eb, EVENT_BLOCK_MARKER);
 
     closeBlockMarker(eb);
 
@@ -1275,6 +1199,26 @@ StgBool hasRoomForVariableEvent(EventsBuf *eb, nat payload_bytes)
       return 1; // Buf has enough space for the event.
   }
 }
+
+void ensureRoomForEvent(EventsBuf *eb, EventTypeNum tag)
+{
+    if (!hasRoomForEvent(eb, tag)) {
+        // Flush event buffer to make room for new event.
+        printAndClearEventBuf(eb);
+    }
+}
+
+int ensureRoomForVariableEvent(EventsBuf *eb, StgWord16 size)
+{
+    if (!hasRoomForVariableEvent(eb, size)) {
+        // Flush event buffer to make room for new event.
+        printAndClearEventBuf(eb);
+        if (!hasRoomForVariableEvent(eb, size))
+            return 1; // Not enough space
+    }
+    return 0;
+}
+
 
 void postEventType(EventsBuf *eb, EventType *et)
 {

@@ -911,7 +911,8 @@ wrapTypeFamInstBody :: CoAxiom br -> Int -> [Type] -> CoreExpr -> CoreExpr
 wrapTypeFamInstBody axiom ind args body
   = mkCast body (mkSymCo (mkAxInstCo Representational axiom ind args))
 
-wrapTypeUnbranchedFamInstBody :: CoAxiom Unbranched -> [Type] -> CoreExpr -> CoreExpr
+wrapTypeUnbranchedFamInstBody :: CoAxiom Unbranched -> [Type] -> CoreExpr
+                              -> CoreExpr
 wrapTypeUnbranchedFamInstBody axiom
   = wrapTypeFamInstBody axiom 0
 
@@ -926,7 +927,8 @@ unwrapTypeFamInstScrut :: CoAxiom br -> Int -> [Type] -> CoreExpr -> CoreExpr
 unwrapTypeFamInstScrut axiom ind args scrut
   = mkCast scrut (mkAxInstCo Representational axiom ind args)
 
-unwrapTypeUnbranchedFamInstScrut :: CoAxiom Unbranched -> [Type] -> CoreExpr -> CoreExpr
+unwrapTypeUnbranchedFamInstScrut :: CoAxiom Unbranched -> [Type] -> CoreExpr
+                                 -> CoreExpr
 unwrapTypeUnbranchedFamInstScrut axiom
   = unwrapTypeFamInstScrut axiom 0
 
@@ -1088,7 +1090,7 @@ proxyHashId
     ty      = mkForAllTys [kv, tv] (mkProxyPrimTy k t)
     kv      = kKiVar
     k       = mkTyVarTy kv
-    tv:_    = tyVarList k
+    [tv]    = mkTemplateTyVars [k]
     t       = mkTyVarTy tv
 
 ------------------------------------------------
@@ -1323,6 +1325,10 @@ In the context of making left-folds fuse somewhat okish (see ticket #7994
 and Note [Left folds via right fold]) it was determined that it would be useful
 if library authors could explicitly tell the compiler that a certain lambda is
 called at most once. The oneShot function allows that.
+
+'oneShot' is open kinded, i.e. the type variables can refer to unlifted
+types as well (Trac #10744); e.g.
+   oneShot (\x:Int# -> x +# 1#)
 
 Like most magic functions it has a compulsary unfolding, so there is no need
 for a real definition somewhere. We have one in GHC.Magic for the convenience

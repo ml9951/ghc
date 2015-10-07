@@ -56,6 +56,16 @@
   * Made `PatternMatchFail`, `RecSelError`, `RecConError`, `RecUpdError`,
     `NoMethodError`, and `AssertionFailed` newtypes (#10738)
 
+  * The `Generic` instance for `Proxy` is now poly-kinded (#10775)
+
+  * add `Data.List.NonEmpty` and `Data.Semigroup` (to become
+    super-class of `Monoid` in the future). These modules were
+    provided by the `semigroups` package previously. (#10365)
+
+  * Add `URec`, `UAddr`, `UChar`, `UDouble`, `UFloat`, `UInt`, and `UWord` to
+    `GHC.Generics` as part of making GHC generics capable of handling
+    unlifted types (#10868)
+
 ## 4.8.1.0  *Jul 2015*
 
   * Bundled with GHC 7.10.2

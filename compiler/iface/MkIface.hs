@@ -15,6 +15,7 @@ module MkIface (
                         -- including computing version information
 
         mkIfaceTc,
+        mkIfaceDirect,
 
         writeIfaceFile, -- Write the interface file
 
@@ -159,6 +160,35 @@ mkIface hsc_env maybe_old_fingerprint mod_details
                    this_mod hsc_src used_names used_th deps rdr_env fix_env
                    warns hpc_info dir_imp_mods self_trust dependent_files
                    safe_mode mod_details
+
+-- | Make an interface from a manually constructed 'ModIface'.  We use
+-- this when we are merging 'ModIface's.  We assume that the 'ModIface'
+-- has accurate entries but not accurate fingerprint information (so,
+-- like @intermediate_iface@ in 'mkIface_'.)
+mkIfaceDirect :: HscEnv
+              -> Maybe Fingerprint
+              -> ModIface
+              -> IO (ModIface, Bool)
+mkIfaceDirect hsc_env maybe_old_fingerprint iface0 = do
+    -- Sort some things to make sure we're deterministic
+    let intermediate_iface = iface0 {
+            mi_exports   = mkIfaceExports (mi_exports iface0),
+            mi_insts     = sortBy cmp_inst     (mi_insts iface0),
+            mi_fam_insts = sortBy cmp_fam_inst (mi_fam_insts iface0),
+            mi_rules     = sortBy cmp_rule     (mi_rules iface0)
+        }
+        dflags = hsc_dflags hsc_env
+    (final_iface, no_change_at_all)
+          <- {-# SCC "versioninfo" #-}
+                   addFingerprints hsc_env maybe_old_fingerprint
+                                   intermediate_iface
+                                   (map snd (mi_decls iface0))
+
+    -- Debug printing
+    dumpIfSet_dyn dflags Opt_D_dump_hi "FINAL INTERFACE"
+                  (pprModIface final_iface)
+
+    return (final_iface, no_change_at_all)
 
 -- | make an interface from the results of typechecking only.  Useful
 -- for non-optimising compilation, or where we aren't generating any
@@ -357,11 +387,6 @@ mkIface_ hsc_env maybe_old_fingerprint
 
         return (errs_and_warns, Just (final_iface, no_change_at_all))
   where
-     cmp_rule     = comparing ifRuleName
-     -- Compare these lexicographically by OccName, *not* by unique,
-     -- because the latter is not stable across compilations:
-     cmp_inst     = comparing (nameOccName . ifDFun)
-     cmp_fam_inst = comparing (nameOccName . ifFamInstTcName)
 
      dflags = hsc_dflags hsc_env
 
@@ -379,8 +404,6 @@ mkIface_ hsc_env maybe_old_fingerprint
      deliberatelyOmitted :: String -> a
      deliberatelyOmitted x = panic ("Deliberately omitted: " ++ x)
 
-     ifFamInstTcName = ifFamInstFam
-
      flattenVectInfo (VectInfo { vectInfoVar            = vVar
                                , vectInfoTyCon          = vTyCon
                                , vectInfoParallelVars     = vParallelVars
@@ -393,6 +416,16 @@ mkIface_ hsc_env maybe_old_fingerprint
        , ifaceVectInfoParallelVars   = [Var.varName v | v <- varSetElems vParallelVars]
        , ifaceVectInfoParallelTyCons = nameSetElems vParallelTyCons
        }
+
+cmp_rule :: IfaceRule -> IfaceRule -> Ordering
+cmp_rule     = comparing ifRuleName
+-- Compare these lexicographically by OccName, *not* by unique,
+-- because the latter is not stable across compilations:
+cmp_inst :: IfaceClsInst -> IfaceClsInst -> Ordering
+cmp_inst     = comparing (nameOccName . ifDFun)
+
+cmp_fam_inst :: IfaceFamInst -> IfaceFamInst -> Ordering
+cmp_fam_inst = comparing (nameOccName . ifFamInstFam)
 
 -----------------------------
 writeIfaceFile :: DynFlags -> FilePath -> ModIface -> IO ()
@@ -1334,20 +1367,9 @@ checkDependencies hsc_env summary iface
      find_res <- liftIO $ findImportedModule hsc_env mod (fmap sl_fs pkg)
      let reason = moduleNameString mod ++ " changed"
      case find_res of
-        FoundModule h -> check_mod reason (fr_mod h)
-        FoundSigs hs _backing -> check_mods reason (map fr_mod hs)
-        _otherwise  -> return (RecompBecause reason)
-
-   check_mods _ [] = return UpToDate
-   check_mods reason (m:ms) = do
-        r <- check_mod reason m
-        case r of
-            UpToDate -> check_mods reason ms
-            _otherwise -> return r
-
-   check_mod reason mod
+        Found _ mod
           | pkg == this_pkg
-            = if moduleName mod `notElem` map fst prev_dep_mods
+           -> if moduleName mod `notElem` map fst prev_dep_mods
                  then do traceHiDiffs $
                            text "imported module " <> quotes (ppr mod) <>
                            text " not among previous dependencies"
@@ -1355,7 +1377,7 @@ checkDependencies hsc_env summary iface
                  else
                          return UpToDate
           | otherwise
-            = if pkg `notElem` (map fst prev_dep_pkgs)
+           -> if pkg `notElem` (map fst prev_dep_pkgs)
                  then do traceHiDiffs $
                            text "imported module " <> quotes (ppr mod) <>
                            text " is from package " <> quotes (ppr pkg) <>
@@ -1364,6 +1386,7 @@ checkDependencies hsc_env summary iface
                  else
                          return UpToDate
            where pkg = modulePackageKey mod
+        _otherwise  -> return (RecompBecause reason)
 
 needInterface :: Module -> (ModIface -> IfG RecompileRequired)
               -> IfG RecompileRequired
@@ -1575,11 +1598,12 @@ coAxiomToIfaceDecl ax@(CoAxiom { co_ax_tc = tycon, co_ax_branches = branches
  = IfaceAxiom { ifName       = name
               , ifTyCon      = toIfaceTyCon tycon
               , ifRole       = role
-              , ifAxBranches = brListMap (coAxBranchToIfaceBranch tycon
-                                            (brListMap coAxBranchLHS branches))
-                                         branches }
+              , ifAxBranches = map (coAxBranchToIfaceBranch tycon
+                                     (map coAxBranchLHS branch_list))
+                                   branch_list }
  where
-   name = getOccName ax
+   branch_list = fromBranches branches
+   name        = getOccName ax
 
 -- 2nd parameter is the list of branch LHSs, for conversion from incompatible branches
 -- to incompatible indices
@@ -1623,15 +1647,17 @@ tyConToIfaceDecl env tycon
                      ifTyVars  = if_tc_tyvars,
                      ifRoles   = tyConRoles tycon,
                      ifSynRhs  = if_syn_type syn_rhs,
-                     ifSynKind = tidyToIfaceType tc_env1 (synTyConResKind tycon)
+                     ifSynKind = tidyToIfaceType tc_env1 (tyConResKind tycon)
                    })
 
   | Just fam_flav <- famTyConFlav_maybe tycon
   = ( tc_env1
     , IfaceFamily { ifName    = getOccName tycon,
                     ifTyVars  = if_tc_tyvars,
+                    ifResVar  = if_res_var,
                     ifFamFlav = to_if_fam_flav fam_flav,
-                    ifFamKind = tidyToIfaceType tc_env1 (synTyConResKind tycon)
+                    ifFamKind = tidyToIfaceType tc_env1 (tyConResKind tycon),
+                    ifFamInj  = familyTyConInjectivityInfo tycon
                   })
 
   | isAlgTyCon tycon
@@ -1662,8 +1688,9 @@ tyConToIfaceDecl env tycon
                   ifParent     = IfNoParent })
   where
     (tc_env1, tc_tyvars) = tidyTyClTyVarBndrs env (tyConTyVars tycon)
-    if_tc_tyvars = toIfaceTvBndrs tc_tyvars
+    if_tc_tyvars   = toIfaceTvBndrs tc_tyvars
     if_syn_type ty = tidyToIfaceType tc_env1 ty
+    if_res_var     = getFS `fmap` tyConFamilyResVar_maybe tycon
 
     funAndPrimTyVars = toIfaceTvBndrs $ take (tyConArity tycon) alphaTyVars
 
@@ -1676,7 +1703,7 @@ tyConToIfaceDecl env tycon
     to_if_fam_flav OpenSynFamilyTyCon        = IfaceOpenSynFamilyTyCon
     to_if_fam_flav (ClosedSynFamilyTyCon (Just ax))
       = IfaceClosedSynFamilyTyCon (Just (axn, ibr))
-      where defs = fromBranchList $ coAxiomBranches ax
+      where defs = fromBranches $ coAxiomBranches ax
             ibr  = map (coAxBranchToIfaceBranch' tycon) defs
             axn  = coAxiomName ax
     to_if_fam_flav (ClosedSynFamilyTyCon Nothing)
@@ -1760,7 +1787,7 @@ classToIfaceDecl env clas
 
     toIfaceAT :: ClassATItem -> IfaceAT
     toIfaceAT (ATI tc def)
-      = IfaceAT if_decl (fmap (tidyToIfaceType env2) def)
+      = IfaceAT if_decl (fmap (tidyToIfaceType env2 . fst) def)
       where
         (env2, if_decl) = tyConToIfaceDecl env1 tc
 
@@ -1853,13 +1880,8 @@ famInstToIfaceFamInst (FamInst { fi_axiom    = axiom,
 
     orph | is_local fam_decl
          = NotOrphan (nameOccName fam_decl)
-
-         | not (isEmptyNameSet lhs_names)
-         = NotOrphan (nameOccName (head (nameSetElems lhs_names)))
-
-
          | otherwise
-         = IsOrphan
+         = chooseOrphanAnchor $ nameSetElems lhs_names
 
 --------------------------
 toIfaceLetBndr :: Id -> IfaceLetBndr
@@ -1875,8 +1897,17 @@ toIfaceIdDetails VanillaId                      = IfVanillaId
 toIfaceIdDetails (DFunId {})                    = IfDFunId
 toIfaceIdDetails (RecSelId { sel_naughty = n
                            , sel_tycon = tc })  = IfRecSelId (toIfaceTyCon tc) n
-toIfaceIdDetails other                          = pprTrace "toIfaceIdDetails" (ppr other)
-                                                  IfVanillaId   -- Unexpected
+
+  -- Currently we don't persist these three "advisory" IdInfos
+  -- through interface files.  We easily could if it mattered
+toIfaceIdDetails PatSynId     = IfVanillaId
+toIfaceIdDetails ReflectionId = IfVanillaId
+toIfaceIdDetails DefMethId    = IfVanillaId
+
+  -- The remaining cases are all "implicit Ids" which don't
+  -- appear in interface files at all
+toIfaceIdDetails other = pprTrace "toIfaceIdDetails" (ppr other)
+                         IfVanillaId   -- Unexpected; the other
 
 toIfaceIdInfo :: IdInfo -> IfaceIdInfo
 toIfaceIdInfo id_info

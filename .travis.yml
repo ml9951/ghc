@@ -41,11 +41,17 @@ before_install:
 script:
  # do  not build docs
  - echo 'HADDOCK_DOCS       = NO' >> mk/validate.mk
- - echo 'BUILD_DOCBOOK_HTML = NO' >> mk/validate.mk
- - echo 'BUILD_DOCBOOK_PS   = NO' >> mk/validate.mk
- - echo 'BUILD_DOCBOOK_PDF  = NO' >> mk/validate.mk
+ - echo 'BUILD_SPHINX_HTML  = NO' >> mk/validate.mk
+ - echo 'BUILD_SPHINX_PDF   = NO' >> mk/validate.mk
  # do not build dynamic libraries
  - echo 'DYNAMIC_GHC_PROGRAMS = NO' >> mk/validate.mk
  - echo 'GhcLibWays = v' >> mk/validate.mk
  - if [ "$DEBUG_STAGE2" = "YES" ]; then echo 'GhcStage2HcOpts += -DDEBUG' >> mk/validate.mk; fi
- - THREADS=3 SKIP_PERF_TESTS=YES ./validate --fast --quiet
+ # * Use --quiet, otherwise the build log might exceed the limit of 4
+ # megabytes, causing Travis to kill our job.
+ # * But use VERBOSE=2 (the default, but not when using --quiet) otherwise
+ # the testsuite might not print output for over 10 minutes (more likely so
+ # when DEBUG_STAGE2=NO), causing Travis to again kill our job.
+ # * Use --fast, to stay within the time limits set by Travis.
+ # See Note [validate and testsuite speed] in toplevel Makefile.
+ - THREADS=3 SKIP_PERF_TESTS=YES VERBOSE=2 ./validate --fast --quiet
