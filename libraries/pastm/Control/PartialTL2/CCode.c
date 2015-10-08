@@ -29,7 +29,7 @@
 
 static volatile unsigned long version_clock = 0;
 
-StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec){
+StgPTRecHeader * ptl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec){
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
@@ -41,7 +41,7 @@ StgPTRecHeader * pa_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec)
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
     ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
     
-    ptrec->read_version = atomic_inc(&version_clock, 2);
+    ptrec->read_version = version_clock;
 
     ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ; 
     ptrec->numK = 0;
@@ -54,29 +54,38 @@ static void clearTRec(StgPTRecHeader * trec){
     trec->lastK = TO_WITHK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->retry_stack = TO_OR_ELSE(NO_PTREC);
+    trec->read_version = version_clock;
     //TODO: we should probably use bitfields instead of manually messing with the bits
     StgInt64 capture_freq = trec->capture_freq & 0xFFFFFFFF00000000;
     trec->capture_freq = capture_freq | (capture_freq >> 32);
     trec->numK = 0;
 }
 
-StgClosure * abort_transaction(StgPTRecHeader * trec){
-    trec->read_version = atomic_inc(&version_clock, 2);
-    clearTRec(trec);
-    return PASTM_FAIL;
+void releaseLocks(StgWriteSet * ws, StgWriteSet * sentinel){
+    while(ws != sentinel){
+	StgTL2TVar * tvar = TO_TL2(ws->tvar);
+	tvar->currentStamp = tvar->oldStamp;
+	ws = ws->next;
+    }
 }
 
-//figure out where to abort for an eager conflict
-static StgPTRecWithK * validate(StgPTRecHeader * trec, Capability * cap){
+/*
+ * validate the read set.  If validation fails, then the trec will have been set up 
+ * appropriately for an abort.  This also updates the read_version, so if this is being
+ * called at commit time, the read_version should be used to overwrite the tvar stamps 
+ * when pushing the write set into the global store.  The "eager" parameter determines
+ * the context in which this is being called.  If it is NOT eager, then we should unlock
+ * the write set if a violation is detected.   
+ * If calling validate eagerly, supply 0 (or any even number) as the lockVal, this way 
+ * LOCKED(s) and s == lockVal are mutually exclusive.
+ */
+static StgPTRecWithK * validate(StgPTRecHeader * trec, Capability * cap, StgBool eager, unsigned long lockVal){
     unsigned long newStamp = atomic_inc(&(version_clock), 2);
     unsigned long myStamp = trec->read_version;
     StgPTRecWithoutK * ptr = trec->read_set;
     StgPTRecWithK * checkpoint = TO_WITHK(PASTM_SUCCESS);
     StgInt kCount = 0;
 
-    //if we called validate from commit, then we would have locked things with this stamp
-    unsigned long lockVal = myStamp + 1;
-    
  RETRY:
     while(ptr != TO_WITHOUTK(NO_PTREC)){
 	StgTL2TVar * tvar = TO_TL2(ptr->tvar);
@@ -101,8 +110,13 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec, Capability * cap){
 
     trec->read_version = newStamp;
     if(checkpoint->header.info == WITHK_HEADER){     //Something is out of date, but we found a checkpoint
+	if(!eager){ //we have acquired locks, so release them
+	    releaseLocks(trec->write_set, TO_WRITE_SET(NO_PTREC));
+	    trec->write_set = TO_WRITE_SET(NO_PTREC);
+	}
+	
 	StgTL2TVar * tvar = TO_TL2(checkpoint->tvar);
-
+	
 	StgClosure * val; 
 	unsigned long stamp1, stamp2;
 	
@@ -110,18 +124,20 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec, Capability * cap){
 	val = tvar->current_value;
 	stamp2 = tvar->currentStamp;
 
-	if((LOCKED(stamp1) && stamp1 != lockVal) || stamp1 != stamp2 || stamp1 > newStamp){
+	if(LOCKED(stamp1) || stamp1 != stamp2 || stamp1 > newStamp){
 	    //try validating again, but don't go past this checkpoint
+	    myStamp = newStamp;
 	    newStamp = atomic_inc(&version_clock, 2);
-	    myStamp = trec->read_version;
-	    lockVal = myStamp + 1;
 	    ptr = TO_WITHOUTK(checkpoint);
 	    kCount = 0;
 	    goto RETRY;
 	}
 	
 #ifdef STATS
-	cap->pastmStats.eagerPartialAborts++;
+	if(eager)
+	    cap->pastmStats.eagerPartialAborts++;
+	else
+	    cap->pastmStats.commitTimePartialAborts++;
 #endif
 
 	checkpoint->read_value = val;
@@ -134,17 +150,22 @@ static StgPTRecWithK * validate(StgPTRecHeader * trec, Capability * cap){
 	return checkpoint;
     }else if(checkpoint == TO_WITHK(PASTM_FAIL)){     //Something is out of date, but no checkpoint was found
 #ifdef STATS
-	cap->pastmStats.eagerFullAborts++;
+	if(eager)
+	    cap->pastmStats.eagerFullAborts++;
+	else
+	    cap->pastmStats.commitTimeFullAborts++;
 #endif
+	if(!eager)
+	    releaseLocks(trec->write_set, TO_WRITE_SET(NO_PTREC));
 	clearTRec(trec);
 	return checkpoint;
-    }else{                                            //everything is still valid
+    }else{                                            //everything is still valid, checkpoint must be PASTM_SUCCESS
 	return checkpoint;
     }
-    
 }
 
-StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
+
+StgClosure * ptl2_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
 			    StgTL2TVar * tvar, StgClosure * k){
     StgWriteSet * ws = trec->write_set;
 
@@ -164,10 +185,11 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     stamp2 = tvar->currentStamp;
 
     if(LOCKED(stamp1) || stamp1 != stamp2 || stamp1 > trec->read_version){
-	StgPTRecWithK * res = validate(trec, cap);
+	StgPTRecWithK * res = validate(trec, cap, TRUE, 0);
 	if(res != TO_WITHK(PASTM_SUCCESS)){
 	    return TO_CLOSURE(res);
 	}
+	//timestamp was extended, try reading again
 	goto retry;
     }
     
@@ -225,7 +247,7 @@ StgClosure * pa_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     return val; 
 }
 
-void pa_stmWriteTVar(Capability *cap,
+void ptl2_stmWriteTVar(Capability *cap,
 		     StgPTRecHeader *trec,
 		     StgTVar *tvar,
 		     StgClosure *new_value) {
@@ -237,18 +259,10 @@ void pa_stmWriteTVar(Capability *cap,
     trec->write_set = newEntry;
 }
 
-void releaseLocks(StgWriteSet * ws, StgWriteSet * sentinel){
-    while(ws != sentinel){
-	StgTL2TVar * tvar = TO_TL2(ws->tvar);
-	tvar->currentStamp = tvar->oldStamp;
-	ws = ws->next;
-    }
-}
-
-StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+StgPTRecWithK * ptl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec, StgThreadID id) {
     
     unsigned long myStamp = trec->read_version;
-    unsigned long lockVal = myStamp + 1;
+    unsigned long lockVal = ((unsigned long) id << 1) | 1;
     
     //Acquire locks
     StgWriteSet * ws_ptr = trec->write_set;
@@ -268,19 +282,17 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	    clearTRec(trec);
 	    return TO_WITHK(PASTM_FAIL);
 	}
-	
+
 	tvar->oldStamp = stamp;
 	trailer = &(ws_ptr->next);
 	ws_ptr = ws_ptr->next;
     }
     
-    ws_ptr = trec->write_set;
-    StgPTRecWithK * res = validate(trec, cap);
+    StgPTRecWithK * res = validate(trec, cap, FALSE, lockVal);
     if(res != TO_WITHK(PASTM_SUCCESS)){
-	releaseLocks(ws_ptr, TO_WRITE_SET(NO_PTREC));
 	return res;
     }
-
+    
     unsigned long write_version = trec->read_version; //validate updates trec->read_version
 
     //push write set into global store
@@ -292,7 +304,6 @@ StgPTRecWithK * pa_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
 	dirty_TL2_TVAR(cap, tvar);
 	ws_ptr = ws_ptr->next;
     }
-   
     return TO_WITHK(PASTM_SUCCESS);
 }
 
@@ -308,6 +319,5 @@ void c_ptl2_printSTMStats(){
     printf("Timestamp Extensions = %lu\n", stats.tsExtensions);
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
-    printf("Number of Commits = %lu\n", stats.numCommits);
 #endif
 }

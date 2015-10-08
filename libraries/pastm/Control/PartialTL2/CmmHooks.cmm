@@ -28,7 +28,7 @@ INFO_TABLE_RET(stg_ptl2_atomically_frame, ATOMICALLY_FRAME,
     trec = StgTSO_ptrec(CurrentTSO);
 
     /* We've got no more invariants to check, try to commit */
-    ("ptr" checkpoint) = ccall pa_stmCommitTransaction(MyCapability() "ptr", trec "ptr");
+    ("ptr" checkpoint) = ccall ptl2_stmCommitTransaction(MyCapability() "ptr", trec "ptr", StgTSO_id(CurrentTSO));
 
     if(checkpoint == PASTM_SUCCESS){ //Validation succeeded
         StgTSO_ptrec(CurrentTSO) = NO_PTREC;
@@ -36,12 +36,7 @@ INFO_TABLE_RET(stg_ptl2_atomically_frame, ATOMICALLY_FRAME,
         return(frame_result);
     }
     if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint
-		trec = StgTSO_ptrec(CurrentTSO);
 		
-        ("ptr" trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", trec "ptr");
-        StgTSO_ptrec(CurrentTSO) = trec;
-        next_invariant = END_INVARIANT_CHECK_QUEUE;
-
         jump stg_ap_v_fast
             // push the StgAtomicallyFrame again: the code generator is
             // clever enough to only assign the fields that have changed.
@@ -79,7 +74,7 @@ stg_ptl2_atomicallyzh (P_ stm)
     old_trec = StgTSO_ptrec(CurrentTSO);
 
     /* Start the memory transcation */
-    ("ptr" new_trec) = ccall pa_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
+    ("ptr" new_trec) = ccall ptl2_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
     StgTSO_ptrec(CurrentTSO) = new_trec;
 
     code = stm;
@@ -182,7 +177,7 @@ stg_ptl2_readTVarzh (P_ tvar, P_ k)
     MAYBE_GC_PP (stg_ptl2_readTVarzh, tvar, k);
 
     trec = StgTSO_ptrec(CurrentTSO);
-    ("ptr" result) = ccall pa_stmReadTVar(MyCapability() "ptr", trec "ptr",
+    ("ptr" result) = ccall ptl2_stmReadTVar(MyCapability() "ptr", trec "ptr",
 					  tvar "ptr", k "ptr");
 
     if(result == PASTM_FAIL){
@@ -207,7 +202,7 @@ stg_ptl2_writeTVarzh (P_ tvar,     /* :: TVar a */
     MAYBE_GC_PP (stg_ptl2_writeTVarzh, tvar, new_value);
 
     trec = StgTSO_ptrec(CurrentTSO);
-    ccall pa_stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
+    ccall ptl2_stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
 						  new_value "ptr");
     return (tvar);
 }
