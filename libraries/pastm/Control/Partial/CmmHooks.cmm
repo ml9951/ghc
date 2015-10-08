@@ -259,6 +259,7 @@ stg_partial_retryzh()
     retry_stack = StgPTRecHeader_retry_stack(trec);
     
     if(retry_stack == NO_PTREC){
+	//TODO: we need to implement blocking semantics for this
         jump stg_eagerFullAbort []; //retry from beginning
     }
 
