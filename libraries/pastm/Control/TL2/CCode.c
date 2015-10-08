@@ -46,18 +46,14 @@ StgPTRecHeader * tl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
     ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
     
-    ptrec->read_version = atomic_inc(&version_clock, 2);
+    ptrec->read_version = version_clock;
     return ptrec;
 }
 
-static void clearTRec(StgPTRecHeader * trec){
+static StgClosure * abort_tx(StgPTRecHeader * trec){
     trec->read_set = TO_WITHOUTK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
-}
-
-StgClosure * abort_transaction(StgPTRecHeader * trec){
-    trec->read_version = atomic_inc(&version_clock, 2);
-    clearTRec(trec);
+    trec->read_version = version_clock;
     return PASTM_FAIL;
 }
 
@@ -82,7 +78,7 @@ StgClosure * tl2_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 #ifdef STATS
 	cap->pastmStats.eagerFullAborts++;
 #endif
-	return abort_transaction(trec);
+	return abort_tx(trec);
     }
     
     StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
@@ -125,9 +121,9 @@ void releaseLocks(StgWriteSet * ws, StgWriteSet * sentinel){
  * traverse in reverse chronological order, we know that the first one locked
  * is our latest modification.
  */
-StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) {
+StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec, StgThreadID id) {
     unsigned long myStamp = trec->read_version;
-    unsigned long lockVal = myStamp + 1;
+    unsigned long lockVal = ((unsigned long)id << 1) | 1;
     
     //Acquire locks
     StgWriteSet * ws_ptr = trec->write_set;
@@ -144,8 +140,7 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
 
 	if(LOCKED(stamp) || stamp > myStamp || cas((StgVolatilePtr)&(tvar->currentStamp), stamp, lockVal) != stamp){
 	    releaseLocks(trec->write_set, ws_ptr);
-	    clearTRec(trec);
-	    return TO_WITHK(PASTM_FAIL);
+	    return TO_WITHK(abort_tx(trec));
 	}
 
 	tvar->oldStamp = stamp;
@@ -160,15 +155,14 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
     while(rs_ptr != TO_WITHOUTK(NO_PTREC)){
 	StgTL2TVar * tvar = TO_TL2(rs_ptr->tvar);
 	unsigned long stamp = tvar->currentStamp;
-	if((stamp < myStamp && !LOCKED(stamp)) || stamp == lockVal){
+	if((stamp <= myStamp && !LOCKED(stamp)) || stamp == lockVal){
 	    rs_ptr = rs_ptr->next;
 	}else{
 #ifdef STATS
 	    cap->pastmStats.commitTimeFullAborts++;
 #endif
 	    releaseLocks(trec->write_set, TO_WRITE_SET(NO_PTREC));
-	    clearTRec(trec);
-	    return TO_WITHK(PASTM_FAIL);
+	    return TO_WITHK(abort_tx(trec));
 	}
     }
     
@@ -193,7 +187,6 @@ void c_tl2_printSTMStats(){
 #ifdef STATS
     StgPASTMStats stats = {0, 0, 0, 0, 0, 0, 0};
     getStats(&stats);
-
     printf("Commit Full Aborts = %lu\n", stats.commitTimeFullAborts);
     printf("Eager Full Aborts = %lu\n", stats.eagerFullAborts);
     printf("Total Aborts = %lu\n", stats.commitTimeFullAborts + stats.commitTimePartialAborts + 

@@ -11,7 +11,8 @@ module Control.FullTL2.STM
     atomically,
     STM(..),
     printStats,
-    newTVar
+    newTVar,
+    module Control.Common.STM
 )
 where
 
@@ -19,7 +20,7 @@ where
 import GHC.Base(State#, RealWorld, IO(..), ap)
 import GHC.Prim(Any, unsafeCoerce# )
 import GHC.Conc.Sync(TVar(..))
-import Control.Common.STM(newTVar#)
+import Control.Common.STM
 
 newtype STM a = STM {unSTM :: State# RealWorld -> (# State# RealWorld, a #)}
 
