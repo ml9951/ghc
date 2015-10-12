@@ -1,12 +1,12 @@
 {-# LANGUAGE CPP, MagicHash #-} 
-module LinkedList(newList, add, find, delete, deleteIndex, ListHandle, printStats, getSizeIO, addIO)
+module LinkedList(newList, add, find, delete, ListHandle, printStats, getSizeIO, addIO)
 where
 
 #ifdef STMHASKELL
 import Control.STMHaskell.STM     --full abort STM haskell
 #elif defined(NOREC)
 import Control.NoRec.STM           --full abort STM (NoRec)
-#elif defined(ORDERED)
+#elif defined(ORDERED_NOREC)
 import Control.Ordered.STM
 #elif defined(PTL2)
 import Control.PartialTL2.STM
@@ -19,7 +19,7 @@ import Control.FastForward.STM
 #elif defined(PABORT)
 import Control.NoRec.STM
 #elif defined(TL2)
-import Control.FullTL2.STM
+import Control.FTL2.STM
 #else
 #error No STM Specified
 #endif
@@ -105,7 +105,7 @@ delete (ListHandle hd size) v = do
                                        case rawPrev of
                                             Head n -> writeTVar prev (Head n) >>= \_ -> return True
                                             Node v'' n' -> writeTVar prev (Node v'' n) >>= \_ -> return True
-                                                     
+{-                                                     
 next (Head n) = n
 next (Node _ n) = n
 
@@ -128,7 +128,7 @@ deleteIndex (ListHandle hd size) v = do
                             Head n -> deleteLoop n l (i-1)
                             Node _ n -> deleteLoop n l (i-1)
                             Null -> return False
-                       
+                       -}   
 
 addIO :: Ord a => ListHandle a -> a -> IO()
 addIO (ListHandle hd size) v = do addLoop hd; atomicModifyIORef size (\s -> (s+1, ())) --s <- readIORef size; writeIORef size (s+1)

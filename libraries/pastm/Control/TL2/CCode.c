@@ -29,16 +29,14 @@
 
 static volatile unsigned long version_clock = 0;
 
-#ifdef STATS
-static StgPASTMStats stats = {0, 0, 0, 0, 0};
-#endif
-
 //Initialize metadata
 StgPTRecHeader * tl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
     if(ptrec == NO_PTREC){
 	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
 	ptrec->tail = TO_WITHOUTK(NO_PTREC);
+	ptrec->capture_freq = 0;
+	ptrec->numK = 0;
     }
     
     ptrec->read_set = TO_WITHOUTK(NO_PTREC);
@@ -123,6 +121,12 @@ void releaseLocks(StgWriteSet * ws, StgWriteSet * sentinel){
  */
 StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec, StgThreadID id) {
     unsigned long myStamp = trec->read_version;
+
+    /*
+    * lock with my thread ID shifted by one bit, with the last bit set.
+    * this will let other threads know that the tvar is locked, but I 
+    * will still be able to tell if I locked something.  
+    */
     unsigned long lockVal = ((unsigned long)id << 1) | 1;
     
     //Acquire locks

@@ -4,7 +4,7 @@
 {-# LANGUAGE Trustworthy #-}
 #endif
 
-module Control.FullTL2.STM
+module Control.TL2.STM
 (
     readTVar,
     writeTVar,
@@ -16,7 +16,6 @@ module Control.FullTL2.STM
 )
 where
 
---add TVar TVar# newTVar# newTVarIO readTVarIO
 import GHC.Base(State#, RealWorld, IO(..), ap)
 import GHC.Prim(Any, unsafeCoerce# )
 import GHC.Conc.Sync(TVar(..))

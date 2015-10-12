@@ -25,7 +25,7 @@ parser :: Parser Opts
 parser = Opts
       <$> option auto (short 'i' <> help "Number of operations performed by each thread" <> value 3000)
       <*> option auto (short 't' <> help "Number of threads" <> value numCapabilities)
-      <*> option auto (long "maxVal" <> help "Max value to be added to the list" <> value 10000000)
+      <*> option auto (long "maxVal" <> help "Max value to be added to the list" <> value 10000)
       <*> option auto (long "initSize" <> help "Initial size of the linked list" <> value 3000)
       <*> option auto (long "reads" <> help "Read proportion" <> value 2)
       <*> option auto (long "writes" <> help "Write proportion" <> value 4)
@@ -43,10 +43,7 @@ threadLoop l opts i g = do
            then do find l r; threadLoop l opts (i-1) g
            else if prob < fromIntegral (reads opts + writes opts)
                 then do add l r; threadLoop l opts (i-1) g
-                else do 
-                     size <- getSizeIO l
-                     deleteIndex l (r `mod` fromIntegral size)
-                     threadLoop l opts (i-1) g
+                else do delete l r; threadLoop l opts (i-1) g
 
 mkThreads 0 l opts = return[]
 mkThreads i l opts = do
