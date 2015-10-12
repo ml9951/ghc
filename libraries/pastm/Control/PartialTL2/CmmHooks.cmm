@@ -51,6 +51,15 @@ INFO_TABLE_RET(stg_ptl2_atomically_frame, ATOMICALLY_FRAME,
         k = StgPTRecWithK_continuation(checkpoint);
         val = StgPTRecWithK_read_value(checkpoint);
 
+	/*
+	 * We pass the new value to be applied to the continuation in 
+	 * the read_value field, which is used by NoRec, but not TL2.
+	 * We have to update the TRec entry via mutation to do this, so
+	 * we need to clear out the field afterwards, because we may have
+	 * created an old gen -> young gen pointer.
+	 */
+	StgPTRecWithK_read_value(checkpoint) = NO_PTREC;
+	
         jump stg_ap_pv_fast  
             // push the StgAtomicallyFrame again: the code generator is
             // clever enough to only assign the fields that have changed.
@@ -162,6 +171,15 @@ stg_ptl2_eagerPartialAbort
 
     k = StgPTRecWithK_continuation(R1);
     val = StgPTRecWithK_read_value(R1);
+
+    /*
+     * We pass the new value to be applied to the continuation in 
+     * the read_value field, which is used by NoRec, but not TL2.
+     * We have to update the TRec entry via mutation to do this, so
+     * we need to clear out the field afterwards, because we may have
+     * created an old gen -> young gen pointer.
+     */
+    StgPTRecWithK_read_value(R1) = NO_PTREC;
     
     jump stg_ap_pv_fast(k, val);
 
