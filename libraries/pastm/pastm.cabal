@@ -17,17 +17,36 @@ extra-source-files:  changelog.md, README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Control.Partial.STM, Control.Full.STM, Control.Concurrent.PASTM.Core Control.STMHaskell.STM Control.Ordered.STM
+  exposed-modules:     Control.Common.STM
+--                     , Control.Partial.STM
+--                     , Control.PartialTL2.STM
+                     , Control.TL2.STM
+--                     , Control.NoRec.STM
+--                     , Control.STMHaskell.STM
   -- other-modules:       
-  other-extensions:    CPP, Safe, Trustworthy, MagicHash, UnboxedTuples, Rank2Types, DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes, UndecidableInstances
-  build-depends:       base >=4.8 && <4.9, array >=0.5 && <0.6, ghc-prim
+  other-extensions:    CPP, Safe, Trustworthy, MagicHash, UnboxedTuples, Rank2Types
+                     , DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses
+                     , ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes
+                     , UndecidableInstances
+  build-depends:       base >=4.8 && <4.9
+                     , array >=0.5 && <0.6
+                     , ghc-prim
   -- hs-source-dirs:      
   default-language:    Haskell2010
-  Include-Dirs: /Users/ml9951/repositories/ghc/rts, /Users/ml9951/repositories/ghc/rts/sm
-  C-Sources: Control/Partial/CmmHooks.cmm, Control/Partial/CCode.c, Control/Full/CmmHooks.cmm, Control/Full/CCode.c, Control/Ordered/CmmHooks.cmm, Control/Ordered/CCode.c
-  ghc-options:     -optc-g -debug -threaded -rtsopts
-  cc-options: -g -DTHREADED_RTS 
-  ld-options: -g
+--  Include-Dirs: /Users/ml9951/repositories/ghc/rts, /Users/ml9951/repositories/ghc/rts/sm
+  C-Sources:           Control/Common/CmmHooks.cmm
+--                     , Control/Partial/CmmHooks.cmm
+--                     , Control/Partial/CCode.c
+--                     , Control/PartialTL2/CmmHooks.cmm
+--                     , Control/PartialTL2/CCode.c
+                     , Control/TL2/CmmHooks.cmm
+                     , Control/TL2/CCode.c
+--                     , Control/NoRec/CmmHooks.cmm
+--                     , Control/NoRec/CCode.c
+--  ghc-options:     -optc-g -debug -threaded -rtsopts
+  ghc-options:     -threaded -rtsopts
+  cc-options:      -DTHREADED_RTS 
+  ld-options:
 
 Flag Debug
      Description:	Enable debug support

@@ -7,6 +7,8 @@ STATS = -optc-DSTATS
 
 .PHONY:	full partial ordered stmHaskell PartialTL2 LockCoupling StraightForward Dissected CAS partialRTS
 
+COMMON_FILES = ../../Control/Common/STM.hs ../../Control/Common/CmmHooks.cmm
+
 full:	
 	$(eval FILES := ../../Control/Full/CmmHooks.cmm ../../Control/Full/CCode.c ../../Control/Full/STM.hs -I../../../../rts)
 	$(eval WHICHSTM := -DFABORT)
@@ -37,19 +39,16 @@ partialTL2:
 	$(eval WHICHSTM := -DPTL2)
 	$(eval STM := PTL2)
 
-partialRTS:
-	$(eval FILES := ../../Control/Concurrent/PASTM/Core.hs)
-	$(eval WHICHSTM := -DPRTS)
-	$(eval STM := PRTS)
+
 
 mvar:	LockCoupling.hs Main.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) ../cbits/gettime.c -DLOCKCOUPLING -fforce-recomp LockCoupling.hs Main.hs -o mvar$(OPT)
 
 straight:	StraightForwardSTM.hs Main.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FILES) $(WHICHSTM) $(STATS) -DSTRAIGHT -fforce-recomp ../cbits/gettime.c StraightForwardSTM.hs Main.hs -o straightForward$(STM)$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(COMMON_FILES) $(OPT) $(FILES) $(WHICHSTM) $(STATS) -DSTRAIGHT -fforce-recomp ../cbits/gettime.c StraightForwardSTM.hs Main.hs -o straightForward$(STM)$(OPT)
 
 dissected:	DissectedSTM.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(FILES) $(WHICHSTM) $(STATS) -DDISSECTED -fforce-recomp ../cbits/gettime.c DissectedSTM.hs Main.hs -o dissected$(STM)$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(COMMON_FILES) $(OPT) $(FILES) $(WHICHSTM) $(STATS) -DDISSECTED -fforce-recomp ../cbits/gettime.c DissectedSTM.hs Main.hs -o dissected$(STM)$(OPT)
 
 cas:	CASLL.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DCAS -fforce-recomp ../cbits/gettime.c CASLL.hs Main.hs -o cas$(OPT)

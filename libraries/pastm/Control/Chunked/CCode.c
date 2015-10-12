@@ -28,12 +28,6 @@
 
 static volatile unsigned long version_clock = 0;
 
-#define STATS
-
-#ifdef STATS
-static StgPASTMStats stats = {0, 0, 0, 0, 0};
-#endif
-
 //TRec 
 typedef struct {
     StgHeader                  header;
@@ -163,9 +157,6 @@ static PTRecWithK * ord_validate(TRec * trec, Capability * cap){
 	if(time == version_clock){
 	    return TO_WITHK(PASTM_SUCCESS);
 	}
-#ifdef STATS
-	cap->pastmStats.tsExtensions++;
-#endif
     }
 }
 

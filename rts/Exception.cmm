@@ -469,6 +469,13 @@ retry_pop_stack:
     SAVE_THREAD_STATE();
     (frame_type) = ccall raiseExceptionHelper(BaseReg "ptr", CurrentTSO "ptr", exception "ptr");
     LOAD_THREAD_STATE();
+
+    if(frame_type == ATOMICALLY_FRAME && StgTSO_trec(CurrentTSO) == NO_TREC){
+        // Transaction was valid: continue searching for a catch frame
+        Sp = Sp + SIZEOF_StgAtomicallyFrame;
+        goto retry_pop_stack;
+    }
+    
     if (frame_type == ATOMICALLY_FRAME) {
       /* The exception has reached the edge of a memory transaction.  Check that
        * the transaction is valid.  If not then perhaps the exception should

@@ -75,32 +75,6 @@ static inline void clearTRec(StgPTRecHeader * trec){
     trec->numK = 0;
 }
 
-static void sanity(StgPTRecHeader * trec){
-    int freq = trec->capture_freq >> 32;
-    int counter = freq;
-
-    StgPTRecWithoutK * ptr = trec->read_set;
-    while(ptr != TO_WITHOUTK(NO_PTREC)){
-	if(counter == 0 && ptr->header.info != WITHK_HEADER){
-	    if(ptr->header.info == WITHK_HEADER){
-		counter = freq;
-	    }else{
-		printf("checkpoint at incorrect interval\n");
-	    }
-	}
-
-	if(counter != 0 && ptr->header.info == WITHK_HEADER){
-	    printf("checkpoint at incorrect interval\n");
-	}
-	
-	ptr = ptr->next;
-	counter--;
-
-    }
-    
-    
-}
-
 static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
  RETRY:
     while(TRUE){
@@ -114,7 +88,6 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
         StgPTRecWithK *checkpoint = NULL;
         StgInt kCount = 0;
 	
-	int i = 0;
 	while(ptr != TO_WITHOUTK(NO_PTREC)){
 	    if(ptr->read_value != ptr->tvar->current_value){
 		if(checkpoint != NULL){ //we have a checkpoint
@@ -124,8 +97,6 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
 			checkpoint->read_value = val; //apply the continuation to this in C--
 			checkpoint->next = TO_WITHOUTK(NO_PTREC);
 			
-			cap->pastmStats.fastForwardAttempts += i;
-
 			trec->tail = TO_WITHOUTK(checkpoint);
 			trec->write_set = checkpoint->write_set;
 			trec->lastK = checkpoint;
@@ -145,7 +116,6 @@ static StgPTRecWithK * ord_validate(StgPTRecHeader * trec, Capability * cap){
 		checkpoint = TO_WITHK(ptr);
 		kCount++;
 	    }
-	    i++;
 	    ptr = ptr->next;
 	}
 	
@@ -184,9 +154,6 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 #endif
 	    return TO_CLOSURE(checkpoint);
         }
-#ifdef STATS
-	cap->pastmStats.tsExtensions++;
-#endif
         val = tvar->current_value;
     }
     
@@ -202,14 +169,12 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->prev_k = trec->lastK;
 	    
 	    trec->tail->next = TO_WITHOUTK(entry); //append to end
-	    /*bdescr * desc = Bdescr((StgPtr)trec->tail);
+	    bdescr * desc = Bdescr((StgPtr)trec->tail);
 	    if(desc->gen_no > 0 && trec->tail->header.info != &stg_PTREC_WITHOUTK_MUT_info){
-		//printf("Adding to remember set, tail is in generation %d\n", desc->gen_no);
 		cap->pastmStats.fastForwards++;
 		recordClosureMutated(cap, (StgClosure*)trec->tail);
 	    }
-*/
-
+	    
             trec->tail = TO_WITHOUTK(entry);
             trec->lastK = entry;
             trec->numK++;
@@ -226,13 +191,12 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
             entry->next = TO_WITHOUTK(NO_PTREC);
 	    
 	    trec->tail->next = entry; //append to end
-	    /*    bdescr * desc = Bdescr((StgPtr)trec->tail);
+	    bdescr * desc = Bdescr((StgPtr)trec->tail);
 	    if(desc->gen_no > 0 && trec->tail->header.info != &stg_PTREC_WITHOUTK_MUT_info){
-		//	printf("Adding to remember set, tail is in generation %d\n", desc->gen_no);
 		cap->pastmStats.fastForwards++;
 		recordClosureMutated(cap, (StgClosure*)trec->tail);
 	    }
-	    */
+	    
 	    trec->tail = entry;
             trec->capture_freq--;
         }
@@ -265,14 +229,12 @@ StgClosure * ord_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
         entry->next = TO_WITHOUTK(NO_PTREC);
 
 	trec->tail->next = TO_WITHOUTK(entry); //append to end
-	/*
 	bdescr * desc = Bdescr((StgPtr)trec->tail);
 	if(desc->gen_no > 0 && trec->tail->header.info != &stg_PTREC_WITHOUTK_MUT_info){
-	    //   printf("Adding to remember set, tail is in generation %d\n", desc->gen_no);
 	    cap->pastmStats.fastForwards++;
 	    recordClosureMutated(cap, (StgClosure*)trec->tail);
 	}
-	*/
+	
 
 	trec->tail = entry;
         trec->capture_freq--;
@@ -328,10 +290,6 @@ StgPTRecWithK * ord_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec) 
         write_set = write_set->next;
     }
     
-#ifdef STATS
-    cap->pastmStats.numCommits++;
-#endif
-
     trec->read_set = TO_WITHOUTK(NO_PTREC);
     trec->lastK = TO_WITHK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
@@ -359,6 +317,5 @@ void ord_printSTMStats(){
 	   stats.eagerPartialAborts + stats.eagerFullAborts);
     printf("Number of Commits = %lu\n", stats.numCommits);
     printf("Heap Objects remembered = %lu\n", stats.fastForwards);
-    printf("Fast Forwarded through %lu reads\n", stats.fastForwardAttempts);
 #endif
 }
