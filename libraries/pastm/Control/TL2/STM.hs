@@ -50,7 +50,7 @@ atomically :: STM a -> IO a
 atomically (STM c) = IO (\s -> unsafeCoerce# atomically# c s)
 
 foreign import prim safe "stg_tl2_atomicallyzh" atomically# 
-        :: State# s -> (# State# s, Any() #)
+        :: Any() -> State# s -> (# State# s, Any() #)
 
 foreign import prim safe "stg_tl2_readTVarzh" readTVar#
         :: Any() -> State# s -> (# State# s, a #)

@@ -18,8 +18,10 @@ import Control.Chunked.STM
 import Control.FastForward.STM
 #elif defined(PABORT)
 import Control.NoRec.STM
-#elif defined(TL2)
-import Control.FTL2.STM
+#elif defined(FTL2)
+import Control.TL2.STM
+#elif defined(CHUNKED_TL2)
+import Control.ChunkedTL2.STM
 #else
 #error No STM Specified
 #endif
