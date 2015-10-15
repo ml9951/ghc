@@ -209,6 +209,20 @@ void stmPrintStats(void);
 
 /*----------------------------------------------------------------------*/
 
+// 
+// TL2
+//
+
+StgPTRecHeader * tl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec);
+StgClosure * tl2_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
+                             StgTL2TVar * tvar, StgClosure * k);
+void tl2_stmWriteTVar(Capability *cap,
+                      StgPTRecHeader *trec,
+                      StgTVar *tvar,
+                      StgClosure *new_value);
+StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec, StgThreadID id);
+void c_tl2_printSTMStats(void);
+
 /* NULLs */
 
 #define END_STM_WATCH_QUEUE ((StgTVarWatchQueue *)(void *)&stg_END_STM_WATCH_QUEUE_closure)

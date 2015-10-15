@@ -33,6 +33,15 @@ static volatile unsigned long version_clock = 0;
 static StgPASTMStats stats = {0, 0, 0, 0, 0};
 #endif
 
+void dirty_TL2_TVAR(Capability * cap, StgTL2TVar *p){
+    if (p->header.info == &stg_TL2_TVAR_CLEAN_info) {
+        p->header.info = &stg_TL2_TVAR_DIRTY_info;
+        recordClosureMutated(cap,(StgClosure*)p);
+    }
+}
+
+#define CFENCE __asm__ volatile ("":::"memory")
+
 //Initialize metadata
 StgPTRecHeader * tl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
     if(ptrec == NO_PTREC){
@@ -71,7 +80,9 @@ StgClosure * tl2_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
     StgClosure * val; 
     unsigned long s1, s2;
     s1 = tvar->currentStamp;
+    CFENCE;
     val = tvar->current_value;
+    CFENCE;
     s2 = tvar->currentStamp;
 
     if(LOCKED(s1) || s1 != s2 || s1 > trec->read_version){

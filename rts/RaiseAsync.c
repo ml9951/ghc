@@ -993,6 +993,10 @@ raiseAsync(Capability *cap, StgTSO *tso, StgClosure *exception,
         }
 
         case ATOMICALLY_FRAME:
+            if (info == (StgRetInfoTable*)&stg_tl2_atomically_frame_info)
+            { // Custom atomically frame, we don't know what to do.
+                break;
+            }
             if (stop_at_atomically) {
                 ASSERT(tso->trec->enclosing_trec == NO_TREC);
                 stmCondemnTransaction(cap, tso -> trec);

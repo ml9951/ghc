@@ -1191,6 +1191,10 @@ typedef struct _RtsSymbolVal {
       SymI_HasProto(stg_newMVarzh)                                      \
       SymI_HasProto(stg_newMutVarzh)                                    \
       SymI_HasProto(stg_newTVarzh)                                      \
+      SymI_HasProto(stg_newTL2TVarzh)                                   \
+      SymI_HasProto(stg_tl2zureadTVarzh)                                \
+      SymI_HasProto(stg_tl2zuwriteTVarzh)                               \
+      SymI_HasProto(stg_tl2zuatomicallyzh)                              \
       SymI_HasProto(stg_noDuplicatezh)                                  \
       SymI_HasProto(stg_atomicModifyMutVarzh)                           \
       SymI_HasProto(stg_casMutVarzh)                                    \

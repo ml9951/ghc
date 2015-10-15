@@ -2088,6 +2088,40 @@ section "STM-accessible Mutable Variables"
 
 primtype TVar# s a
 
+primop  TL2_AtomicallyOp "tl2_atomically#" GenPrimOp
+      (State# RealWorld -> (# State# RealWorld, a #) )
+   -> State# RealWorld -> (# State# RealWorld, a #)
+   with
+   strictness  = { \ _arity -> mkClosedStrictSig [strictApply1Dmd,topDmd] topRes }
+                 -- See Note [Strictness for mask/unmask/catch]
+   out_of_line = True
+   has_side_effects = True
+
+primop  NewTL2TVarOp "newTL2TVar#" GenPrimOp
+       a
+    -> State# s -> (# State# s, TVar# s a #)
+   {Create a new {\tt TVar\#} holding a specified initial value.}
+   with
+   out_of_line  = True
+   has_side_effects = True
+
+primop  ReadTL2TVarOp "tl2_readTVar#" GenPrimOp
+       TVar# s a
+    -> State# s -> (# State# s, a #)
+   {Read contents of {\tt TVar\#}.  Result is not yet evaluated.}
+   with
+   out_of_line  = True
+   has_side_effects = True
+
+primop  WriteTL2TVarOp "tl2_writeTVar#" GenPrimOp
+       TVar# s a
+    -> a
+    -> State# s -> State# s
+   {Write contents of {\tt TVar\#}.}
+   with
+   out_of_line      = True
+   has_side_effects = True
+
 primop  AtomicallyOp "atomically#" GenPrimOp
       (State# RealWorld -> (# State# RealWorld, a #) )
    -> State# RealWorld -> (# State# RealWorld, a #)

@@ -4,13 +4,13 @@
 {-# LANGUAGE Trustworthy #-}
 #endif
 
-module Control.FullTL2.STM
+module Control.TL2.STM
 (
     readTVar,
     writeTVar,
     atomically,
     STM(..),
-    printStats,
+--    printStats,
     newTVar,
     module Control.Common.STM
 )
@@ -18,7 +18,7 @@ where
 
 --add TVar TVar# newTVar# newTVarIO readTVarIO
 import GHC.Base(State#, RealWorld, IO(..), ap)
-import GHC.Prim(Any, unsafeCoerce# )
+import GHC.Prim(Any, unsafeCoerce#, newTL2TVar#, tl2_writeTVar#, tl2_readTVar#, tl2_atomically# )
 import GHC.Conc.Sync(TVar(..))
 import Control.Common.STM
 
@@ -36,22 +36,25 @@ instance  Functor STM where
     fmap f m = m >>= (return . f)
 
 newTVar :: a -> STM (TVar a)
-newTVar x = STM $ \s -> case unsafeCoerce# newTVar# x s of
+newTVar x = STM $ \s -> case unsafeCoerce# newTL2TVar# x s of
                               (# s', tv #) -> (# s', TVar tv #)
 
 readTVar :: TVar a -> STM a
-readTVar (TVar tv) = STM $  \s-> unsafeCoerce# readTVar# tv s 
+readTVar (TVar tv) = STM $  \s-> unsafeCoerce# tl2_readTVar# tv s 
 
 writeTVar :: TVar a -> a -> STM ()
 writeTVar (TVar tv) a = STM $ \s -> 
-          case unsafeCoerce# writeTVar# tv a s of
+          case unsafeCoerce# tl2_writeTVar# tv a s of
                (# s', tv #) -> (# s', () #)
 
 atomically :: STM a -> IO a
-atomically (STM c) = IO (\s -> unsafeCoerce# atomically# c s)
-
+atomically (STM c) = IO (\s -> unsafeCoerce# tl2_atomically# c s)
+{-
 foreign import prim safe "stg_tl2_atomicallyzh" atomically# 
         :: State# s -> (# State# s, Any() #)
+--        :: Any() -> (# State# s, Any() #)
+--          :: (State# RealWorld -> (# State# RealWorld, a #) )
+--             -> State# RealWorld -> (# State# RealWorld, a #)
 
 foreign import prim safe "stg_tl2_readTVarzh" readTVar#
         :: Any() -> State# s -> (# State# s, a #)
@@ -60,3 +63,4 @@ foreign import prim safe "stg_tl2_writeTVarzh" writeTVar#
         :: Any() -> Any() -> State# RealWorld -> (# State# RealWorld, a #)
 
 foreign import ccall "c_tl2_printSTMStats" printStats :: IO ()
+-}

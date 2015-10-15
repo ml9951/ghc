@@ -57,6 +57,7 @@ RTS_RET(stg_catch_frame);
 RTS_RET(stg_catch_retry_frame);
 RTS_RET(stg_atomically_frame);
 RTS_RET(stg_atomically_waiting_frame);
+RTS_RET(stg_tl2_atomically_frame);
 RTS_RET(stg_catch_stm_frame);
 RTS_RET(stg_unmaskAsyncExceptionszh_ret);
 RTS_RET(stg_maskUninterruptiblezh_ret);
@@ -455,6 +456,11 @@ RTS_FUN_DECL(stg_readTVarzh);
 RTS_FUN_DECL(stg_readTVarIOzh);
 RTS_FUN_DECL(stg_writeTVarzh);
 RTS_FUN_DECL(stg_checkzh);
+
+RTS_FUN_DECL(stg_tl2zureadTVarzh);
+RTS_FUN_DECL(stg_tl2zuwriteTVarzh);
+RTS_FUN_DECL(stg_tl2zuatomicallyzh);
+RTS_FUN_DECL(stg_newTL2TVarzh);
 
 /*Partial Abort Prim Ops*/
 RTS_FUN_DECL(stg_patomicallyzh);
