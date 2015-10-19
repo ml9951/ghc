@@ -737,9 +737,16 @@ loop:
       return;
 
   case PTREC_CHUNK:
-      copy(p,info,q,sizeofW(StgPTRecChunk),gen_no);
-      return;
+  {
+      StgPTRecChunk * tc = (StgPTRecChunk *) q;
+      nat size = sizeofW(StgTL2TVar *) * tc->next_entry_idx + sizeofW(StgWord) + sizeofW(StgClosure *) * 2;
+      tc->size = tc->next_entry_idx;//seal this chunk
+      copy(p,info,q,size,gen_no);
 
+      StgPTRecChunk * tc2 = (StgPTRecChunk *) *p;
+      
+      return;
+  }
   default:
     barf("evacuate: strange closure type %d", (int)(INFO_PTR_TO_STRUCT(info)->type));
   }

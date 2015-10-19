@@ -29,6 +29,11 @@ stmHaskell:
 	$(eval WHICHSTM := -DSTMHASKELL)
 	$(eval STM := STMHaskell)
 
+chunkedTL2:	
+	$(eval FILES := ../../Control/ChunkedTL2/STM.hs ../../Control/ChunkedTL2/CCode.c ../../Control/ChunkedTL2/CmmHooks.cmm -I../../../../rts)
+	$(eval WHICHSTM := -DCHUNKED_TL2)
+	$(eval STM := ChunkedTL2)
+
 chunked:	
 	$(eval FILES := ../../Control/Chunked/CmmHooks.cmm ../../Control/Chunked/CCode.c ../../Control/Chunked/STM.hs -I../../../../rts)
 	$(eval WHICHSTM := -DCHUNKED)

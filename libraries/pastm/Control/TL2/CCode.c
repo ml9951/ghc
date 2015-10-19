@@ -153,20 +153,21 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec, 
     }
     
     unsigned long write_version = atomic_inc(&version_clock, 2);
-
-    //validate read set
-    StgPTRecWithoutK * rs_ptr = trec->read_set;
-    while(rs_ptr != TO_WITHOUTK(NO_PTREC)){
-	StgTL2TVar * tvar = TO_TL2(rs_ptr->tvar);
-	unsigned long stamp = tvar->currentStamp;
-	if((stamp <= myStamp && !LOCKED(stamp)) || stamp == lockVal){
-	    rs_ptr = rs_ptr->next;
-	}else{
+    if(write_version != trec->read_version + 2){
+	//validate read set
+	StgPTRecWithoutK * rs_ptr = trec->read_set;
+	while(rs_ptr != TO_WITHOUTK(NO_PTREC)){
+	    StgTL2TVar * tvar = TO_TL2(rs_ptr->tvar);
+	    unsigned long stamp = tvar->currentStamp;
+	    if((stamp <= myStamp && !LOCKED(stamp)) || stamp == lockVal){
+		rs_ptr = rs_ptr->next;
+	    }else{
 #ifdef STATS
-	    cap->pastmStats.commitTimeFullAborts++;
+		cap->pastmStats.commitTimeFullAborts++;
 #endif
-	    releaseLocks(trec->write_set, TO_WRITE_SET(NO_PTREC));
-	    return TO_WITHK(abort_tx(trec));
+		releaseLocks(trec->write_set, TO_WRITE_SET(NO_PTREC));
+		return TO_WITHK(abort_tx(trec));
+	    }
 	}
     }
     
