@@ -8,6 +8,11 @@ stg_tl2_newTVarIOzh (P_ init)
 
     tv = Hp - SIZEOF_StgTL2TVar + WDS(1);
     SET_HDR (tv, stg_TL2_TVAR_DIRTY_info, CCCS);
+    
+    if(%INFO_PTRS(%STD_INFO(%INFO_PTR(UNTAG(init)))) > 2){
+	ccall barf("barf\n");
+    }
+
 
     StgTL2TVar_current_value(tv) = init;
     StgTL2TVar_currentStamp(tv) = 0;
@@ -26,6 +31,11 @@ stg_tl2_readTVarIOzh(P_ tvar)
 }
 
 stg_tl2_writeTVarIOzh(P_ tvar, P_ a){
+
+    if(%INFO_PTRS(%STD_INFO(%INFO_PTR(UNTAG(a)))) > 2){
+	ccall barf("barf\n");
+    }
+    
     StgTL2TVar_current_value(tvar) = a;
     ccall dirty_TL2_TVAR(MyCapability() "ptr", tvar "ptr");
     return(tvar);

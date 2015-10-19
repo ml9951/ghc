@@ -44,7 +44,7 @@ library
 --                     , Control/NoRec/CmmHooks.cmm
 --                     , Control/NoRec/CCode.c
 --  ghc-options:     -optc-g -debug -threaded -rtsopts
-  ghc-options:     -threaded -rtsopts -DSTM_TL2
+  ghc-options:     -threaded -rtsopts -DFTL2
   cc-options:      -DTHREADED_RTS -DTL2
   ld-options:
 

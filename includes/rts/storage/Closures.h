@@ -495,13 +495,13 @@ typedef struct{
     StgClosure       *read_value;
 }PTRecWithoutK;
 
-#define PTREC_CHUNK_SIZE 61 
-//Make this 512 bytes.
+#define PTREC_CHUNK_SIZE 61
 typedef struct StgPTRecChunk_ {
     StgHeader                  header;                     //8 bytes
-    struct StgPTRecChunk_     *prev_chunk;                 //8 bytes (16 total)
-    StgWord                    next_entry_idx;             //8 bytes (24 total)
-    StgWord                    entries[PTREC_CHUNK_SIZE];  //488 bytes -- 61 Words (512 total bytes) -- This will also perfectly fit 20 withoutK entries
+    unsigned int               next_entry_idx;             //4 bytes
+    unsigned int               size;                       //4 bytes
+    struct StgPTRecChunk_     *prev_chunk;                 //8 bytes 
+    StgTL2TVar                *entries[PTREC_CHUNK_SIZE];  //15 entries, makes this 512 bytes
 } StgPTRecChunk;
 
 /* ----------------------------------------------------------------------------

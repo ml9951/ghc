@@ -802,28 +802,13 @@ scavenge_block (bdescr *bd)
     {
         StgWord i = 0;
         StgPTRecChunk * tc = ((StgPTRecChunk *)p);
-        gct->eager_promotion = rtsFalse;
         evacuate((StgClosure **)&tc->prev_chunk);
         
         while(i < tc->next_entry_idx){
-            PTRecWithoutK * entry = (PTRecWithoutK *)&(tc->entries[i]);
-            if(entry->size == 3){ //checkpoint
-                evacuate((StgClosure **)&entry->tvar);
-                evacuate((StgClosure **)&entry->read_value);
-                i += 3;
-            }else{ //checkpoint
-                PTRecWithK * withK = (PTRecWithK*)entry;
-                evacuate((StgClosure **)&withK->tvar);
-                evacuate((StgClosure **)&withK->read_value);
-                evacuate((StgClosure **)&withK->write_set);
-                evacuate((StgClosure **)&withK->continuation);
-                evacuate((StgClosure **)&withK->prev_k); 
-                i += 7;
-            }
+            evacuate((StgClosure **)&(tc->entries[i]));
+            i++;
         }
-        gct->eager_promotion = saved_eager_promotion;
-        gct->failed_to_evac = rtsTrue; // mutable
-        p += sizeofW(StgPTRecChunk);
+        p += sizeofW(StgTL2TVar*) * tc->next_entry_idx + sizeofW(StgWord) + sizeofW(StgClosure *) * 2;
         break;
     }
 
@@ -1245,27 +1230,12 @@ scavenge_mark_stack(void)
         {
             StgWord i = 0;
             StgPTRecChunk * tc = ((StgPTRecChunk *)p);
-            gct->eager_promotion = rtsFalse;
             evacuate((StgClosure **)&tc->prev_chunk);
             
             while(i < tc->next_entry_idx){
-                PTRecWithoutK * entry = (PTRecWithoutK *)&(tc->entries[i]);
-                if(entry->size == 3){ //checkpoint
-                    evacuate((StgClosure **)&entry->tvar);
-                    evacuate((StgClosure **)&entry->read_value);
-                    i += 3;
-                }else{ //checkpoint
-                    PTRecWithK * withK = (PTRecWithK*)entry;
-                    evacuate((StgClosure **)&withK->tvar);
-                    evacuate((StgClosure **)&withK->read_value);
-                    evacuate((StgClosure **)&withK->write_set);
-                    evacuate((StgClosure **)&withK->continuation);
-                    evacuate((StgClosure **)&withK->prev_k); 
-                    i += 7;
-                }
+                evacuate((StgClosure **)&(tc->entries[i]));
+                i++;
             }
-            gct->eager_promotion = saved_eager_promotion;
-            gct->failed_to_evac = rtsTrue; // mutable
             break;
         }
         
@@ -1601,26 +1571,12 @@ scavenge_one(StgPtr p)
     {
         StgWord i = 0;
         StgPTRecChunk * tc = ((StgPTRecChunk *)p);
-        gct->eager_promotion = rtsFalse;
         evacuate((StgClosure **)&tc->prev_chunk);
+        
         while(i < tc->next_entry_idx){
-            PTRecWithoutK * entry = (PTRecWithoutK *)&(tc->entries[i]);
-            if(entry->size == 3){ //checkpoint
-                evacuate((StgClosure **)&entry->tvar);
-                evacuate((StgClosure **)&entry->read_value);
-                i += 3;
-            }else{ //checkpoint
-                PTRecWithK * withK = (PTRecWithK*)entry;
-                evacuate((StgClosure **)&withK->tvar);
-                evacuate((StgClosure **)&withK->read_value);
-                evacuate((StgClosure **)&withK->write_set);
-                evacuate((StgClosure **)&withK->continuation);
-                evacuate((StgClosure **)&withK->prev_k); 
-                i += 7;
-            }
+            evacuate((StgClosure **)&(tc->entries[i]));
+            i++;
         }
-        gct->eager_promotion = saved_eager_promotion;
-        gct->failed_to_evac = rtsTrue; // mutable
         break;
     }
 
@@ -1708,8 +1664,6 @@ scavenge_mutable_list(bdescr *bd, generation *gen)
                 mutlist_TVAR++; break;
             case TREC_CHUNK:
                 mutlist_TREC_CHUNK++; break;
-            case PTREC_CHUNK:
-                mutlist_PTREC_CHUNK++; break;
             case MUT_PRIM:
                 if (((StgClosure*)p)->header.info == &stg_TVAR_WATCH_QUEUE_info)
                     mutlist_TVAR_WATCH_QUEUE++;

@@ -534,24 +534,12 @@ update_fwd_large( bdescr *bd )
     case PTREC_CHUNK:
     {
         StgWord i = 0;
-        StgPTRecChunk * tc = (StgPTRecChunk *)p;
-        thread_(&tc->prev_chunk);
-        while(i < tc->next_entry_idx){
-            PTRecWithoutK * entry = (PTRecWithoutK*)&(tc->entries[i]);
-            if(entry->size == 3){ //checkpoint
-                thread_(&entry->tvar);
-                thread(&entry->read_value);
-                i += 3;
-            }else{ //checkpoint
-                PTRecWithK * withK = (PTRecWithK*)entry;
-                thread_(&withK->tvar);
-                thread(&withK->read_value);
-                thread_(&withK->write_set);
-                thread(&withK->continuation);
-                thread_(&withK->prev_k); 
-                i += 7;
-            }
+        StgPTRecChunk * tc = ((StgPTRecChunk *)p);
+        thread((StgClosure **)&tc->prev_chunk);
+        for(i = 0; i < tc->next_entry_idx; i++){
+            thread_(&(tc->entries[i]));
         }
+        break;
     }
 
     default:
@@ -754,24 +742,12 @@ thread_obj (StgInfoTable *info, StgPtr p)
     case PTREC_CHUNK:
     {
         StgWord i = 0;
-        StgPTRecChunk * tc = (StgPTRecChunk *)p;
-        thread_(&tc->prev_chunk);
-        while(i < tc->next_entry_idx){
-            PTRecWithoutK * entry = (PTRecWithoutK*)&(tc->entries[i]);
-            if(entry->size == 3){ //checkpoint
-                thread_(&entry->tvar);
-                thread(&entry->read_value);
-                i += 3;
-            }else{ //checkpoint
-                PTRecWithK * withK = (PTRecWithK*)entry;
-                thread_(&withK->tvar);
-                thread(&withK->read_value);
-                thread_(&withK->write_set);
-                thread(&withK->continuation);
-                thread_(&withK->prev_k); 
-                i += 7;
-            }
+        StgPTRecChunk * tc = ((StgPTRecChunk *)p);
+        thread((StgClosure **)&tc->prev_chunk);
+        for(i = 0; i < tc->next_entry_idx; i++){
+            thread_(&(tc->entries[i]));
         }
+        break;
     }
 
     default:

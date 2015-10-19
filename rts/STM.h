@@ -213,15 +213,29 @@ void stmPrintStats(void);
 // TL2
 //
 
-StgClosure * abort_tx(StgPTRecHeader * trec);
-StgPTRecHeader * tl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec);
-StgClosure * tl2_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
-                             StgTL2TVar * tvar, StgClosure * k);
+//TRec
+typedef struct {
+    StgHeader                  header;
+    StgPTRecChunk             *read_set;
+    StgPTRecWithK             *lastK;          //unused
+    StgWriteSet               *write_set;
+    StgPTRecOrElse            *retry_stack;
+    StgPTRecWithoutK          *tail;           //unused
+    unsigned long              read_version;
+    StgInt64                   capture_freq;
+    StgInt                     numK;
+} TRec;
+
+
+StgClosure * abort_tx(TRec* trec);
+TRec * tl2_stmStartTransaction(Capability *cap, TRec * ptrec);
+StgClosure * tl2_stmReadTVar(Capability * cap, TRec * trec,
+                             StgTL2TVar * tvar);
 void tl2_stmWriteTVar(Capability *cap,
-                      StgPTRecHeader *trec,
+                      TRec *trec,
                       StgTVar *tvar,
                       StgClosure *new_value);
-StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec, StgThreadID id);
+StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadID id);
 void c_tl2_printSTMStats(void);
 
 /* NULLs */

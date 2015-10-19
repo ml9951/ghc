@@ -993,26 +993,30 @@ raiseAsync(Capability *cap, StgTSO *tso, StgClosure *exception,
         }
 
         case ATOMICALLY_FRAME:
-            if (info == (StgRetInfoTable*)&stg_tl2_atomically_frame_info)
-            { // Custom atomically frame, we don't know what to do.
-                break;
-            }
             if (stop_at_atomically) {
-                ASSERT(tso->trec->enclosing_trec == NO_TREC);
-                stmCondemnTransaction(cap, tso -> trec);
-                stack->sp = frame - 2;
-                // The ATOMICALLY_FRAME expects to be returned a
-                // result from the transaction, which it stores in the
-                // stack frame.  Hence we arrange to return a dummy
-                // result, so that the GC doesn't get upset (#3578).
-                // Perhaps a better way would be to have a different
-                // ATOMICALLY_FRAME instance for condemned
-                // transactions, but I don't fully understand the
-                // interaction with STM invariants.
-                stack->sp[1] = (W_)&stg_NO_TREC_closure;
-                stack->sp[0] = (W_)&stg_ret_p_info;
-                tso->what_next = ThreadRunGHC;
-                goto done;
+                if (tso->trec != NO_TREC) {
+                    ASSERT(tso->trec->enclosing_trec == NO_TREC);
+                    stmCondemnTransaction(cap, tso -> trec);
+                    stack->sp = frame - 2;
+                    // The ATOMICALLY_FRAME expects to be returned a
+                    // result from the transaction, which it stores in the
+                    // stack frame.  Hence we arrange to return a dummy
+                    // result, so that the GC doesn't get upset (#3578).
+                    // Perhaps a better way would be to have a different
+                    // ATOMICALLY_FRAME instance for condemned
+                    // transactions, but I don't fully understand the
+                    // interaction with STM invariants.
+                    stack->sp[1] = (W_)&stg_NO_TREC_closure;
+                    stack->sp[0] = (W_)&stg_ret_p_info;
+                    tso->what_next = ThreadRunGHC;
+                    goto done;
+                } else {
+                    stack->sp = frame - 2;
+                    stack->sp[1] = (W_)&stg_NO_PTREC_closure;
+                    stack->sp[0] = (W_)&stg_ret_p_info;
+                    tso->what_next = ThreadRunGHC;
+                    goto done;
+                }
             }
             else
             {
@@ -1035,28 +1039,53 @@ raiseAsync(Capability *cap, StgTSO *tso, StgClosure *exception,
                 //   4. continue stripping the stack
                 //
                 StgTRecHeader *trec = tso->trec;
-                StgTRecHeader *outer = trec->enclosing_trec;
+                if (trec == NO_TREC)
+                {
+                    abort_tx((TRec*)tso->ptrec);
+                    tso->ptrec = ((StgPTRecHeader *)(void *)&stg_NO_PTREC_closure); // NO_PTREC;
 
-                StgThunk *atomically;
-                StgAtomicallyFrame *af = (StgAtomicallyFrame*)frame;
+                    StgThunk *atomically;
+                    StgAtomicallyFrame *af = (StgAtomicallyFrame*)frame;
 
-                debugTraceCap(DEBUG_stm, cap,
-                              "raiseAsync: freezing atomically frame")
-                stmAbortTransaction(cap, trec);
-                stmFreeAbortedTRec(cap, trec);
-                tso->trec = outer;
+                    atomically = (StgThunk*)allocate(cap,sizeofW(StgThunk)+1);
+                    TICK_ALLOC_SE_THK(1,0);
+                    SET_HDR(atomically,&stg_tl2zuatomically_info,af->header.prof.ccs);
+                    atomically->payload[0] = af->code;
+    
+                    // discard stack up to and including the ATOMICALLY_FRAME
+                    frame += sizeofW(StgAtomicallyFrame);
+                    sp = frame - 1;
+    
+                    // replace the ATOMICALLY_FRAME with call to atomically#
+                    sp[0] = (W_)atomically;
 
-                atomically = (StgThunk*)allocate(cap,sizeofW(StgThunk)+1);
-                TICK_ALLOC_SE_THK(1,0);
-                SET_HDR(atomically,&stg_atomically_info,af->header.prof.ccs);
-                atomically->payload[0] = af->code;
+                    continue;
+                }
+                else
+                {
+                    StgTRecHeader *outer = trec->enclosing_trec;
 
-                // discard stack up to and including the ATOMICALLY_FRAME
-                frame += sizeofW(StgAtomicallyFrame);
-                sp = frame - 1;
-
-                // replace the ATOMICALLY_FRAME with call to atomically#
-                sp[0] = (W_)atomically;
+                    debugTraceCap(DEBUG_stm, cap,
+                                  "raiseAsync: freezing atomically frame")
+                    stmAbortTransaction(cap, trec);
+                    stmFreeAbortedTRec(cap, trec);
+                    tso->trec = outer;
+    
+                    StgThunk *atomically;
+                    StgAtomicallyFrame *af = (StgAtomicallyFrame*)frame;
+    
+                    atomically = (StgThunk*)allocate(cap,sizeofW(StgThunk)+1);
+                    TICK_ALLOC_SE_THK(1,0);
+                    SET_HDR(atomically,&stg_atomically_info,af->header.prof.ccs);
+                    atomically->payload[0] = af->code;
+    
+                    // discard stack up to and including the ATOMICALLY_FRAME
+                    frame += sizeofW(StgAtomicallyFrame);
+                    sp = frame - 1;
+    
+                    // replace the ATOMICALLY_FRAME with call to atomically#
+                    sp[0] = (W_)atomically;
+                }
                 continue;
             }
 
