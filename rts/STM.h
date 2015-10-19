@@ -213,6 +213,7 @@ void stmPrintStats(void);
 // TL2
 //
 
+StgClosure * abort_tx(StgPTRecHeader * trec);
 StgPTRecHeader * tl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec);
 StgClosure * tl2_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
                              StgTL2TVar * tvar, StgClosure * k);

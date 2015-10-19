@@ -991,6 +991,7 @@ StgTRecHeader *stmStartTransaction(Capability *cap,
 
 void stmAbortTransaction(Capability *cap,
                          StgTRecHeader *trec) {
+
   StgTRecHeader *et;
   TRACE("%p : stmAbortTransaction", trec);
   ASSERT (trec != NO_TREC);
@@ -1032,6 +1033,7 @@ void stmAbortTransaction(Capability *cap,
 
 void stmFreeAbortedTRec(Capability *cap,
                         StgTRecHeader *trec) {
+
   TRACE("%p : stmFreeAbortedTRec", trec);
   ASSERT (trec != NO_TREC);
   ASSERT ((trec -> state == TREC_CONDEMNED) ||
@@ -1046,6 +1048,7 @@ void stmFreeAbortedTRec(Capability *cap,
 
 void stmCondemnTransaction(Capability *cap,
                            StgTRecHeader *trec) {
+
   TRACE("%p : stmCondemnTransaction", trec);
   ASSERT (trec != NO_TREC);
   ASSERT ((trec -> state == TREC_ACTIVE) ||
@@ -1772,7 +1775,7 @@ StgPTRecHeader * tl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec
     return ptrec;
 }
 
-static StgClosure * abort_tx(StgPTRecHeader * trec){
+StgClosure * abort_tx(StgPTRecHeader * trec){
     trec->read_set = TO_WITHOUTK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->read_version = version_clock;

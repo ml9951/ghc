@@ -1174,8 +1174,7 @@ INFO_TABLE_RET(stg_tl2_atomically_frame, ATOMICALLY_FRAME,
 
     if(checkpoint == PASTM_SUCCESS){ //Validation succeeded
         StgTSO_ptrec(CurrentTSO) = NO_PTREC;
-        frame_result = result;
-        return(frame_result);
+        return(result);
     }
     else{ //Validation failed
         jump stg_ap_v_fast
@@ -1204,12 +1203,18 @@ stg_tl2zuatomicallyzh (P_ stm)
 
     code = stm;
     next_invariant = END_INVARIANT_CHECK_QUEUE;
-    frame_result = NO_TREC;
+    frame_result = NO_PTREC;
 
     jump stg_ap_v_fast
         (ATOMICALLY_FRAME_FIELDS(,,stg_tl2_atomically_frame_info, CCCS, 0,
                                  code,next_invariant,frame_result))
         (stm);
+}
+
+INFO_TABLE(stg_tl2zuatomically,1,0,THUNK_1_0,"tl2zuatomically","tl2zuatomically")
+    (P_ thunk)
+{
+    jump stg_tl2zuatomicallyzh(StgThunk_payload(thunk,0));
 }
 
 stg_tl2_eagerFullAbort
@@ -1265,18 +1270,18 @@ stg_tl2_eagerPartialAbort
 
 }
 
-stg_tl2zureadTVarzh (P_ tvar, P_ k)
+stg_tl2zureadTVarzh (P_ tvar)
 {
     P_ trec;
     P_ result;
     W_ header;
 
     // Call to stmReadTVar may allocate
-    MAYBE_GC_PP (stg_tl2zureadTVarzh, tvar, k);
+    MAYBE_GC_P (stg_tl2zureadTVarzh, tvar);
 
     trec = StgTSO_ptrec(CurrentTSO);
     ("ptr" result) = ccall tl2_stmReadTVar(MyCapability() "ptr", trec "ptr",
-                      tvar "ptr", k "ptr");
+                      tvar "ptr", 0 "ptr");
 
     if(result == PASTM_FAIL){
         jump stg_tl2_eagerFullAbort []; //full abort
@@ -1302,7 +1307,7 @@ stg_tl2zuwriteTVarzh (P_ tvar,     /* :: TVar a */
     trec = StgTSO_ptrec(CurrentTSO);
     ccall tl2_stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
                           new_value "ptr");
-    return (tvar);
+    return ();
 }
 
 stg_newTL2TVarzh (P_ init)
@@ -1366,6 +1371,7 @@ INFO_TABLE(stg_atomically,1,0,THUNK_1_0,"atomically","atomically")
 {
     jump stg_atomicallyzh(StgThunk_payload(thunk,0));
 }
+
 
 
 stg_catchSTMzh (P_ code    /* :: STM a */,
