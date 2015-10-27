@@ -740,7 +740,7 @@ loop:
   {
       StgPTRecChunk * tc = (StgPTRecChunk *) q;
       nat size = sizeofW(StgTL2TVar *) * tc->next_entry_idx + sizeofW(StgWord) + sizeofW(StgClosure *) * 2;
-      tc->size = tc->next_entry_idx;//seal this chunk
+      tc->size = 0;//seal this chunk
       copy(p,info,q,size,gen_no);
 
       StgPTRecChunk * tc2 = (StgPTRecChunk *) *p;

@@ -1041,7 +1041,7 @@ raiseAsync(Capability *cap, StgTSO *tso, StgClosure *exception,
                 StgTRecHeader *trec = tso->trec;
                 if (trec == NO_TREC)
                 {
-                    abort_tx((TRec*)tso->ptrec);
+                    abort_tx((TRec*)tso->ptrec, cap);
                     tso->ptrec = ((StgPTRecHeader *)(void *)&stg_NO_PTREC_closure); // NO_PTREC;
 
                     StgThunk *atomically;

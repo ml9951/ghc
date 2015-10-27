@@ -931,6 +931,7 @@ void stmPreGCHook (Capability *cap) {
   cap->free_tvar_watch_queues = END_STM_WATCH_QUEUE;
   cap->free_trec_chunks = END_STM_CHUNK_LIST;
   cap->free_trec_headers = NO_TREC;
+  cap->free_ptrec_chunks = ((StgPTRecChunk *)(void *)&stg_NO_PTREC_closure); //NO_PTREC
   unlock_stm(NO_TREC);
 }
 
@@ -1750,6 +1751,9 @@ void stmPrintStats(){
 
 #define CFENCE __asm__ volatile ("":::"memory")
 
+#define TL2_REUSE_CHUNKS
+#define TL2_READ_ONLY
+
 static void dirty_TL2_TVAR(Capability * cap, StgTL2TVar *p){
     if (p->header.info == &stg_TL2_TVAR_CLEAN_info) {
         p->header.info = &stg_TL2_TVAR_DIRTY_info;
@@ -1759,16 +1763,48 @@ static void dirty_TL2_TVAR(Capability * cap, StgTL2TVar *p){
 
 static volatile unsigned long version_clock = 0;
 
-TRec * tl2_stmStartTransaction(Capability *cap, TRec * ptrec){
-    if(ptrec == (TRec*)NO_PTREC){
-    ptrec = (TRec *)allocate(cap, sizeofW(TRec));
-    SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
-    ptrec->tail = TO_WITHOUTK(NO_PTREC);
-    ptrec->lastK = TO_WITHK(NO_PTREC);
+static StgPTRecChunk * alloc_ptrec_chunk(Capability * cap){
+#ifdef TL2_REUSE_CHUNKS
+    if(cap->free_ptrec_chunks == NO_PTREC){
+        StgPTRecChunk * chunk = (StgPTRecChunk *)allocate(cap, sizeofW(StgPTRecChunk));
+        SET_HDR(chunk, &stg_PTREC_CHUNK_info, CCS_SYSTEM);
+        return chunk;
+    }else{
+        StgPTRecChunk * chunk = cap->free_ptrec_chunks;
+        cap->free_ptrec_chunks = chunk->prev_chunk;
+        return chunk;
     }
-
+#else
     StgPTRecChunk * chunk = (StgPTRecChunk *)allocate(cap, sizeofW(StgPTRecChunk));
     SET_HDR(chunk, &stg_PTREC_CHUNK_info, CCS_SYSTEM);
+    return chunk;
+#endif
+}
+
+static void tl2_recyclePTRecChunks(Capability * cap, StgPTRecChunk * ptchunks){
+#ifdef TL2_REUSE_CHUNKS
+    while(ptchunks != NO_PTREC){
+        if(ptchunks->size == 0){
+            return; //this was sealed, don't recycle
+        }
+        
+        StgPTRecChunk * temp = ptchunks->prev_chunk;
+        ptchunks->prev_chunk = cap->free_ptrec_chunks;
+        cap->free_ptrec_chunks = ptchunks;
+        ptchunks = temp;
+    }
+#endif
+}
+
+TRec * tl2_stmStartTransaction(Capability *cap, TRec * ptrec){
+    if(ptrec == (TRec*)NO_PTREC){
+        ptrec = (TRec *)allocate(cap, sizeofW(TRec));
+        SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+        ptrec->tail = TO_WITHOUTK(NO_PTREC);
+        ptrec->lastK = TO_WITHK(NO_PTREC);
+    }
+
+    StgPTRecChunk * chunk = alloc_ptrec_chunk(cap);
     chunk->prev_chunk = TO_CHUNK(NO_PTREC);
     chunk->next_entry_idx = 0;
     chunk->size = PTREC_CHUNK_SIZE;
@@ -1785,7 +1821,8 @@ TRec * tl2_stmStartTransaction(Capability *cap, TRec * ptrec){
     return ptrec;
 }
 
-StgClosure * abort_tx(TRec * trec){
+StgClosure * abort_tx(TRec * trec, Capability * cap){
+    tl2_recyclePTRecChunks(cap, trec->read_set);
     trec->read_set = TO_CHUNK(NO_PTREC);
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->read_version = version_clock;
@@ -1810,28 +1847,27 @@ StgClosure * tl2_stmReadTVar(Capability * cap, TRec * trec,
     val = tvar->current_value;
     CFENCE;
     s2 = tvar->currentStamp;
-
+    
     if(LOCKED(s1) || s1 != s2 || s1 > trec->read_version){
 #ifdef STATS
-    cap->pastmStats.eagerFullAborts++;
+        cap->pastmStats.eagerFullAborts++;
 #endif
-    return abort_tx(trec);
+        return abort_tx(trec, cap);
     }
-
+    
     StgPTRecChunk * current_chunk = trec->read_set;
-
+    
     if(current_chunk->next_entry_idx >= current_chunk->size){
-    current_chunk = (StgPTRecChunk *)allocate(cap, sizeofW(StgPTRecChunk));
-    SET_HDR(current_chunk, &stg_PTREC_CHUNK_info, CCS_SYSTEM);
-    current_chunk->next_entry_idx = 0;
-    current_chunk->size = PTREC_CHUNK_SIZE; //61
-    current_chunk->prev_chunk = trec->read_set;
-    trec->read_set = current_chunk;
+        current_chunk = alloc_ptrec_chunk(cap);
+        current_chunk->next_entry_idx = 0;
+        current_chunk->size = PTREC_CHUNK_SIZE; //61
+        current_chunk->prev_chunk = trec->read_set;
+        trec->read_set = current_chunk;
     }
-
+    
     current_chunk->entries[current_chunk->next_entry_idx] = tvar;
     current_chunk->next_entry_idx++;
-
+    
     return val;
 }
 
@@ -1868,6 +1904,14 @@ static void releaseLocks(StgWriteSet * ws, StgWriteSet * sentinel){
 StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadID id) {
     unsigned long myStamp = trec->read_version;
 
+    //special treatment for read only transactions
+#ifdef TL2_READ_ONLY
+    if(trec->write_set == NO_PTREC){
+        tl2_recyclePTRecChunks(cap, trec->read_set);
+        return TO_WITHK(PASTM_SUCCESS);
+    }
+#endif
+    
     /*
     * lock with my thread ID shifted by one bit, with the last bit set.
     * this will let other threads know that the tvar is locked, but I
@@ -1879,63 +1923,64 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadI
     StgWriteSet * ws_ptr = trec->write_set;
     StgWriteSet ** trailer = &(trec->write_set);
     while(ws_ptr != TO_WRITE_SET(NO_PTREC)){
-    StgTL2TVar * tvar = TO_TL2(ws_ptr->tvar);
-    unsigned long stamp = tvar->currentStamp;
-
-    if(stamp == lockVal){
-        *trailer = ws_ptr->next;
-        ws_ptr = ws_ptr->next;
-        continue;
-    }
-
-    if(LOCKED(stamp) || stamp > myStamp || cas((StgVolatilePtr)&(tvar->currentStamp), stamp, lockVal) != stamp){
-        releaseLocks(trec->write_set, ws_ptr);
-        return TO_WITHK(abort_tx(trec));
-    }
-
-    tvar->oldStamp = stamp;
-    trailer = &(ws_ptr->next);
-    ws_ptr = ws_ptr->next;
-    }
-
-    unsigned long write_version = atomic_inc(&version_clock, 2);
-
-    if(write_version != trec->read_version + 2){
-    //validate read set
-    StgPTRecChunk * rs_ptr = trec->read_set;
-    while(rs_ptr != TO_CHUNK(NO_PTREC)){
-        StgInt i = 0;
-        for (; i < rs_ptr->next_entry_idx; i++){
-        StgTL2TVar * tvar = rs_ptr->entries[i];
+        StgTL2TVar * tvar = TO_TL2(ws_ptr->tvar);
         unsigned long stamp = tvar->currentStamp;
-
-        if((stamp <= myStamp && !LOCKED(stamp)) || stamp == lockVal){
+        
+        if(stamp == lockVal){
+            *trailer = ws_ptr->next;
+            ws_ptr = ws_ptr->next;
             continue;
-        }else{
+        }
+        
+        if(LOCKED(stamp) || stamp > myStamp || cas((StgVolatilePtr)&(tvar->currentStamp), stamp, lockVal) != stamp){
+            releaseLocks(trec->write_set, ws_ptr);
+            return TO_WITHK(abort_tx(trec, cap));
+        }
+        
+        tvar->oldStamp = stamp;
+        trailer = &(ws_ptr->next);
+        ws_ptr = ws_ptr->next;
+    }
+    
+    unsigned long write_version = atomic_inc(&version_clock, 2);
+    
+    if(write_version != trec->read_version + 2){
+        //validate read set
+        StgPTRecChunk * rs_ptr = trec->read_set;
+        while(rs_ptr != TO_CHUNK(NO_PTREC)){
+            StgInt i = 0;
+            for (; i < rs_ptr->next_entry_idx; i++){
+                StgTL2TVar * tvar = rs_ptr->entries[i];
+                unsigned long stamp = tvar->currentStamp;
+                
+                if((stamp <= myStamp && !LOCKED(stamp)) || stamp == lockVal){
+                    continue;
+                }else{
 #ifdef STATS
-            cap->pastmStats.commitTimeFullAborts++;
+                    cap->pastmStats.commitTimeFullAborts++;
 #endif
-            releaseLocks(trec->write_set, TO_WRITE_SET(NO_PTREC));
-            return TO_WITHK(abort_tx(trec));
+                    releaseLocks(trec->write_set, TO_WRITE_SET(NO_PTREC));
+                    return TO_WITHK(abort_tx(trec, cap));
+                }
+            }
+            rs_ptr = rs_ptr->prev_chunk;
         }
-        }
-        rs_ptr = rs_ptr->prev_chunk;
     }
-    }
-
+    
     //push write set into global store
     ws_ptr = trec->write_set;
     while(ws_ptr != TO_WRITE_SET(NO_PTREC)){
-    StgTL2TVar * tvar = TO_TL2(ws_ptr->tvar);
-    tvar->current_value = ws_ptr->val;
-    tvar->currentStamp = write_version;
-    dirty_TL2_TVAR(cap, tvar);
-    ws_ptr = ws_ptr->next;
+        StgTL2TVar * tvar = TO_TL2(ws_ptr->tvar);
+        tvar->current_value = ws_ptr->val;
+        tvar->currentStamp = write_version;
+        dirty_TL2_TVAR(cap, tvar);
+        ws_ptr = ws_ptr->next;
     }
-
+    
 #ifdef STATS
     cap->pastmStats.numCommits++;
 #endif
+    tl2_recyclePTRecChunks(cap, trec->read_set);
     return TO_WITHK(PASTM_SUCCESS);
 }
 

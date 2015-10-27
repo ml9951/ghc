@@ -227,7 +227,7 @@ typedef struct {
 } TRec;
 
 
-StgClosure * abort_tx(TRec* trec);
+StgClosure * abort_tx(TRec* trec, Capability * c);
 TRec * tl2_stmStartTransaction(Capability *cap, TRec * ptrec);
 StgClosure * tl2_stmReadTVar(Capability * cap, TRec * trec,
                              StgTL2TVar * tvar);
