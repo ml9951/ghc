@@ -494,6 +494,7 @@ wanteds = concat
           ,closureSize  C "StgTL2TVar"
 
           ,closureField C "StgTL2TVar" "current_value"
+          ,closureField C "StgTL2TVar" "first_watch_queue_entry"
           ,closureField C "StgTL2TVar" "currentStamp"
           ,closureField C "StgTL2TVar" "oldStamp"
 

@@ -207,6 +207,8 @@ void stmWriteTVar(Capability *cap,
 
 void stmPrintStats(void);
 
+
+
 /*----------------------------------------------------------------------*/
 
 // 
@@ -217,14 +219,18 @@ void stmPrintStats(void);
 typedef struct {
     StgHeader                  header;
     StgPTRecChunk             *read_set;
-    StgPTRecWithK             *lastK;          //unused
+    StgPTRecWithK             *lastK;
+    StgPTRecWithoutK          *tail; //last element of linked list
     StgWriteSet               *write_set;
     StgPTRecOrElse            *retry_stack;
-    StgPTRecWithoutK          *tail;           //unused
     unsigned long              read_version;
     StgInt64                   capture_freq;
     StgInt                     numK;
 } TRec;
+
+
+StgClosure * tl2_stmRetry(TRec * trec);
+void tl2_stmCatchRetry(Capability * cap, TRec * trec, StgClosure * alt);
 
 
 StgClosure * abort_tx(TRec* trec, Capability * c);
@@ -237,6 +243,9 @@ void tl2_stmWriteTVar(Capability *cap,
                       StgClosure *new_value);
 StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadID id);
 void c_tl2_printSTMStats(void);
+
+StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id);
+
 
 /* NULLs */
 

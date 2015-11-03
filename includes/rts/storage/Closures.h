@@ -468,6 +468,7 @@ typedef struct STMProfiling_{
 typedef struct {
     StgHeader                  header;
     StgClosure                *volatile current_value;
+    StgTVarWatchQueue         *volatile first_watch_queue_entry;
     volatile StgInt64          currentStamp;
     volatile StgInt64          oldStamp;
 } StgTL2TVar;

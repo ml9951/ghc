@@ -1320,12 +1320,82 @@ stg_newTL2TVarzh (P_ init)
     SET_HDR (tv, stg_TL2_TVAR_DIRTY_info, CCCS);
 
     StgTL2TVar_current_value(tv) = init;
+    StgTL2TVar_first_watch_queue_entry(tv) = stg_END_STM_WATCH_QUEUE_closure;
     StgTL2TVar_currentStamp(tv) = 0;
     StgTL2TVar_oldStamp(tv) = 0;
 
     return (tv);
 }
 
+stg_tl2zupopRetryzh(P_ x)
+{
+    W_ trec;
+    W_ retry_stack;
+ 
+    trec = StgTSO_ptrec(CurrentTSO);
+
+    retry_stack = StgPTRecHeader_retry_stack(trec);
+    StgPTRecHeader_retry_stack(trec) = StgPTRecOrElse_next(retry_stack);
+
+    return(x);
+}
+
+/*
+ * Bail on a transaction, execution should continue with the alternative
+ * branch of the nearest orElse.  We currently are not supporting the 
+ * blocking semantics of retry if it propogates all the way up to the 
+ * top of the transaction.  Instead, we simply immediatly retry.
+ */
+stg_tl2zuretryzh
+{
+
+    W_ trec;
+    W_ alt;
+    W_ retry_stack;
+    W_ r;
+    
+    trec = StgTSO_ptrec(CurrentTSO);
+
+    retry_stack = StgPTRecHeader_retry_stack(trec);
+    
+    if(retry_stack == NO_PTREC){
+        (r) = ccall tl2_stmWait(MyCapability() "ptr", CurrentTSO "ptr", trec "ptr");
+        if(r != 0){
+
+            W_ frame;
+            P_ code;
+            SAVE_THREAD_STATE();
+            ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr");
+            LOAD_THREAD_STATE();
+            frame = Sp;
+            R3 = trec;
+            jump stg_block_tl2_stmwait [R3];
+        }else{
+            jump stg_eagerFullAbort []; //retry from beginning
+        }
+    }
+
+    //Have at least one catchRetry on our retry_stack
+    ("ptr" alt) = ccall tl2_stmRetry(trec "ptr");
+    
+    jump stg_ap_v_fast(alt);
+}
+
+stg_tl2zucatchRetryzh (P_ first_code,     /* :: STM a */
+			  P_ alt_code       /* :: STM a */)
+{
+
+    W_ trec;
+    W_ retry_stack;
+
+    MAYBE_GC_PP(stg_pcatchRetryzh, first_code, alt_code);
+
+    trec = StgTSO_ptrec(CurrentTSO);
+    ccall tl2_stmCatchRetry(MyCapability() "ptr", trec "ptr", 
+                            alt_code "ptr");
+    
+    jump stg_ap_v_fast (first_code);
+}
 
 
 // Primop definition -----------------------------------------------------------

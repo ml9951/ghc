@@ -1830,7 +1830,7 @@ StgClosure * abort_tx(TRec * trec, Capability * cap){
 }
 
 StgClosure * tl2_stmReadTVar(Capability * cap, TRec * trec,
-                 StgTL2TVar * tvar){
+                             StgTL2TVar * tvar){
     StgWriteSet * ws = trec->write_set;
 
     while(ws != TO_WRITE_SET(NO_PTREC)){
@@ -1872,9 +1872,9 @@ StgClosure * tl2_stmReadTVar(Capability * cap, TRec * trec,
 }
 
 void tl2_stmWriteTVar(Capability *cap,
-             TRec *trec,
-             StgTVar *tvar,
-             StgClosure *new_value) {
+                      TRec *trec,
+                      StgTVar *tvar,
+                      StgClosure *new_value) {
     StgWriteSet * newEntry = (StgWriteSet *) allocate(cap, sizeofW(StgWriteSet));
     SET_HDR(newEntry , &stg_WRITE_SET_info, CCS_SYSTEM);
     newEntry->tvar = tvar;
@@ -1883,11 +1883,29 @@ void tl2_stmWriteTVar(Capability *cap,
     trec->write_set = newEntry;
 }
 
+StgClosure * tl2_stmRetry(TRec * trec)
+{
+    StgPTRecOrElse * entry = trec->retry_stack;
+    trec->retry_stack = entry->next;
+    trec->write_set = entry->write_set;
+    return entry->alt;
+}
+
+void tl2_stmCatchRetry(Capability * cap, TRec * trec, StgClosure * alt)
+{
+    StgPTRecOrElse * orelse = (StgPTRecOrElse*)allocate(cap, sizeofW(StgPTRecOrElse));
+    SET_HDR(orelse, &stg_PTREC_OR_ELSE_info, CCS_SYSTEM);
+    orelse->alt = alt;
+    orelse->write_set = trec->write_set;
+    orelse->next = trec->retry_stack;
+    trec->retry_stack = orelse;
+}
+
 static void releaseLocks(StgWriteSet * ws, StgWriteSet * sentinel){
     while(ws != sentinel){
-    StgTL2TVar * tvar = TO_TL2(ws->tvar);
-    tvar->currentStamp = tvar->oldStamp;
-    ws = ws->next;
+        StgTL2TVar * tvar = TO_TL2(ws->tvar);
+        tvar->currentStamp = tvar->oldStamp;
+        ws = ws->next;
     }
 }
 
@@ -1970,6 +1988,7 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadI
     //push write set into global store
     ws_ptr = trec->write_set;
     while(ws_ptr != TO_WRITE_SET(NO_PTREC)){
+        unpark_waiters_on(cap, ws_ptr->tvar);
         StgTL2TVar * tvar = TO_TL2(ws_ptr->tvar);
         tvar->current_value = ws_ptr->val;
         tvar->currentStamp = write_version;
@@ -1995,4 +2014,79 @@ void c_tl2_printSTMStats(){
     printf("Number of Commits = %lu\n", stats.numCommits);
 #endif
 }
+
+static StgBool releaseRSLocks(StgPTRecChunk * rs_ptr, unsigned long lockVal){
+    //acquire the lock for each entry
+    while(rs_ptr != TO_CHUNK(NO_PTREC)){
+        StgInt i;
+        for (i = 0; i < rs_ptr->next_entry_idx; i++){
+            StgTL2TVar * tvar = rs_ptr->entries[i];
+            if(tvar->currentStamp == lockVal){
+                tvar->currentStamp = tvar->oldStamp;
+            }else{
+                return FALSE;
+            }
+        }
+        rs_ptr = rs_ptr->prev_chunk;
+    }
+    
+    return FALSE;
+}
+
+StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id){
+    unsigned long lockVal = ((unsigned long)id << 1) | 1;
+    unsigned long myStamp = trec->read_version;
+    StgPTRecChunk * rs_ptr = trec->read_set;
+
+    //acquire the lock for each entry
+    while(rs_ptr != TO_CHUNK(NO_PTREC)){
+        StgInt i;
+        for (i = 0; i < rs_ptr->next_entry_idx; i++){
+            StgTL2TVar * tvar = rs_ptr->entries[i];
+            
+            unsigned long oldStamp = tvar->currentStamp;
+            if(oldStamp != lockVal && (oldStamp > myStamp || LOCKED(oldStamp))){
+                return releaseRSLocks(trec->read_set, lockVal);
+            }
+
+            if(cas((StgVolatilePtr)&(tvar->currentStamp), oldStamp, lockVal) != oldStamp){
+                return releaseRSLocks(trec->read_set, lockVal);
+            }
+            tvar->oldStamp = oldStamp;
+        }
+        rs_ptr = rs_ptr->prev_chunk;
+    }
+
+    //transaction is still valid, put on queues
+    rs_ptr = trec->read_set;
+    while(rs_ptr != TO_CHUNK(NO_PTREC)){
+        StgInt i;
+        for (i = 0; i < rs_ptr->next_entry_idx; i++){
+            StgTL2TVar * tvar = rs_ptr->entries[i];
+
+            StgTVarWatchQueue * fq = tvar->first_watch_queue_entry;
+            if(fq->closure == tso)
+                continue; //we already put ourselves on this one
+
+            StgTVarWatchQueue *q = alloc_stg_tvar_watch_queue(cap, (StgClosure*)tso);
+            q->next_queue_entry = fq;
+            q->prev_queue_entry = END_STM_WATCH_QUEUE;
+            if(fq != END_STM_WATCH_QUEUE)
+                fq->prev_queue_entry = q;
+
+            tvar->first_watch_queue_entry = q;
+            dirty_TL2_TVAR(cap, tvar);
+        }
+        rs_ptr = rs_ptr->prev_chunk;
+    }
+
+    releaseRSLocks(trec->read_set, lockVal);
+
+    tso->why_blocked = BlockedOnSTM;
+    tso->block_info.closure = (StgClosure *)END_TSO_QUEUE;
+    
+    return TRUE;
+}
+
+                
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, MagicHash, UnboxedTuples, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes #-}
+{-# LANGUAGE CPP, MagicHash, UnboxedTuples #-}
 
 #if __GLASGOW_HASKELL__ >= 701
 {-# LANGUAGE Trustworthy #-}
@@ -12,12 +12,16 @@ module Control.TL2.STM
     STM(..),
 --    printStats,
     newTVar,
+    retry,
+    orElse,
+    modifyTVar,
+    modifyTVar',
     module Control.Common.STM
 )
 where
 
 import GHC.Base(State#, RealWorld, IO(..), ap)
-import GHC.Prim(Any, unsafeCoerce#, newTL2TVar#, tl2_writeTVar#, tl2_readTVar#, tl2_atomically# )
+import GHC.Prim(Any, unsafeCoerce#, newTL2TVar#, tl2_writeTVar#, tl2_readTVar#, tl2_atomically#, tl2_retry#, tl2_popRetry#, tl2_catchRetry# )
 import GHC.Conc.Sync(TVar(..))
 import Control.Common.STM
 
@@ -51,6 +55,33 @@ writeTVar (TVar tv#) a = STM $ \s1# ->
 
 atomically :: STM a -> IO a
 atomically (STM c) = IO (\s# -> tl2_atomically# c s#)
+
+retry :: STM a
+retry = STM $ \s -> tl2_retry# s
+
+popRetry :: a -> STM a
+popRetry x = STM $ \s -> tl2_popRetry# x s
+
+orElse :: STM a -> STM a -> STM a
+orElse a b = STM $ \s -> tl2_catchRetry# (unSTM (a >>= popRetry)) (unSTM b) s 
+
+-- Like 'modifyIORef' but for 'TVar'.
+-- | Mutate the contents of a 'TVar'. /N.B./, this version is
+-- non-strict.
+modifyTVar :: TVar a -> (a -> a) -> STM ()
+modifyTVar var f = do
+    x <- readTVar var
+    writeTVar var (f x)
+{-# INLINE modifyTVar #-}
+
+
+-- | Strict version of 'modifyTVar'.
+modifyTVar' :: TVar a -> (a -> a) -> STM ()
+modifyTVar' var f = do
+    x <- readTVar var
+    writeTVar var $! f x
+{-# INLINE modifyTVar' #-}
+
 {-
 foreign import prim safe "stg_tl2_atomicallyzh" atomically# 
         :: State# s -> (# State# s, Any() #)
