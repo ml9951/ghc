@@ -1,7 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import GHC.Conc
+--import GHC.Conc
+import Control.TL2.STM
 import Control.Concurrent
 import Control.Exception
 

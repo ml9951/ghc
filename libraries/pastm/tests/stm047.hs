@@ -1,10 +1,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import GHC.Conc
+--import GHC.Conc
 import Control.Exception
 import Foreign.StablePtr
 import System.IO
+import Control.TL2.STM
 
 inittvar :: STM (TVar String)
 inittvar = newTVar "Hello world"

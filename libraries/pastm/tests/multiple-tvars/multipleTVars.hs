@@ -16,8 +16,8 @@ import Control.Chunked.STM
 import Control.FastForward.STM
 #elif defined(PABORT)
 import Control.NoRec.STM
-#elif defined(TL2)
-import Control.FullTL2.STM
+#elif defined(FULLTL2)
+import Control.TL2.STM
 #else
 #error No STM Specified
 #endif
@@ -119,7 +119,7 @@ main = do
      let freq = MS.toOccurList (MS.fromList writes)
      failed <- atomically $ check tvars freq
      mapM_ (\(i,freq,actual) -> putStrLn("Error: " ++ show i ++ ": Count should be " ++ show freq ++ ", but found " ++ show actual)) failed
-     printStats
+     
      case failed of
           [] -> putStrLn "Success: test passed"
           _ -> return()

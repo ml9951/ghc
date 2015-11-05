@@ -6,7 +6,8 @@ module Main (main) where
 import Foreign
 import Control.Concurrent
 import Control.Exception
-import GHC.Conc -- Control.Concurrent.STM
+--import GHC.Conc -- Control.Concurrent.STM
+import Control.TL2.STM
 import System.Random
 import Data.Array
 import Data.List
