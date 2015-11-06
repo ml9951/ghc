@@ -251,15 +251,28 @@ StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id)
 // NOrec
 //
 
-StgClosure * norec_abort_tx(TRec* trec, Capability * c);
-TRec * norec_stmStartTransaction(Capability *cap, TRec * ptrec);
-StgClosure * norec_stmReadTVar(Capability * cap, TRec * trec,
+//TRec
+typedef struct {
+    StgHeader                  header;
+    StgNOrecChunk             *read_set;
+    StgPTRecWithK             *lastK;
+    StgPTRecWithoutK          *tail; //last element of linked list
+    StgWriteSet               *write_set;
+    StgPTRecOrElse            *retry_stack;
+    unsigned long              read_version;
+    StgInt64                   capture_freq;
+    StgInt                     numK;
+} NOrecTRec;
+
+StgClosure * norec_abort_tx(NOrecTRec* trec, Capability * c);
+NOrecTRec * norec_stmStartTransaction(Capability *cap, NOrecTRec * ptrec);
+StgClosure * norec_stmReadTVar(Capability * cap, NOrecTRec * trec,
                                StgTL2TVar * tvar);
 void norec_stmWriteTVar(Capability *cap,
-                        TRec *trec,
+                        NOrecTRec *trec,
                         StgTVar *tvar,
                         StgClosure *new_value);
-StgClosure * norec_stmCommitTransaction(Capability *cap, TRec *trec);
+StgClosure * norec_stmCommitTransaction(Capability *cap, NOrecTRec *trec);
 
 /* NULLs */
 
