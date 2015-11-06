@@ -1510,15 +1510,14 @@ stg_newNOrecTVarzh (P_ init)
 {
     W_ tv;
 
-    ALLOC_PRIM_P (SIZEOF_StgTL2TVar, stg_newTL2TVarzh, init);
+    ALLOC_PRIM_P (SIZEOF_StgTVar, stg_newTVarzh, init);
 
-    tv = Hp - SIZEOF_StgTL2TVar + WDS(1);
-    SET_HDR (tv, stg_TL2_TVAR_DIRTY_info, CCCS);
+    tv = Hp - SIZEOF_StgTVar + WDS(1);
+    SET_HDR (tv, stg_TVAR_DIRTY_info, CCCS);
 
-    StgTL2TVar_current_value(tv) = init;
-    StgTL2TVar_first_watch_queue_entry(tv) = stg_END_STM_WATCH_QUEUE_closure;
-    StgTL2TVar_currentStamp(tv) = 0;
-    StgTL2TVar_oldStamp(tv) = 0;
+    StgTVar_current_value(tv) = init;
+    StgTVar_first_watch_queue_entry(tv) = stg_END_STM_WATCH_QUEUE_closure;
+    StgTVar_num_updates(tv) = 0;
 
     return (tv);
 }
