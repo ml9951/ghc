@@ -27,7 +27,7 @@ module Control.NoRec.STM
     writeTVar,
     atomically,
     STM(..),
-    printStats,
+ --   printStats,
     TVar(..),    
     newTVar       
 )
@@ -35,7 +35,7 @@ where
 
 import GHC.Conc.Sync(TVar(..))
 import GHC.Base(State#, RealWorld, IO(..), ap, newTVar#, TVar#)
-import GHC.Prim(Any, unsafeCoerce# )
+import GHC.Prim(newNOrecTVar#, norec_writeTVar#, norec_readTVar#, norec_atomically#, norec_retry#, norec_popRetry#, norec_catchRetry# )
 
 newtype STM a = STM {unSTM :: State# RealWorld ->                                     --Incoming State
                               (# State# RealWorld, a #)}                              --New state and result
@@ -52,26 +52,24 @@ instance  Functor STM where
     fmap f m = m >>= (return . f)
 
 readTVar :: TVar a -> STM a
-readTVar (TVar tv) =  STM $ \s-> unsafeCoerce# readTVar# tv s
+readTVar (TVar tv) =  STM $ \s-> norec_readTVar# tv s
 
 writeTVar :: TVar a -> a -> STM ()
 writeTVar (TVar tv) a = STM $ \s -> 
-          case unsafeCoerce# writeTVar# tv a s of
-               (# s', _ #) -> (# s', () #)
+          case norec_writeTVar# tv a s of
+               s' -> (# s', () #)
 
 newTVar :: a -> STM (TVar a)
-newTVar x = STM $ \s -> case newTVar# x s of
+newTVar x = STM $ \s -> case newNOrecTVar# x s of
                             (# s', tv #) -> (# s', TVar tv #)
 
 atomically :: STM a -> IO a
-atomically (STM c) = IO (\s -> unsafeCoerce# atomically# c s)
+atomically (STM c) = IO (\s -> norec_atomically# c s)
 
+
+{-
 foreign import prim "stg_norec_atomicallyzh" atomically# 
         :: Any() -> State# s -> (# State# s, Any() #)
-{-         FFI won't accept this type...
-        :: (State# RealWorld -> (# State# RealWorld , b #) )
-            -> State# RealWorld -> (# State# RealWorld, b #)
--} 
 
 foreign import prim "stg_norec_readTVarzh" readTVar#
         :: TVar# s a -> State# s -> (# State# s, a #)
@@ -81,3 +79,4 @@ foreign import prim "stg_norec_writeTVarzh" writeTVar#
 
 
 foreign import ccall "c_norec_printSTMStats" printStats :: IO()
+-}

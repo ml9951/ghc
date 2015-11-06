@@ -2088,5 +2088,181 @@ StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id)
     return TRUE;
 }
 
-                
+/*......................................................................*/
+/* NOrec                                                               */
 
+static volatile unsigned long norec_version_clock = 0;
+
+static StgNOrecChunk * alloc_norec_chunk(Capability * cap){
+    if(cap->free_ptrec_chunks == NO_PTREC){
+        StgNOrecChunk * chunk = (StgNOrecChunk *)allocate(cap, sizeofW(StgNOrecChunk));
+        SET_HDR(chunk, &stg_NOREC_CHUNK_info, CCS_SYSTEM);
+        return chunk;
+    }else{
+        StgNOrecChunk * chunk = (StgNOrecChunk *)cap->free_ptrec_chunks;
+        cap->free_ptrec_chunks = (StgPTRecChunk *) chunk->prev_chunk;
+        return chunk;
+    }
+}
+
+static void norec_recyclePTRecChunks(Capability * cap, StgNOrecChunk * ptchunks){
+    while(ptchunks != (StgNOrecChunk *) NO_PTREC){
+        if(ptchunks->size == 0){
+            return; //this was sealed, don't recycle
+        }
+        
+        StgNOrecChunk * temp = ptchunks->prev_chunk;
+        ptchunks->prev_chunk = (StgNOrecChunk*) cap->free_ptrec_chunks;
+        cap->free_ptrec_chunks = (StgPTRecChunk*) ptchunks;
+        ptchunks = temp;
+    }
+}
+
+TRec * norec_stmStartTransaction(Capability *cap, TRec * ptrec){
+    if(ptrec == (TRec*)NO_PTREC){
+        ptrec = (TRec *)allocate(cap, sizeofW(TRec));
+        SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+        ptrec->tail = TO_WITHOUTK(NO_PTREC);
+        ptrec->lastK = TO_WITHK(NO_PTREC);
+    }
+
+    StgNOrecChunk * chunk = alloc_norec_chunk(cap);
+    chunk->prev_chunk = (StgNOrecChunk*)NO_PTREC;
+    chunk->next_entry_idx = 0;
+    chunk->size = NOREC_CHUNK_SIZE;
+
+    ptrec->read_set = (StgPTRecChunk *)chunk;
+    ptrec->lastK = TO_WITHK(NO_PTREC);
+    ptrec->write_set = TO_WRITE_SET(NO_PTREC);
+    ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
+
+    //get a read version
+    ptrec->read_version = norec_version_clock;
+    while((ptrec->read_version & 1) != 0){
+        ptrec->read_version = norec_version_clock;
+    }
+    return ptrec;
+}
+
+StgClosure * norec_abort_tx(TRec * trec, Capability * cap){
+    norec_recyclePTRecChunks(cap, (StgNOrecChunk *)trec->read_set);
+    trec->read_set = TO_CHUNK(NO_PTREC);
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+    trec->read_version = norec_version_clock;
+    return PASTM_FAIL;
+}
+
+static StgClosure * norec_validate(Capability * cap, TRec * trec){
+    while(TRUE){
+        unsigned long time = norec_version_clock;
+        if((time & 1) != 0){
+            continue; //clock is locked
+        }
+
+        trec->read_version = time;
+
+        //validate read set
+        StgNOrecChunk * ptr = (StgNOrecChunk*)trec->read_set;
+
+        while(ptr != (StgNOrecChunk*)NO_PTREC){
+            unsigned long i = 0;
+            for(; i < ptr->next_entry_idx; i++){
+                StgNOrecEntry e = ptr->entries[i];
+                if(e.tvar->current_value != e.expected_val){
+                    return norec_abort_tx(trec, cap);
+                }
+            }
+            ptr = ptr->prev_chunk;
+	}
+        if(time == norec_version_clock){
+	    return PASTM_SUCCESS; //necessarily PASTM_SUCCESS
+        }
+        //Validation succeeded, but someone else committed in the meantime, loop back around...
+    }
+}
+
+StgClosure * norec_stmReadTVar(Capability * cap, TRec * trec,
+                               StgTL2TVar * tvar){
+    StgWriteSet * ws = trec->write_set;
+
+    while(ws != TO_WRITE_SET(NO_PTREC)){
+        if(TO_TL2(ws->tvar) == tvar){
+            return ws->val;
+        }
+        ws = ws->next;
+    }
+
+    //Not found in write set
+    StgClosure * val = tvar->current_value;
+    while(trec->read_version != norec_version_clock){
+        StgClosure * res = norec_validate(cap, trec);
+        if(res == PASTM_FAIL){
+            return PASTM_FAIL;
+        }
+        val = tvar->current_value;
+    }
+    
+    StgNOrecChunk * current_chunk = (StgNOrecChunk*) trec->read_set;
+    
+    if(current_chunk->next_entry_idx >= current_chunk->size){
+        current_chunk = alloc_norec_chunk(cap);
+        current_chunk->next_entry_idx = 0;
+        current_chunk->size = NOREC_CHUNK_SIZE; 
+        current_chunk->prev_chunk = (StgNOrecChunk *)trec->read_set;
+        trec->read_set = (StgPTRecChunk *)current_chunk;
+    }
+
+    StgNOrecEntry * e = &(current_chunk->entries[current_chunk->next_entry_idx]);
+    e->tvar = tvar;
+    e->expected_val = val;
+    current_chunk->next_entry_idx++;
+    
+    return val;
+}
+
+void norec_stmWriteTVar(Capability *cap,
+                        TRec *trec,
+                        StgTVar *tvar,
+                        StgClosure *new_value) {
+    StgWriteSet * newEntry = (StgWriteSet *) allocate(cap, sizeofW(StgWriteSet));
+    SET_HDR(newEntry , &stg_WRITE_SET_info, CCS_SYSTEM);
+    newEntry->tvar = tvar;
+    newEntry->val = new_value;
+    newEntry->next = trec->write_set;
+    trec->write_set = newEntry;
+}
+
+StgClosure * norec_stmCommitTransaction(Capability *cap, TRec *trec) {
+    unsigned long snapshot = trec->read_version;
+    while (cas(&norec_version_clock, snapshot, snapshot+1) != snapshot){ 
+        StgClosure * res = norec_validate(cap, trec);
+        if(res != PASTM_SUCCESS){
+            //The validate function sets up the trec with the appropriate read/write sets
+            return res;
+        }
+        snapshot = trec->read_version;
+    }
+
+    //reverse the write set, so that new modifications overwrite old ones
+    StgWriteSet * one, * two;
+    one = TO_WRITE_SET(NO_PTREC);
+    two = trec->write_set;
+    while(two != TO_WRITE_SET(NO_PTREC)){
+        StgWriteSet * temp = two->next;
+	two->next = one;
+	one = two;
+	two = temp;
+    }
+
+    StgWriteSet * write_set = one;
+    while(write_set != TO_WRITE_SET(NO_PTREC)){
+        StgTVar * tvar = write_set->tvar;
+        tvar->current_value = write_set->val;
+        dirty_TVAR(cap,tvar);
+        write_set = write_set->next;
+    }
+    norec_version_clock = snapshot + 2;//unlock clock
+
+    norec_recyclePTRecChunks(cap, (StgNOrecChunk*)trec->read_set);
+    return PASTM_SUCCESS;
+}

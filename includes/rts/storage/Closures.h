@@ -502,8 +502,22 @@ typedef struct StgPTRecChunk_ {
     unsigned int               next_entry_idx;             //4 bytes
     unsigned int               size;                       //4 bytes
     struct StgPTRecChunk_     *prev_chunk;                 //8 bytes 
-    StgTL2TVar                *entries[PTREC_CHUNK_SIZE];  //15 entries, makes this 512 bytes
+    StgTL2TVar                *entries[PTREC_CHUNK_SIZE];  //61 entries makes this whole thing 512 bytes
 } StgPTRecChunk;
+
+typedef struct {
+    StgTL2TVar * tvar;
+    StgClosure * expected_val;
+} StgNOrecEntry;
+
+#define NOREC_CHUNK_SIZE 30
+typedef struct StgNOrecChunk_ {
+    StgHeader                  header;                     //8 bytes
+    unsigned long              next_entry_idx;             //8 bytes
+    unsigned long              size;                       //8 bytes
+    struct StgNOrecChunk_     *prev_chunk;                 //8 bytes 
+    StgNOrecEntry              entries[NOREC_CHUNK_SIZE];  //30 entries makes this whole thing 512 bytes
+} StgNOrecChunk;
 
 /* ----------------------------------------------------------------------------
    Messages

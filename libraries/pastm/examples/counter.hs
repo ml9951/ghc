@@ -10,6 +10,8 @@ import Control.Ordered.STM
 import Control.PartialTL2.STM
 #elif defined(CHUNKED)
 import Control.Chunked.STM
+#elif defined(NOREC)
+import Control.NoRec.STM
 #else
 import Control.Partial.STM
 #endif
@@ -58,10 +60,10 @@ opts = info (helper  <*> parser) fullDesc
 
 main = do
      opts <- execParser opts
-     counter <- newTVarIO 0
+     counter <- atomically $ newTVar 0
      mvars <- mkThreads counter numCapabilities opts
      join mvars --wait for everyone to finish adding to list
-     count <- readTVarIO counter
+     count <- atomically $ readTVar counter
      putStrLn("Count is " ++ show count)
    --  printStats
      return()

@@ -246,6 +246,20 @@ void c_tl2_printSTMStats(void);
 
 StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id);
 
+/*----------------------------------------------------------------------*/
+//
+// NOrec
+//
+
+StgClosure * norec_abort_tx(TRec* trec, Capability * c);
+TRec * norec_stmStartTransaction(Capability *cap, TRec * ptrec);
+StgClosure * norec_stmReadTVar(Capability * cap, TRec * trec,
+                               StgTL2TVar * tvar);
+void norec_stmWriteTVar(Capability *cap,
+                        TRec *trec,
+                        StgTVar *tvar,
+                        StgClosure *new_value);
+StgClosure * norec_stmCommitTransaction(Capability *cap, TRec *trec);
 
 /* NULLs */
 
@@ -255,7 +269,6 @@ StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id)
 
 #define NO_TREC ((StgTRecHeader *)(void *)&stg_NO_TREC_closure)
 
-/*----------------------------------------------------------------------*/
 
 #include "EndPrivate.h"
 

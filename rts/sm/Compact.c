@@ -533,13 +533,25 @@ update_fwd_large( bdescr *bd )
 
     case PTREC_CHUNK:
     {
-        StgWord i = 0;
-        StgPTRecChunk * tc = ((StgPTRecChunk *)p);
-        thread((StgClosure **)&tc->prev_chunk);
-        for(i = 0; i < tc->next_entry_idx; i++){
-            thread_(&(tc->entries[i]));
+        if(((StgClosure*)p)->header.info == &stg_NOREC_CHUNK_info){
+            StgWord i;
+            StgNOrecChunk *tc = (StgNOrecChunk *)p;
+            StgNOrecEntry *e = &(tc -> entries[0]);
+            thread_(&tc->prev_chunk);
+            for (i = 0; i < tc -> next_entry_idx; i ++, e++ ) {
+                thread_(&e->tvar);
+                thread(&e->expected_val);
+            }
+            continue;
+        }else{
+            StgWord i = 0;
+            StgPTRecChunk * tc = ((StgPTRecChunk *)p);
+            thread((StgClosure **)&tc->prev_chunk);
+            for(i = 0; i < tc->next_entry_idx; i++){
+                thread_(&(tc->entries[i]));
+            }
+            continue;
         }
-        break;
     }
 
     default:

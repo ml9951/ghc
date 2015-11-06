@@ -37,7 +37,7 @@ import Data.Typeable (Typeable)
 
 numTVars = (100 :: Int)
 numSamples = 10
-numWrites = 10
+numWrites = 0 --10
 numIters = (1000 :: Int) --1000
 
 newtype TArray i e = TArray (Array i (TVar e)) deriving (Eq, Typeable)
@@ -75,23 +75,22 @@ sample tvars (r:rs) x = do
 
 write tvars [] = return ()
 write tvars (r:rs) = do
-      temp <- readArray tvars r
+      !temp <- readArray tvars r
       writeArray tvars r (temp+1)
       write tvars rs
 
-threadLoop :: TVars -> [Int] -> Int -> IO [Int]
-threadLoop tvars g 0 = return []
-threadLoop tvars g i = do
+threadLoop :: TVars -> [Int] -> Int -> [Int] -> IO [Int]
+threadLoop tvars g 0 ws = return ws
+threadLoop tvars g i ws = do
            (samples, g1) <- return $ splitAt numSamples g
            (writes, g2) <- return $ splitAt numWrites g1
            atomically $ sample tvars samples 0 >>= \_ -> write tvars writes
-           rest <- threadLoop tvars g2 (i-1)
-           return(writes ++ rest)
+           threadLoop tvars g2 (i-1) (writes ++ ws)
 
 mkThreads tvars 0 = return[]
 mkThreads tvars i = do
           mv <- newEmptyMVar
-          forkIO $ threadLoop tvars (randomRs (0, numTVars) (mkStdGen i)) numIters >>= \writes -> putMVar mv writes
+          forkIO $ threadLoop tvars (randomRs (0, numTVars) (mkStdGen i)) numIters [] >>= \writes -> putMVar mv writes
           mvs <- mkThreads tvars (i-1)
           return(mv : mvs)
 

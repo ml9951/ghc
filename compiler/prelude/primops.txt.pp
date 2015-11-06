@@ -2154,6 +2154,66 @@ primop TL2PopRetryOp "tl2_popRetry#" GenPrimOp
        out_of_line = True
        has_side_effects = True
 
+---------NOrec---------
+
+primop  NOrecAtomicallyOp "norec_atomically#" GenPrimOp
+      (State# RealWorld -> (# State# RealWorld, a #) )
+   -> State# RealWorld -> (# State# RealWorld, a #)
+   with
+   strictness  = { \ _arity -> mkClosedStrictSig [strictApply1Dmd,topDmd] topRes }
+                 -- See Note [Strictness for mask/unmask/catch]
+   out_of_line = True
+   has_side_effects = True
+
+primop  NewNOrecTVarOp "newNOrecTVar#" GenPrimOp
+       a
+    -> State# s -> (# State# s, TVar# s a #)
+   {Create a new {\tt TVar\#} holding a specified initial value.}
+   with
+   out_of_line  = True
+   has_side_effects = True
+
+primop  ReadNOrecTVarOp "norec_readTVar#" GenPrimOp
+       TVar# s a
+    -> State# s -> (# State# s, a #)
+   {Read contents of {\tt TVar\#}.  Result is not yet evaluated.}
+   with
+   out_of_line  = True
+   has_side_effects = True
+
+primop  WriteNOrecTVarOp "norec_writeTVar#" GenPrimOp
+       TVar# s a
+    -> a
+    -> State# s -> State# s
+   {Write contents of {\tt TVar\#}.}
+   with
+   out_of_line      = True
+   has_side_effects = True
+
+primop  NOrecRetryOp "norec_retry#" GenPrimOp
+   State# RealWorld -> (# State# RealWorld, a #)
+   with
+   strictness  = { \ _arity -> mkClosedStrictSig [topDmd] botRes }
+   out_of_line = True
+   has_side_effects = True
+
+primop  NOrecCatchRetryOp "norec_catchRetry#" GenPrimOp
+      (State# RealWorld -> (# State# RealWorld, a #) )
+   -> (State# RealWorld -> (# State# RealWorld, a #) )
+   -> State# RealWorld -> (# State# RealWorld, a #)
+   with
+   strictness  = { \ _arity -> mkClosedStrictSig [strictApply1Dmd,lazyApply1Dmd,topDmd] topRes }
+   out_of_line = True
+   has_side_effects = True
+
+primop NOrecPopRetryOp "norec_popRetry#" GenPrimOp
+       a -> State# RealWorld -> (# State# RealWorld, a #)
+       with
+       out_of_line = True
+       has_side_effects = True
+
+--------
+
 primop  AtomicallyOp "atomically#" GenPrimOp
       (State# RealWorld -> (# State# RealWorld, a #) )
    -> State# RealWorld -> (# State# RealWorld, a #)

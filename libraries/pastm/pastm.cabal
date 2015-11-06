@@ -17,11 +17,8 @@ extra-source-files:  changelog.md, README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Control.Common.STM
---                     , Control.Partial.STM
---                     , Control.PartialTL2.STM
-                     , Control.TL2.STM
---                     , Control.NoRec.STM
+  exposed-modules:     Control.TL2.STM
+                     , Control.NoRec.STM
 --                     , Control.STMHaskell.STM
   -- other-modules:       
   other-extensions:    CPP, Safe, Trustworthy, MagicHash, UnboxedTuples, Rank2Types
@@ -29,12 +26,12 @@ library
                      , ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes
                      , UndecidableInstances
   build-depends:       base >=4.8 && <4.9
-                     , array >=0.5 && <0.6
+              --       , array >=0.5 && <0.6
                      , ghc-prim
   -- hs-source-dirs:      
   default-language:    Haskell2010
 --  Include-Dirs: /Users/ml9951/repositories/ghc/rts, /Users/ml9951/repositories/ghc/rts/sm
-  C-Sources:           Control/Common/CmmHooks.cmm
+--  C-Sources:           Control/Common/CmmHooks.cmm
 --                     , Control/Partial/CmmHooks.cmm
 --                     , Control/Partial/CCode.c
 --                     , Control/PartialTL2/CmmHooks.cmm
@@ -44,10 +41,10 @@ library
 --                     , Control/NoRec/CmmHooks.cmm
 --                     , Control/NoRec/CCode.c
 --  ghc-options:     -optc-g -debug -threaded -rtsopts
-  ghc-options:     -threaded -rtsopts -DFTL2
+  ghc-options:     -threaded -rtsopts -DFTL2 -O2
   cc-options:      -DTHREADED_RTS -DTL2
   ld-options:
 
 Flag Debug
      Description:	Enable debug support
-     Default:		True
+     Default:		False

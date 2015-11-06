@@ -800,16 +800,29 @@ scavenge_block (bdescr *bd)
 
     case PTREC_CHUNK:
     {
-        StgWord i = 0;
-        StgPTRecChunk * tc = ((StgPTRecChunk *)p);
-        evacuate((StgClosure **)&tc->prev_chunk);
-        
-        while(i < tc->next_entry_idx){
-            evacuate((StgClosure **)&(tc->entries[i]));
-            i++;
+        if(((StgClosure*)p)->header.info == &stg_NOREC_CHUNK_info){
+            StgWord i = 0;
+            StgNOrecChunk * tc = ((StgNOrecChunk *)p);
+            evacuate((StgClosure **)&tc->prev_chunk);
+            StgNOrecEntry * e = &(tc->entries[0]);
+            for(i = 0; i < tc->next_entry_idx; i++, e++){
+                evacuate((StgClosure **)&e->tvar);
+                evacuate((StgClosure **)&e->expected_val);
+            }
+            p += sizeofW(StgNOrecEntry) * tc->next_entry_idx + sizeofW(StgHeader) + sizeofW(unsigned long) * 2 + sizeofW(StgPTRecChunk *);
+            break;
+        }else{
+            StgWord i = 0;
+            StgPTRecChunk * tc = ((StgPTRecChunk *)p);
+            evacuate((StgClosure **)&tc->prev_chunk);
+            
+            while(i < tc->next_entry_idx){
+                evacuate((StgClosure **)&(tc->entries[i]));
+                i++;
+            }
+            p += sizeofW(StgTL2TVar*) * tc->next_entry_idx + sizeofW(StgWord) + sizeofW(StgClosure *) * 2;
+            break;
         }
-        p += sizeofW(StgTL2TVar*) * tc->next_entry_idx + sizeofW(StgWord) + sizeofW(StgClosure *) * 2;
-        break;
     }
 
     default:
@@ -1228,15 +1241,27 @@ scavenge_mark_stack(void)
 
         case PTREC_CHUNK:
         {
-            StgWord i = 0;
-            StgPTRecChunk * tc = ((StgPTRecChunk *)p);
-            evacuate((StgClosure **)&tc->prev_chunk);
-            
-            while(i < tc->next_entry_idx){
-                evacuate((StgClosure **)&(tc->entries[i]));
-                i++;
+            if(((StgClosure*)p)->header.info == &stg_NOREC_CHUNK_info){
+                StgWord i = 0;
+                StgNOrecChunk * tc = ((StgNOrecChunk *)p);
+                evacuate((StgClosure **)&tc->prev_chunk);
+                StgNOrecEntry * e = &(tc->entries[0]);
+                for(i = 0; i < tc->next_entry_idx; i++, e++){
+                    evacuate((StgClosure **)&e->tvar);
+                    evacuate((StgClosure **)&e->expected_val);
+                }
+                break;
+            }else{
+                StgWord i = 0;
+                StgPTRecChunk * tc = ((StgPTRecChunk *)p);
+                evacuate((StgClosure **)&tc->prev_chunk);
+                
+                while(i < tc->next_entry_idx){
+                    evacuate((StgClosure **)&(tc->entries[i]));
+                    i++;
+                }
+                break;
             }
-            break;
         }
         
         default:
@@ -1569,15 +1594,27 @@ scavenge_one(StgPtr p)
 
     case PTREC_CHUNK:
     {
-        StgWord i = 0;
-        StgPTRecChunk * tc = ((StgPTRecChunk *)p);
-        evacuate((StgClosure **)&tc->prev_chunk);
-        
-        while(i < tc->next_entry_idx){
-            evacuate((StgClosure **)&(tc->entries[i]));
-            i++;
+        if(((StgClosure*)p)->header.info == &stg_NOREC_CHUNK_info){
+            StgWord i = 0;
+            StgNOrecChunk * tc = ((StgNOrecChunk *)p);
+            evacuate((StgClosure **)&tc->prev_chunk);
+            StgNOrecEntry * e = &(tc->entries[0]);
+            for(i = 0; i < tc->next_entry_idx; i++, e++){
+                evacuate((StgClosure **)&e->tvar);
+                evacuate((StgClosure **)&e->expected_val);
+            }
+            break;
+        }else{
+            StgWord i = 0;
+            StgPTRecChunk * tc = ((StgPTRecChunk *)p);
+            evacuate((StgClosure **)&tc->prev_chunk);
+            
+            while(i < tc->next_entry_idx){
+                evacuate((StgClosure **)&(tc->entries[i]));
+                i++;
+            }
+            break;
         }
-        break;
     }
 
     case IND:
