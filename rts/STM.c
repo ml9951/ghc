@@ -2146,6 +2146,11 @@ NOrecTRec * norec_stmStartTransaction(Capability *cap, NOrecTRec * ptrec){
     return ptrec;
 }
 
+void clear_ptrec(TRec * trec){
+    trec->read_set = NO_PTREC; 
+    trec->write_set = TO_WRITE_SET(NO_PTREC);
+}
+
 StgClosure * norec_abort_tx(NOrecTRec * trec, Capability * cap){
     norec_recyclePTRecChunks(cap, trec->read_set->prev_chunk);
     trec->read_set->prev_chunk = (NOrecTRec *)NO_PTREC;  //leave one on the read set for the next attempt
@@ -2155,6 +2160,10 @@ StgClosure * norec_abort_tx(NOrecTRec * trec, Capability * cap){
 }
 
 static StgClosure * norec_validate(Capability * cap, NOrecTRec * trec){
+
+    if(trec->write_set = TO_WRITE_SET(NO_PTREC))
+        return PASTM_SUCCESS;
+    
     while(TRUE){
         unsigned long time = norec_version_clock;
         if((time & 1) != 0){

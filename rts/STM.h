@@ -229,6 +229,8 @@ typedef struct {
 } TRec;
 
 
+void clear_ptrec(TRec * trec);
+
 StgClosure * tl2_stmRetry(TRec * trec);
 void tl2_stmCatchRetry(Capability * cap, TRec * trec, StgClosure * alt);
 
