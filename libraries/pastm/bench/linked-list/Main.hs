@@ -7,7 +7,6 @@ import LinkedList
 import Control.Concurrent.MVar
 import Control.Concurrent(forkOn)
 import Text.Printf
-import Control.Common.STM
 import System.Random.PCG.Fast.Pure
 import Dump
 
@@ -84,10 +83,10 @@ main = do
      join mvars
      end <- getTime
      printf "Time = %0.3f\n" (end - start :: Double)
-     printStats
+   --  printStats
      s <- getSizeIO l
      putStrLn ("List size is " ++ show s)
-     printSTMProfile
+ --    printSTMProfile
      return()
 
 foreign import ccall unsafe "hs_gettime" getTime :: IO Double

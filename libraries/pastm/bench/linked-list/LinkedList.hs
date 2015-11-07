@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, MagicHash #-} 
-module LinkedList(newList, add, find, delete, ListHandle, printStats, getSizeIO, addIO)
+module LinkedList(newList, add, find, delete, ListHandle, getSizeIO, addIO)
 where
 
 #ifdef STMHASKELL
