@@ -205,6 +205,11 @@ typedef struct _PAR_FLAGS {
                                   * (zero disables) */
 
   rtsBool        setAffinity;    /* force thread affinity with CPUs */
+  char*          setAffinityMasks;
+                                 /* Allow the user to specify a particular
+                                  * assignment of capabilites to CPUs */
+  nat            setAffinityMasksSize;
+  nat            setAffinityMasksCount;
 } PAR_FLAGS;
 #endif /* THREADED_RTS */
 

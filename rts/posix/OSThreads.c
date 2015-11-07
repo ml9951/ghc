@@ -258,20 +258,33 @@ getNumberOfProcessors (void)
 #if defined(HAVE_SCHED_H) && defined(HAVE_SCHED_SETAFFINITY)
 // Schedules the thread to run on CPU n of m.  m may be less than the
 // number of physical CPUs, in which case, the thread will be allowed
-// to run on CPU n, n+m, n+2m etc.
+// to run on CPU n, n+m, n+2m etc.  If affinity masks are given use
+// the given mask instead.
 void
 setThreadAffinity (nat n, nat m)
 {
-    nat nproc;
-    cpu_set_t cs;
-    nat i;
+    if (RtsFlags.ParFlags.setAffinityMasks != NULL)
+    {
+        nat s = RtsFlags.ParFlags.setAffinityMasksSize;
+        nat c = RtsFlags.ParFlags.setAffinityMasksCount;
+        char* p = RtsFlags.ParFlags.setAffinityMasks;
 
-    nproc = getNumberOfProcessors();
-    CPU_ZERO(&cs);
-    for (i = n; i < nproc; i+=m) {
-        CPU_SET(i, &cs);
+        cpu_set_t* set = (cpu_set_t*)(p + (n % c) * s);
+        sched_setaffinity(0, s, set);
     }
-    sched_setaffinity(0, sizeof(cpu_set_t), &cs);
+    else
+    {
+        nat nproc;
+        cpu_set_t cs;
+        nat i;
+        
+        nproc = getNumberOfProcessors();
+        CPU_ZERO(&cs);
+        for (i = n; i < nproc; i+=m) {
+            CPU_SET(i, &cs);
+        }
+        sched_setaffinity(0, sizeof(cpu_set_t), &cs);
+    }
 }
 
 #elif defined(darwin_HOST_OS) && defined(THREAD_AFFINITY_POLICY)
