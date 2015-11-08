@@ -221,7 +221,7 @@ typedef struct {
     StgPTRecChunk             *read_set;
     StgPTRecWithK             *lastK;
     StgPTRecWithoutK          *tail; //last element of linked list
-    StgWriteSet               *write_set;
+    StgNOrecChunk             *write_set;
     StgPTRecOrElse            *retry_stack;
     unsigned long              read_version;
     StgInt64                   capture_freq;

@@ -1340,7 +1340,7 @@ error = rtsTrue;
                         break;
                     case 'a':
                         RtsFlags.ParFlags.setAffinity = rtsTrue;
-#if defined(HAVE_SCHED_H)
+#if defined(__linux__) && defined(THREADED_RTS) && defined(HAVE_SCHED_H)
                         if (rts_argv[arg][3] != '\0') {
                             if (!readAffinityMasks(rts_argv[arg]+3)) {
                                 errorBelch("failed to parse affinity masks: %s", rts_argv[arg]+3);
