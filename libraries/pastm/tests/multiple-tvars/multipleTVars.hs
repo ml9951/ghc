@@ -37,7 +37,7 @@ import Data.Typeable (Typeable)
 
 numTVars = (100 :: Int)
 numSamples = 10
-numWrites = 0 --10
+numWrites = 10
 numIters = (1000 :: Int) --1000
 
 newtype TArray i e = TArray (Array i (TVar e)) deriving (Eq, Typeable)

@@ -1,7 +1,7 @@
 
 
 THREADED = -threaded -optc-DTHREADED_RTS
-GHC = ghc ../../examples/cbits/gettime.c
+GHC = /Users/ml9951/repositories/ghc-wip/bin/ghc ../../examples/cbits/gettime.c
 
 DEBUG = -rtsopts
 
@@ -9,7 +9,7 @@ DEBUG = -rtsopts
 COMMON_FILES = -I../../../../rts ../../Control/Common/CmmHooks.cmm ../../Control/Common/STM.hs
 TL2_FILES = ../../Control/TL2/CmmHooks.cmm ../../Control/TL2/CCode.c ../../Control/TL2/STM.hs 
 PTL2_FILES = ../../Control/PartialTL2/CmmHooks.cmm ../../Control/PartialTL2/CCode.c ../../Control/PartialTL2/STM.hs
-NOREC_FILES = ../../Control/NoRec/CmmHooks.cmm ../../Control/NoRec/CCode.c ../../Control/NoRec/STM.hs
+NOREC_FILES = ../../Control/NoRecLib/CmmHooks.cmm ../../Control/NoRecLib/CCode.c ../../Control/NoRecLib/STM.hs
 ORDERED_NOREC_FILES = ../../Control/OrderedNoRec/CmmHooks.cmm ../../Control/OrderedNoRec/CCode.c ../../Control/OrderedNoRec/STM.hs
 CHUNKED_TL2_FILES = ../../Control/ChunkedTL2/CmmHooks.cmm ../../Control/ChunkedTL2/CCode.c ../../Control/ChunkedTL2/STM.hs
 
@@ -28,7 +28,7 @@ orderedNoRec:	ordered-linked-list.hs Main.hs
 	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(STATS) $(ORDERED_NOREC_FILES) $(COMMON_FILES) -DORDERED_NOREC -optc-DORDERED_NOREC -fforce-recomp ordered-linked-list.hs Main.hs -o orderedNoRec$(OPT)
 
 norec:	ordered-linked-list.hs Main.hs
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(STATS) $(NOREC_FILES) $(COMMON_FILES) -DNOREC -optc-DNOREC -fforce-recomp ordered-linked-list.hs Main.hs -o norec$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(STATS) $(NOREC_FILES) $(COMMON_FILES) -DNOREC -optc-DNOREC -fforce-recomp LinkedList.hs Main.hs -o norec$(OPT)
 
 
 ptl2:	ordered-linked-list.hs Main.hs
