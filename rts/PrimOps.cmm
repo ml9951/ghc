@@ -1173,7 +1173,6 @@ INFO_TABLE_RET(stg_tl2_atomically_frame, ATOMICALLY_FRAME,
     ("ptr" checkpoint) = ccall tl2_stmCommitTransaction(MyCapability() "ptr", trec "ptr", StgTSO_id(CurrentTSO));
 
     if(checkpoint == PASTM_SUCCESS){ //Validation succeeded
-        StgTSO_ptrec(CurrentTSO) = NO_PTREC;
         return(result);
     }
     else{ //Validation failed
@@ -1182,6 +1181,17 @@ INFO_TABLE_RET(stg_tl2_atomically_frame, ATOMICALLY_FRAME,
                                      code,next_invariant,frame_result))
             (code);
     }
+}
+
+INFO_TABLE_RET(stg_tl2_catch_retry_frame, CATCH_RETRY_FRAME,
+               CATCH_RETRY_FRAME_FIELDS(W_,P_,
+                                        info_ptr, p1, p2,
+                                        running_alt_code,
+                                        first_code,
+                                        alt_code))
+    return (P_ ret)
+{
+    return(ret);
 }
 
 stg_tl2zuatomicallyzh (P_ stm)
@@ -1321,6 +1331,50 @@ stg_newTL2TVarzh (P_ init)
     return (tv);
 }
 
+stg_tl2zuretryzh /* no arg list: explicit stack layout */
+{
+    W_ frame_type;
+    W_ frame;
+    W_ trec;
+    W_ write_set;
+    W_ r;
+
+    // STM operations may allocate
+    MAYBE_GC_ (stg_tl2zuretryzh); // NB. not MAYBE_GC(), we cannot make a
+                                 // function call in an explicit-stack proc
+
+    trec = StgTSO_ptrec(CurrentTSO);
+    
+    // Find the enclosing ATOMICALLY_FRAME or CATCH_RETRY_FRAME
+retry_pop_stack:
+    SAVE_THREAD_STATE();
+    (frame_type) = ccall findRetryFrameHelper(MyCapability(), CurrentTSO "ptr");
+    LOAD_THREAD_STATE();
+    frame = Sp;
+    
+    if (frame_type == CATCH_RETRY_FRAME) {
+        if(!StgCatchRetryFrame_running_alt_code(frame) != 0){
+            StgCatchRetryFrame_running_alt_code(frame) = 1 :: CInt; // true;
+            write_set = StgCatchRetryFrame_first_code(frame);
+            StgPTRecHeader_write_set(trec) = write_set;
+            R1 = StgCatchRetryFrame_alt_code(frame);
+            jump stg_ap_v_fast [R1];
+        }else{
+            Sp = Sp + SIZEOF_StgCatchRetryFrame;
+            goto retry_pop_stack;
+        }
+    }
+    
+    //retry propogated to top level
+    (r) = ccall tl2_stmWait(MyCapability() "ptr", CurrentTSO "ptr", trec "ptr");
+    if(r != 0){
+        jump stg_block_tl2_stmwait [];
+    }else{
+        jump stg_eagerFullAbort []; //retry from beginning
+    }
+}
+
+//we don't needs this anymore
 stg_tl2zupopRetryzh(P_ x)
 {
     W_ trec;
@@ -1334,61 +1388,24 @@ stg_tl2zupopRetryzh(P_ x)
     return(x);
 }
 
-/*
- * Bail on a transaction, execution should continue with the alternative
- * branch of the nearest orElse.  We currently are not supporting the 
- * blocking semantics of retry if it propogates all the way up to the 
- * top of the transaction.  Instead, we simply immediatly retry.
- */
-stg_tl2zuretryzh
+stg_tl2zucatchRetryzh (P_ first_code, /* :: STM a */
+                       P_ alt_code    /* :: STM a */)
 {
-
     W_ trec;
-    W_ alt;
-    W_ retry_stack;
-    W_ r;
+    W_ write_set;
     
-    trec = StgTSO_ptrec(CurrentTSO);
-
-    retry_stack = StgPTRecHeader_retry_stack(trec);
-    
-    if(retry_stack == NO_PTREC){
-        (r) = ccall tl2_stmWait(MyCapability() "ptr", CurrentTSO "ptr", trec "ptr");
-        if(r != 0){
-
-            W_ frame;
-            P_ code;
-            SAVE_THREAD_STATE();
-            ccall p_setAtomicallyFrameHelper(MyCapability() "ptr", CurrentTSO "ptr");
-            LOAD_THREAD_STATE();
-            frame = Sp;
-            R3 = trec;
-            jump stg_block_tl2_stmwait [R3];
-        }else{
-            jump stg_eagerFullAbort []; //retry from beginning
-        }
-    }
-
-    //Have at least one catchRetry on our retry_stack
-    ("ptr" alt) = ccall tl2_stmRetry(trec "ptr");
-    
-    jump stg_ap_v_fast(alt);
-}
-
-stg_tl2zucatchRetryzh (P_ first_code,     /* :: STM a */
-			  P_ alt_code       /* :: STM a */)
-{
-
-    W_ trec;
-    W_ retry_stack;
-
-    MAYBE_GC_PP(stg_pcatchRetryzh, first_code, alt_code);
+    STK_CHK_GEN();
 
     trec = StgTSO_ptrec(CurrentTSO);
-    ccall tl2_stmCatchRetry(MyCapability() "ptr", trec "ptr", 
-                            alt_code "ptr");
+    write_set = StgPTRecHeader_write_set(trec);
     
-    jump stg_ap_v_fast (first_code);
+    // push the CATCH_RETRY stack frame, and apply first_code to realWorld#
+    jump stg_ap_v_fast
+        (CATCH_RETRY_FRAME_FIELDS(,, stg_tl2_catch_retry_frame_info, CCCS, 0,
+                                  0, /* not running_alt_code */
+                                  write_set,
+                                  alt_code))
+        (first_code);
 }
 
 // ------------------------------------------------------------

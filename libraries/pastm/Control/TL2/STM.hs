@@ -63,7 +63,7 @@ popRetry :: a -> STM a
 popRetry x = STM $ \s -> tl2_popRetry# x s
 
 orElse :: STM a -> STM a -> STM a
-orElse a b = STM $ \s -> tl2_catchRetry# (unSTM (a >>= popRetry)) (unSTM b) s 
+orElse (STM a) (STM b) = STM $ \s -> tl2_catchRetry# a b s 
 
 -- Like 'modifyIORef' but for 'TVar'.
 -- | Mutate the contents of a 'TVar'. /N.B./, this version is

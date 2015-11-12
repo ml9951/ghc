@@ -1802,6 +1802,8 @@ TRec * tl2_stmStartTransaction(Capability *cap, TRec * ptrec){
         SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
         ptrec->tail = TO_WITHOUTK(NO_PTREC);
         ptrec->lastK = TO_WITHK(NO_PTREC);
+        ptrec->lastK = TO_WITHK(NO_PTREC);
+        ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
     }
 
     StgPTRecChunk * chunk = alloc_ptrec_chunk(cap);
@@ -1810,23 +1812,37 @@ TRec * tl2_stmStartTransaction(Capability *cap, TRec * ptrec){
     chunk->size = PTREC_CHUNK_SIZE;
 
     ptrec->read_set = chunk;
-    ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
-    ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
-
     ptrec->read_version = version_clock;
-
-    ptrec->capture_freq = ((unsigned long)START_FREQ << 32) + START_FREQ ;
-    ptrec->numK = 0;
     return ptrec;
 }
 
 StgClosure * abort_tx(TRec * trec, Capability * cap){
     tl2_recyclePTRecChunks(cap, trec->read_set->prev_chunk);
-    trec->read_set->prev_chunk = TO_CHUNK(NO_PTREC);
+    trec->read_set->prev_chunk = TO_CHUNK(NO_PTREC); //leave one on the read_set
+    trec->read_set->next_entry_idx = 0;
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->read_version = version_clock;
     return PASTM_FAIL;
+}
+
+StgClosure * tl2_ts_extend(TRec * trec){
+    unsigned long new_stamp = version_clock;
+    unsigned long current_stamp = trec->read_version;
+    
+    StgPTRecChunk * rs_ptr = trec->read_set;
+    while(rs_ptr != TO_CHUNK(NO_PTREC)){
+        StgInt i = 0;
+        for (; i < rs_ptr->next_entry_idx; i++){
+            StgTL2TVar * tvar = rs_ptr->entries[i];
+            unsigned long stamp = tvar->currentStamp;
+            if(stamp > current_stamp || LOCKED(stamp))
+                return PASTM_FAIL;
+            }
+        rs_ptr = rs_ptr->prev_chunk;
+    }
+    trec->read_version = new_stamp;
+    return PASTM_SUCCESS;
 }
 
 StgClosure * tl2_stmReadTVar(Capability * cap, TRec * trec,
@@ -1841,20 +1857,22 @@ StgClosure * tl2_stmReadTVar(Capability * cap, TRec * trec,
     }
 
     StgClosure * val;
-    unsigned long s1, s2;
-    s1 = tvar->currentStamp;
-    CFENCE;
-    val = tvar->current_value;
-    CFENCE;
-    s2 = tvar->currentStamp;
     
-    if(LOCKED(s1) || s1 != s2 || s1 > trec->read_version){
-#ifdef STATS
-        cap->pastmStats.eagerFullAborts++;
-#endif
-        return abort_tx(trec, cap);
+ RETRY:
+    {
+        unsigned long s1, s2;
+        s1 = tvar->currentStamp;
+        CFENCE;
+        val = tvar->current_value;
+        CFENCE;
+        s2 = tvar->currentStamp;
+        
+        if(LOCKED(s1) || s1 != s2 || s1 > trec->read_version){
+            if(tl2_ts_extend(trec) == PASTM_FAIL)
+                return abort_tx(trec, cap);
+            goto RETRY;
+        }
     }
-    
     StgPTRecChunk * current_chunk = trec->read_set;
     
     if(current_chunk->next_entry_idx >= current_chunk->size){
@@ -1926,6 +1944,8 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadI
 #ifdef TL2_READ_ONLY
     if(trec->write_set == NO_PTREC){
         tl2_recyclePTRecChunks(cap, trec->read_set);
+        trec->read_set = NO_PTREC;
+        trec->write_set = NO_PTREC;
         return TO_WITHK(PASTM_SUCCESS);
     }
 #endif
@@ -1937,29 +1957,33 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadI
     */
     unsigned long lockVal = ((unsigned long)id << 1) | 1;
 
-    //Acquire locks
-    StgWriteSet * ws_ptr = trec->write_set;
-    StgWriteSet ** trailer = &(trec->write_set);
-    while(ws_ptr != TO_WRITE_SET(NO_PTREC)){
-        StgTL2TVar * tvar = TO_TL2(ws_ptr->tvar);
-        unsigned long stamp = tvar->currentStamp;
-        
-        if(stamp == lockVal){
-            *trailer = ws_ptr->next;
+ RETRY:
+    {
+        //Acquire locks
+        StgWriteSet * ws_ptr = trec->write_set;
+        StgWriteSet ** trailer = &(trec->write_set);
+        while(ws_ptr != TO_WRITE_SET(NO_PTREC)){
+            StgTL2TVar * tvar = TO_TL2(ws_ptr->tvar);
+            unsigned long stamp = tvar->currentStamp;
+            
+            if(stamp == lockVal){
+                *trailer = ws_ptr->next;
+                ws_ptr = ws_ptr->next;
+                continue;
+            }
+            
+            if(LOCKED(stamp) || stamp > myStamp || cas((StgVolatilePtr)&(tvar->currentStamp), stamp, lockVal) != stamp){
+                releaseLocks(trec->write_set, ws_ptr);
+                if(tl2_ts_extend(trec) == PASTM_FAIL)
+                    return TO_WITHK(abort_tx(trec, cap));
+                goto RETRY;
+            }
+            
+            tvar->oldStamp = stamp;
+            trailer = &(ws_ptr->next);
             ws_ptr = ws_ptr->next;
-            continue;
         }
-        
-        if(LOCKED(stamp) || stamp > myStamp || cas((StgVolatilePtr)&(tvar->currentStamp), stamp, lockVal) != stamp){
-            releaseLocks(trec->write_set, ws_ptr);
-            return TO_WITHK(abort_tx(trec, cap));
-        }
-        
-        tvar->oldStamp = stamp;
-        trailer = &(ws_ptr->next);
-        ws_ptr = ws_ptr->next;
     }
-    
     unsigned long write_version = atomic_inc(&version_clock, 2);
     
     if(write_version != trec->read_version + 2){
@@ -1986,7 +2010,7 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadI
     }
     
     //push write set into global store
-    ws_ptr = trec->write_set;
+    StgWriteSet * ws_ptr = trec->write_set;
     while(ws_ptr != TO_WRITE_SET(NO_PTREC)){
         unpark_waiters_on(cap, ws_ptr->tvar);
         StgTL2TVar * tvar = TO_TL2(ws_ptr->tvar);
@@ -2000,6 +2024,8 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadI
     cap->pastmStats.numCommits++;
 #endif
     tl2_recyclePTRecChunks(cap, trec->read_set);
+    trec->read_set = NO_PTREC;
+    trec->write_set = NO_PTREC;
     return TO_WITHK(PASTM_SUCCESS);
 }
 
@@ -2134,7 +2160,6 @@ NOrecTRec * norec_stmStartTransaction(Capability *cap, NOrecTRec * ptrec){
     chunk->size = NOREC_CHUNK_SIZE;
 
     ptrec->read_set = chunk;
-    ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
     ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
 
@@ -2154,16 +2179,13 @@ void clear_ptrec(TRec * trec){
 StgClosure * norec_abort_tx(NOrecTRec * trec, Capability * cap){
     norec_recyclePTRecChunks(cap, trec->read_set->prev_chunk);
     trec->read_set->prev_chunk = (NOrecTRec *)NO_PTREC;  //leave one on the read set for the next attempt
+    trec->read_set->next_entry_idx = 0;
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->read_version = norec_version_clock;
     return PASTM_FAIL;
 }
 
 static StgClosure * norec_validate(Capability * cap, NOrecTRec * trec){
-
-    if(trec->write_set = TO_WRITE_SET(NO_PTREC))
-        return PASTM_SUCCESS;
-    
     while(TRUE){
         unsigned long time = norec_version_clock;
         if((time & 1) != 0){
@@ -2244,6 +2266,11 @@ void norec_stmWriteTVar(Capability *cap,
 }
 
 StgClosure * norec_stmCommitTransaction(Capability *cap, NOrecTRec *trec) {
+    if(trec->write_set == NO_PTREC){
+        norec_recyclePTRecChunks(cap, trec->read_set);
+        return PASTM_SUCCESS;
+    }
+    
     unsigned long snapshot = trec->read_version;
     while (cas(&norec_version_clock, snapshot, snapshot+1) != snapshot){ 
         StgClosure * res = norec_validate(cap, trec);
