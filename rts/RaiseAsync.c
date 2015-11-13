@@ -1102,13 +1102,19 @@ raiseAsync(Capability *cap, StgTSO *tso, StgClosure *exception,
             // and will not be visible after the abort.
         {
             StgTRecHeader *trec = tso -> trec;
-            StgTRecHeader *outer = trec -> enclosing_trec;
-            debugTraceCap(DEBUG_stm, cap,
-                          "found atomically block delivering async exception");
-            stmAbortTransaction(cap, trec);
-            stmFreeAbortedTRec(cap, trec);
-            tso -> trec = outer;
-            break;
+            if(trec == NO_TREC)
+            {
+                clear_ptrec((TRec*)tso->ptrec);
+                break;
+            }else{
+                StgTRecHeader *outer = trec -> enclosing_trec;
+                debugTraceCap(DEBUG_stm, cap,
+                              "found atomically block delivering async exception");
+                stmAbortTransaction(cap, trec);
+                stmFreeAbortedTRec(cap, trec);
+                tso -> trec = outer;
+                break;
+            }
         };
 
         default:

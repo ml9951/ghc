@@ -989,7 +989,6 @@ StgTRecHeader *stmStartTransaction(Capability *cap,
 }
 
 /*......................................................................*/
-
 void stmAbortTransaction(Capability *cap,
                          StgTRecHeader *trec) {
 
@@ -2049,34 +2048,41 @@ static StgBool releaseRSLocks(StgPTRecChunk * rs_ptr, unsigned long lockVal){
             StgTL2TVar * tvar = rs_ptr->entries[i];
             if(tvar->currentStamp == lockVal){
                 tvar->currentStamp = tvar->oldStamp;
-            }else{
-                return FALSE;
             }
         }
         rs_ptr = rs_ptr->prev_chunk;
     }
-    
     return FALSE;
 }
 
-StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id){
+StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec){
+
+    StgThreadID id = tso->id;
+    
     unsigned long lockVal = ((unsigned long)id << 1) | 1;
     unsigned long myStamp = trec->read_version;
     StgPTRecChunk * rs_ptr = trec->read_set;
-
+    
     //acquire the lock for each entry
     while(rs_ptr != TO_CHUNK(NO_PTREC)){
         StgInt i;
         for (i = 0; i < rs_ptr->next_entry_idx; i++){
             StgTL2TVar * tvar = rs_ptr->entries[i];
+
+            if(tvar->currentStamp == lockVal)
+                continue;//already locked this one
             
             unsigned long oldStamp = tvar->currentStamp;
-            if(oldStamp != lockVal && (oldStamp > myStamp || LOCKED(oldStamp))){
-                return releaseRSLocks(trec->read_set, lockVal);
+            if(oldStamp > myStamp || LOCKED(oldStamp)){
+                releaseRSLocks(trec->read_set, lockVal);
+                abort_tx(trec, cap);
+                return FALSE;
             }
 
             if(cas((StgVolatilePtr)&(tvar->currentStamp), oldStamp, lockVal) != oldStamp){
-                return releaseRSLocks(trec->read_set, lockVal);
+                releaseRSLocks(trec->read_set, lockVal);
+                abort_tx(trec, cap);
+                return FALSE;
             }
             tvar->oldStamp = oldStamp;
         }
@@ -2090,10 +2096,11 @@ StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id)
         for (i = 0; i < rs_ptr->next_entry_idx; i++){
             StgTL2TVar * tvar = rs_ptr->entries[i];
 
-            StgTVarWatchQueue * fq = tvar->first_watch_queue_entry;
-            if(fq->closure == tso)
-                continue; //we already put ourselves on this one
+            if(tvar->currentStamp != lockVal)
+                continue; //we already enqueued on this one and unlocked it
 
+            StgTVarWatchQueue * fq = tvar->first_watch_queue_entry;
+            
             StgTVarWatchQueue *q = alloc_stg_tvar_watch_queue(cap, (StgClosure*)tso);
             q->next_queue_entry = fq;
             q->prev_queue_entry = END_STM_WATCH_QUEUE;
@@ -2102,15 +2109,71 @@ StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id)
 
             tvar->first_watch_queue_entry = q;
             dirty_TL2_TVAR(cap, tvar);
+            tvar->currentStamp = tvar->oldStamp;
         }
         rs_ptr = rs_ptr->prev_chunk;
     }
 
-    releaseRSLocks(trec->read_set, lockVal);
-
     tso->why_blocked = BlockedOnSTM;
     tso->block_info.closure = (StgClosure *)END_TSO_QUEUE;
+    return TRUE;
+}
+
+/*
+ * In the future, it would probably be best to have each entry in the read set 
+ * have a slot to point to the watch queue entry that it has placed itself on
+ * The stock STM does this by writing the queue entry in the new_value slot 
+ * This way we can figure out in constant time which entry to remove.  Also, if we 
+ * have duplicate entries in the read set, we could tell if we have already removed 
+ * the entry from the queue if we set the next and prev pointers to NULL.
+ *
+ * It would be best to splice out the entries in a lock free manner 
+ */
+void tl2_remove_watch_queue_entries_for_trec(Capability *cap, StgTSO * tso, TRec *trec) {
+    StgThreadID id = tso->id;
+    unsigned long lockVal = ((unsigned long)id << 1) | 1;
+    StgPTRecChunk * rs_ptr = trec->read_set;
     
+    //acquire the lock for each entry
+    while(rs_ptr != TO_CHUNK(NO_PTREC)){
+        StgInt i;
+        for (i = 0; i < rs_ptr->next_entry_idx; i++){
+            StgTL2TVar * tvar = rs_ptr->entries[i];
+            
+            unsigned long oldStamp = tvar->currentStamp;
+
+            if(oldStamp == lockVal)
+                continue;
+            
+            while(LOCKED(oldStamp) || (cas((StgVolatilePtr)&(tvar->currentStamp), oldStamp, lockVal) != oldStamp)){
+                oldStamp = tvar->currentStamp;
+            }
+
+            StgTVarWatchQueue *q, *nq, *pq;
+            q = tvar->first_watch_queue_entry;
+            while(q != END_STM_WATCH_QUEUE){
+                if(q->closure == (StgClosure*)tso){
+                    nq = q->next_queue_entry;
+                    pq = q->prev_queue_entry;
+                    if (nq != END_STM_WATCH_QUEUE) {
+                        nq->prev_queue_entry = pq;
+                    }
+                    if (pq != END_STM_WATCH_QUEUE) {
+                        pq->next_queue_entry = nq;
+                    } else {
+                        tvar->first_watch_queue_entry = nq;
+                        dirty_TL2_TVAR(cap,tvar); // we modified first_watch_queue_entry
+                    }
+                    break;
+                }
+                q = q->next_queue_entry;
+            }
+            tvar->currentStamp = oldStamp; //unlock
+        }
+        rs_ptr = rs_ptr->prev_chunk;
+    }
+    
+    abort_tx(trec, cap); //clear the trec and restart the transaction
     return TRUE;
 }
 

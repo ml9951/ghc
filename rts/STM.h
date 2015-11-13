@@ -246,7 +246,9 @@ void tl2_stmWriteTVar(Capability *cap,
 StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadID id);
 void c_tl2_printSTMStats(void);
 
-StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec, StgThreadID id);
+StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec);
+void tl2_remove_watch_queue_entries_for_trec(Capability *cap, StgTSO * tso,
+                                             TRec *trec);
 
 /*----------------------------------------------------------------------*/
 //

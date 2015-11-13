@@ -1194,6 +1194,27 @@ INFO_TABLE_RET(stg_tl2_catch_retry_frame, CATCH_RETRY_FRAME,
     return(ret);
 }
 
+INFO_TABLE_RET(stg_tl2_atomically_waiting_frame, ATOMICALLY_FRAME,
+               // layout of the frame, and bind the field names
+               ATOMICALLY_FRAME_FIELDS(W_,P_,
+                                       info_ptr, p1, p2,
+                                       code,
+                                       next_invariant,
+                                       frame_result))
+    return (/* no return values */)
+{
+    W_ trec;
+
+    trec = StgTSO_ptrec(CurrentTSO);
+    ccall tl2_remove_watch_queue_entries_for_trec(MyCapability() "ptr", CurrentTSO, trec);
+    
+    jump stg_ap_v_fast
+        (ATOMICALLY_FRAME_FIELDS(,,stg_tl2_atomically_frame_info, p1, p2,
+                                 code,next_invariant,frame_result))
+        (code);
+    
+}
+
 stg_tl2zuatomicallyzh (P_ stm)
 {
     P_ old_trec;
@@ -1368,9 +1389,12 @@ retry_pop_stack:
     //retry propogated to top level
     (r) = ccall tl2_stmWait(MyCapability() "ptr", CurrentTSO "ptr", trec "ptr");
     if(r != 0){
+        StgHeader_info(frame) = stg_tl2_atomically_waiting_frame_info;
+        Sp = frame;
         jump stg_block_tl2_stmwait [];
     }else{
-        jump stg_eagerFullAbort []; //retry from beginning
+        R1 = StgAtomicallyFrame_code(frame);
+        jump stg_ap_v_fast [R1];
     }
 }
 
