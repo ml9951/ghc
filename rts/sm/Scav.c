@@ -914,10 +914,9 @@ scavenge_mark_stack(void)
             StgTVar *tvar = ((StgTVar *)p);
             gct->eager_promotion = rtsFalse;
             evacuate((StgClosure **)&tvar->current_value);
-            
+            evacuate((StgClosure **)&tvar->first_watch_queue_entry);
             if(((StgClosure*)p)->header.info == &stg_TVAR_DIRTY_info || 
                ((StgClosure*)p)->header.info == &stg_TVAR_CLEAN_info){
-                evacuate((StgClosure **)&tvar->first_watch_queue_entry);
                 gct->eager_promotion = saved_eager_promotion;
                 
                 if (gct->failed_to_evac) {

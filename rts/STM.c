@@ -2168,6 +2168,7 @@ void tl2_remove_watch_queue_entries_for_trec(Capability *cap, StgTSO * tso, TRec
                 }
                 q = q->next_queue_entry;
             }
+            free_stg_tvar_watch_queue(cap, q);
             tvar->currentStamp = oldStamp; //unlock
         }
         rs_ptr = rs_ptr->prev_chunk;
