@@ -449,11 +449,10 @@ scavenge_block (bdescr *bd)
         StgTVar *tvar = ((StgTVar *)p);
         gct->eager_promotion = rtsFalse;
         evacuate((StgClosure **)&tvar->current_value);
+        evacuate((StgClosure **)&tvar->first_watch_queue_entry);
+        gct->eager_promotion = saved_eager_promotion;
         if(((StgClosure*)p)->header.info == &stg_TVAR_DIRTY_info || 
            ((StgClosure*)p)->header.info == &stg_TVAR_CLEAN_info){
-            evacuate((StgClosure **)&tvar->first_watch_queue_entry);
-            gct->eager_promotion = saved_eager_promotion;
-
             if (gct->failed_to_evac) {
                 tvar->header.info = &stg_TVAR_DIRTY_info;
             } else {
@@ -461,9 +460,6 @@ scavenge_block (bdescr *bd)
             }
             p += sizeofW(StgTVar);
         }else{
-            evacuate((StgClosure **)&tvar->first_watch_queue_entry);
-            gct->eager_promotion = saved_eager_promotion;
-
             if (gct->failed_to_evac) {
                 tvar->header.info = &stg_TL2_TVAR_DIRTY_info;
             } else {
@@ -1322,10 +1318,10 @@ scavenge_one(StgPtr p)
         StgTVar *tvar = ((StgTVar *)p);
         gct->eager_promotion = rtsFalse;
         evacuate((StgClosure **)&tvar->current_value);
+        evacuate((StgClosure **)&tvar->first_watch_queue_entry);
         
         if(((StgClosure*)p)->header.info == &stg_TVAR_DIRTY_info || 
            ((StgClosure*)p)->header.info == &stg_TVAR_CLEAN_info){
-            evacuate((StgClosure **)&tvar->first_watch_queue_entry);
             gct->eager_promotion = saved_eager_promotion;
 
             if (gct->failed_to_evac) {
