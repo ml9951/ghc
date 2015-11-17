@@ -1627,6 +1627,11 @@ stg_noreczucatchRetryzh (P_ first_code,     /* :: STM a */
     jump stg_ap_v_fast (first_code);
 }
 
+stg_printSTMStatszh()
+{
+    ccall stm_printStats();
+    return();
+}
 
 // Primop definition -----------------------------------------------------------
 

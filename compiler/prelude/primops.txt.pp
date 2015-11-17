@@ -2212,6 +2212,12 @@ primop NOrecPopRetryOp "norec_popRetry#" GenPrimOp
        out_of_line = True
        has_side_effects = True
 
+primop STMPrintStats "printSTMStats#" GenPrimOp
+       State# RealWorld -> State# RealWorld
+       with
+       out_of_line = True
+       has_side_effects = True
+
 --------
 
 primop  AtomicallyOp "atomically#" GenPrimOp

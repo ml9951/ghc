@@ -1552,6 +1552,8 @@ StgBool stmWait(Capability *cap, StgTSO *tso, StgTRecHeader *trec) {
     park_tso(tso);
     trec -> state = TREC_WAITING;
 
+    cap->pastmStats.retrySleepCount++;
+    
     // We haven't released ownership of the transaction yet.  The TSO
     // has been put on the wait queue for the TVars it is waiting for,
     // but we haven't yet tidied up the TSO's stack and made it safe
@@ -2116,6 +2118,7 @@ StgBool tl2_stmWait(Capability * cap, StgTSO * tso, TRec * trec){
 
     tso->why_blocked = BlockedOnSTM;
     tso->block_info.closure = (StgClosure *)END_TSO_QUEUE;
+    cap->pastmStats.retrySleepCount++;
     return TRUE;
 }
 
@@ -2368,3 +2371,11 @@ StgClosure * norec_stmCommitTransaction(Capability *cap, NOrecTRec *trec) {
     norec_recyclePTRecChunks(cap, trec->read_set);
     return PASTM_SUCCESS;
 }
+
+void stm_printStats(){
+    StgPASTMStats stats;
+    getStats(&stats);
+    printf("retry sleep count = %d\n", stats.retrySleepCount);
+}
+
+

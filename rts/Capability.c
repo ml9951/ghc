@@ -298,6 +298,7 @@ initCapability( Capability *cap, nat i )
     cap->pastmStats.tsExtensions = 0;
     cap->pastmStats.fastForwardAttempts = 0;
     cap->pastmStats.fastForwards = 0;
+    cap->pastmStats.retrySleepCount = 0;
 
     cap->profileSTM.readTime = 0;
     cap->profileSTM.eagerValidationTime = 0;
@@ -335,7 +336,8 @@ void getStats(StgPASTMStats * stats){
     stats->tsExtensions = 0; 
     stats->numCommits = 0; 
     stats->fastForwardAttempts = 0; 
-    stats->fastForwards = 0; 
+    stats->fastForwards = 0;
+    stats->retrySleepCount = 0;
     
     nat i;
     for(i = 0; i < n_capabilities; i++){
@@ -347,6 +349,7 @@ void getStats(StgPASTMStats * stats){
         stats->numCommits += capabilities[i]->pastmStats.numCommits;
         stats->fastForwardAttempts += capabilities[i]->pastmStats.fastForwardAttempts;
         stats->fastForwards += capabilities[i]->pastmStats.fastForwards;
+        stats->retrySleepCount += capabilities[i]->pastmStats.retrySleepCount;
     }
 }
 
