@@ -1025,7 +1025,7 @@ void stmAbortTransaction(Capability *cap,
 
   trec -> state = TREC_ABORTED;
   unlock_stm(trec);
-
+  
   TRACE("%p : stmAbortTransaction done", trec);
 }
 
@@ -1453,6 +1453,7 @@ StgBool stmCommitTransaction(Capability *cap, StgTRecHeader *trec) {
         ACQ_ASSERT(!tvar_is_locked(s, trec));
       });
     } else {
+        cap->pastmStats.commitTimeFullAborts++;
         revert_ownership(cap, trec, FALSE);
     }
   }
@@ -1511,6 +1512,7 @@ StgBool stmCommitNestedTransaction(Capability *cap, StgTRecHeader *trec) {
         ACQ_ASSERT(s -> current_value != (StgClosure *)trec);
       });
     } else {
+        cap->pastmStats.commitTimeFullAborts++;
         revert_ownership(cap, trec, FALSE);
     }
   }
@@ -1602,6 +1604,7 @@ StgBool stmReWait(Capability *cap, StgTSO *tso) {
   } else {
     // The transcation has become invalid.  We can now remove it from the wait
     // queues.
+    cap->pastmStats.commitTimeFullAborts++;
     if (trec -> state != TREC_CONDEMNED) {
       remove_watch_queue_entries_for_trec (cap, trec);
     }
@@ -1824,6 +1827,7 @@ StgClosure * abort_tx(TRec * trec, Capability * cap){
     trec->read_set->next_entry_idx = 0;
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->read_version = version_clock;
+    cap->pastmStats.commitTimeFullAborts++;
     return PASTM_FAIL;
 }
 
@@ -2376,6 +2380,7 @@ void stm_printStats(){
     StgPASTMStats stats;
     getStats(&stats);
     printf("retry sleep count = %d\n", stats.retrySleepCount);
+    printf("aborts = %d\n", stats.commitTimeFullAborts);
 }
 
 

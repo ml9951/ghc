@@ -456,6 +456,7 @@ typedef struct StgPASTMStats_{
     StgInt64  numCommits;
     StgInt64  fastForwardAttempts;
     StgInt64  fastForwards;
+    StgInt64  retrySleepCount;
 } StgPASTMStats;
 
 typedef struct STMProfiling_{
