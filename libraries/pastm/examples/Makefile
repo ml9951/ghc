@@ -3,11 +3,13 @@
 THREADED = -threaded -optc-DTHREADED_RTS
 GHC = ghc
 
-DEBUG = -rtsopts
+DEBUG = -rtsopts -optc-g -O0 -optc-O0
 
 all:	ll counter
 
 ll:	llSTMHaskell llFull llPartial llOrdered llOrderedRemSet llCPSFull
+
+COMMON_FILES = ../Control/Common/STM.hs ../Control/Common/CmmHooks.cmm
 
 ORDERED_FILES = ../Control/OrderedRemSet/CmmHooks.cmm ../Control/OrderedRemSet/CCode.c ../Control/OrderedRemSet/STM.hs -I../../../rts
 FULL_FILES = ../Control/Full/CmmHooks.cmm ../Control/Full/CCode.c ../Control/Full/STM.hs -I../../../rts
@@ -17,8 +19,12 @@ TL2_FILES = ../Control/TL2/CmmHooks.cmm ../Control/TL2/CCode.c ../Control/TL2/ST
 PartialTL2_FILES = ../Control/PartialTL2/CmmHooks.cmm ../Control/PartialTL2/CCode.c ../Control/PartialTL2/STM.hs -I../../../rts
 CHUNKED_FILES = ../Control/Chunked/CmmHooks.cmm ../Control/Chunked/CCode.c ../Control/Chunked/STM.hs -I../../../rts
 FF_FILES = ../Control/FastForward/CmmHooks.cmm ../Control/FastForward/CCode.c ../Control/FastForward/STM.hs -I../../../rts 
-
+CHUNKED_TL2_FILES = ../Control/ChunkedPartial/CmmHooks.cmm ../Control/ChunkedPartial/CCode.c ../Control/ChunkedPartial/STM.hs -I../../../rts 
 OPT =
+
+.PHONY:	llChunkedTL2
+llChunkedTL2:	ll.hs cbits/gettime.c  
+	$(GHC) -ddump-asm -ddump-to-file -ddump-stg -ddump-cmm $(THREADED) $(DEBUG) $(OPT) $(COMMON_FILES) -DCHUNKEDTL2 $(CHUNKED_TL2_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llChunkedTL2$(OPT)
 
 .PHONY:	llOrdered
 llOrdered:	ll.hs cbits/gettime.c 

@@ -803,12 +803,13 @@ scavenge_block (bdescr *bd)
         StgWord i = 0;
         StgPTRecChunk * tc = ((StgPTRecChunk *)p);
         evacuate((StgClosure **)&tc->prev_chunk);
-        
+        evacuate((StgClosure **)&tc->write_set);
+        evacuate((StgClosure **)&tc->checkpoint);
         while(i < tc->next_entry_idx){
             evacuate((StgClosure **)&(tc->entries[i]));
             i++;
         }
-        p += sizeofW(StgTL2TVar*) * tc->next_entry_idx + sizeofW(StgWord) + sizeofW(StgClosure *) * 2;
+        p += sizeofW(StgPTRecChunk);
         break;
     }
 
@@ -1230,12 +1231,17 @@ scavenge_mark_stack(void)
         {
             StgWord i = 0;
             StgPTRecChunk * tc = ((StgPTRecChunk *)p);
+            gct->eager_promotion = rtsFalse;
             evacuate((StgClosure **)&tc->prev_chunk);
-            
+            evacuate((StgClosure **)&tc->write_set);
+            evacuate((StgClosure **)&tc->checkpoint);
             while(i < tc->next_entry_idx){
                 evacuate((StgClosure **)&(tc->entries[i]));
                 i++;
             }
+            gct->eager_promotion = saved_eager_promotion;
+            gct->failed_to_evac = rtsTrue; //mutable
+            
             break;
         }
         
@@ -1571,12 +1577,16 @@ scavenge_one(StgPtr p)
     {
         StgWord i = 0;
         StgPTRecChunk * tc = ((StgPTRecChunk *)p);
+        gct->eager_promotion = rtsFalse;
         evacuate((StgClosure **)&tc->prev_chunk);
-        
+        evacuate((StgClosure **)&tc->write_set);
+        evacuate((StgClosure **)&tc->checkpoint);
         while(i < tc->next_entry_idx){
             evacuate((StgClosure **)&(tc->entries[i]));
             i++;
         }
+        gct->eager_promotion = saved_eager_promotion;
+        gct->failed_to_evac = rtsTrue; //mutable
         break;
     }
 

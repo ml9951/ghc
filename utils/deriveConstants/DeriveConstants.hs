@@ -488,6 +488,10 @@ wanteds = concat
           ,closureField C "StgPTRecWithK" "continuation"
           ,closureField C "StgPTRecWithK" "read_value"
           ,closureField C "StgPTRecHeader" "retry_stack"
+          ,closureField C "StgPTRecHeader" "lastK"
+          ,closureField C "StgPTRecHeader" "capture_freq"
+
+          ,closureField C "StgPTRecChunk" "checkpoint"
 
           ,closureField C "StgPTRecOrElse" "next"
 

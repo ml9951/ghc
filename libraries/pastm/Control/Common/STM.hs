@@ -58,7 +58,7 @@ printSTMProfile = return()
 foreign import prim safe "stg_dumpSTMProfile" dumpSTMProfile
         :: State# RealWorld -> (# State# RealWorld, ()#)
 
-#if defined(FTL2) || defined(PTL2) || defined(CHUNKED_TL2)
+#if defined(FTL2) || defined(PTL2) || defined(CHUNKED_TL2) || defined (CHUNKEDTL2)
 foreign import prim safe "stg_tl2_newTVarIOzh" newTVar#
         :: Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #) 
 

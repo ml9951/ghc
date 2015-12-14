@@ -18,6 +18,8 @@ import Control.Chunked.STM
 import Control.Partial.STM
 #elif defined(FF)
 import Control.Ordered.STM
+#elif defined(CHUNKEDTL2)
+import Control.ChunkedTL2.STM
 #else
 #error No STM Specified
 #endif
@@ -30,6 +32,7 @@ import Dump
 import Data.Map(Map, empty)
 import Text.Printf
 
+import Control.Common.STM(newTVarIO, readTVarIO, writeTVarIO)
 
 data STMList a = Head (TVar (STMList a))
                | Null
@@ -91,9 +94,10 @@ delete trailer x = (do ptr <- next trailer; loop ptr trailer) where
                                               _ -> error "delete: loop: Impossible"
                       else loop tl ptr
 
-threadLoop :: Ord a => TVar (STMList a) -> [a] -> IO()
+threadLoop :: (Ord a, Show a) => TVar (STMList a) -> [a] -> IO()
 threadLoop l [] = return()
 threadLoop l (hd:tl) = do
+           putStrLn("iteration " ++ show hd)
            atomically $ insert l hd
            res <- atomically $ lookup l hd
            if res == True
@@ -103,6 +107,7 @@ threadLoop l (hd:tl) = do
 remove :: Show a => Ord a => TVar (STMList a) -> [a] -> IO()
 remove l [] = return()
 remove l (hd:tl) = do
+       putStrLn "remove iter"
        removed <- atomically $ delete l hd 
        if removed == True
        then remove l tl >>= \_ -> return()

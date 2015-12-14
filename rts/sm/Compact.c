@@ -743,11 +743,13 @@ thread_obj (StgInfoTable *info, StgPtr p)
     {
         StgWord i = 0;
         StgPTRecChunk * tc = ((StgPTRecChunk *)p);
-        thread((StgClosure **)&tc->prev_chunk);
+        thread_((StgClosure **)&tc->prev_chunk);
+        thread_((StgClosure **)&tc->write_set);
+        thread_((StgClosure **)&tc->checkpoint);
         for(i = 0; i < tc->next_entry_idx; i++){
             thread_(&(tc->entries[i]));
         }
-        break;
+        return p + sizeofW(StgPTRecChunk);
     }
 
     default:
