@@ -1,0 +1,87 @@
+{-# LANGUAGE CPP, MagicHash, UnboxedTuples, Rank2Types, ForeignFunctionInterface, GHCForeignImportPrim, UnliftedFFITypes#-}
+
+#if __GLASGOW_HASKELL__ >= 701
+{-# LANGUAGE Trustworthy #-}
+#endif
+
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Control.Full.STM
+-- Copyright   :  (c) The University of Glasgow 2004
+-- License     :  BSD-style (see the file libraries/base/LICENSE)
+--
+-- Maintainer  :  libraries@haskell.org
+-- Stability   :  experimental
+-- Portability :  non-portable (requires PASTM)
+--
+-- Software Transactional Memory: a modular composable concurrency
+-- abstraction.  
+--
+--  * This contains the core STM operations
+--
+-----------------------------------------------------------------------------
+
+module Control.ChunkedTL2.STM
+(
+    readTVar,
+    writeTVar,
+    atomically,
+    STM(..),
+    printStats,
+    TVar(..),
+    newTVar       
+)
+where
+
+import GHC.Base(State#, RealWorld, IO(..), ap, TVar#)
+import GHC.Prim(Any, unsafeCoerce#)
+import GHC.Conc.Sync(TVar(..))
+
+newtype STM a = STM {unSTM :: forall r . --r is the type of the final result
+                                 (a -> State# RealWorld -> (# State# RealWorld, r #)) -> --Continuation
+                                 State# RealWorld ->                                     --Incoming State
+                                 (# State# RealWorld, r #)}                              --New state and result
+
+instance Monad STM where
+    return a = STM $ \c -> \s -> c a s
+    m >>= k = STM $ \c -> \s -> unSTM m (\a -> \s' -> unSTM (k a) c s') s
+
+instance Applicative STM where
+    (<*>) = ap
+    pure  = return
+
+instance  Functor STM where
+    fmap f m = m >>= (return . f)
+
+readTVar :: TVar a -> STM a
+readTVar (TVar tv) = STM $ \c -> \s-> case unsafeCoerce# readTVar# tv c s of
+                                        (# s', t #) -> c t s'
+
+writeTVar :: TVar a -> a -> STM ()
+writeTVar (TVar tv) a = STM $ \c -> \s -> 
+          case unsafeCoerce# writeTVar# tv a s of
+               (# s', tv #) -> c () s'
+
+newTVar :: a -> STM (TVar a)
+newTVar x = STM $ \c -> \s -> case unsafeCoerce# newTVar# x s of
+                                (# s', tv #) -> c (TVar tv) s'
+
+atomically :: STM a -> IO a
+atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c (unsafeCoerce# commitTx#)) s)
+
+foreign import prim safe "stg_ptl2_atomicallyzh" atomically# 
+        :: Any() -> State# RealWorld -> (# State# RealWorld, Any() #)
+
+foreign import prim safe "stg_ptl2_readTVarzh" readTVar#
+        :: Any() -> Any() -> State# RealWorld -> (# State# RealWorld, a #)
+
+foreign import prim safe "stg_ptl2_writeTVarzh" writeTVar#
+        :: Any() -> Any() -> State# RealWorld -> (# State# RealWorld, a #)
+
+foreign import prim safe "stg_ptl2_commit" commitTx#
+        :: Any() -> State# RealWorld -> (# State# RealWorld, a #)
+
+foreign import ccall "c_ptl2_printSTMStats" printStats :: IO ()
+
+foreign import prim safe "stg_ptl2_newTVar" newTVar#
+        :: Any() -> State# RealWorld -> (# State# RealWorld, TVar# RealWorld a #) 

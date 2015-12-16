@@ -1,0 +1,125 @@
+#include "Cmm.h"
+
+/* -----------------------------------------------------------------------------
+ * Partial Abort TVar primitives
+ * -------------------------------------------------------------------------- */
+
+stg_ptl2_atomicallyzh (P_ stm)
+{
+    P_ old_trec;
+    P_ new_trec;
+    P_ code, next_invariant, frame_result;
+
+    // stmStartTransaction may allocate
+    MAYBE_GC_P(stg_ptl2_atomicallyzh, stm);
+
+    old_trec = StgTSO_ptrec(CurrentTSO);
+    
+    /* Start the memory transcation */
+    ("ptr" new_trec) = ccall ptl2_stmStartTransaction(MyCapability() "ptr", old_trec "ptr");
+    StgTSO_ptrec(CurrentTSO) = new_trec;
+
+    StgPTRecHeader_lastK(new_trec) = stm; //in case of full abort, invoke this
+    
+    jump stg_ap_v_fast(stm);
+}
+
+stg_ptl2_commit(P_ retVal)
+{
+
+    P_ checkpoint;
+    gcptr trec, code;
+
+    trec = StgTSO_ptrec(CurrentTSO);
+    ("ptr" checkpoint) = ccall ptl2_stmCommitTransaction(MyCapability() "ptr", trec "ptr", StgTSO_id(CurrentTSO));
+
+    if(checkpoint == PASTM_SUCCESS){ //Validation succeeded
+        return(retVal);
+    }
+    if(checkpoint == PASTM_FAIL){ //Validation failed and no checkpoint, TRec should already be set up
+	code = StgPTRecHeader_lastK(trec);
+        jump stg_ap_v_fast(code);
+    }else{//Validation failed, but we have a checkpoint
+
+        P_ k;
+        P_ val;
+
+        k = StgPTRecChunk_checkpoint(checkpoint);
+	val = StgPTRecHeader_capture_freq(trec);
+        jump stg_ap_pv_fast(k, val);
+    }
+}
+
+stg_ptl2_eagerFullAbort
+{
+    P_ trec; 
+    trec = StgTSO_ptrec(CurrentTSO);
+    R1 = StgPTRecHeader_lastK(trec);
+    jump stg_ap_v_fast [R1];
+
+}
+
+//Pass the checkpoint in R1
+stg_ptl2_eagerPartialAbort(P_ chkpnt, P_ val)
+{
+    P_ k;
+    k = StgPTRecChunk_checkpoint(chkpnt);    
+    jump stg_ap_pv_fast(k, val);
+}
+
+stg_ptl2_readTVarzh (P_ tvar, P_ k)
+{
+    P_ trec;
+    P_ result, val;
+    W_ header;
+    
+    // Call to stmReadTVar may allocate
+    MAYBE_GC_PP (stg_ptl2_readTVarzh, tvar, k);
+
+    trec = StgTSO_ptrec(CurrentTSO);
+    ("ptr" result) = ccall ptl2_stmReadTVar(MyCapability() "ptr", trec "ptr",
+					    tvar "ptr", k "ptr");
+
+    if(result == PASTM_FAIL){
+        jump stg_ptl2_eagerFullAbort []; //full abort
+    }
+    
+    header = StgHeader_info(result);
+
+    if(header == stg_PTREC_CHUNK_info){
+	val = StgPTRecHeader_capture_freq(trec);
+	jump stg_ptl2_eagerPartialAbort(result, val);
+    }
+
+    return (result);
+}
+
+stg_ptl2_writeTVarzh (P_ tvar,     /* :: TVar a */
+		      P_ new_value /* :: a      */)
+{
+    W_ trec;
+
+    // Call to stmWriteTVar may allocate
+    MAYBE_GC_PP (stg_ptl2_writeTVarzh, tvar, new_value);
+
+    trec = StgTSO_ptrec(CurrentTSO);
+    ccall ptl2_stmWriteTVar(MyCapability() "ptr", trec "ptr", tvar "ptr",
+						  new_value "ptr");
+    return (tvar);
+}
+
+stg_ptl2_newTVar (P_ init)
+{
+    W_ tv;
+
+    ALLOC_PRIM_P (SIZEOF_StgTL2TVar, stg_tl2_newTVarIOzh, init);
+
+    tv = Hp - SIZEOF_StgTL2TVar + WDS(1);
+    SET_HDR (tv, stg_TL2_TVAR_DIRTY_info, CCCS);
+    
+    StgTL2TVar_current_value(tv) = init;
+    StgTL2TVar_currentStamp(tv) = 0;
+    StgTL2TVar_oldStamp(tv) = 0;
+
+    return (tv);
+}
