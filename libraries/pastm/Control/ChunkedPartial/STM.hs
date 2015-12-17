@@ -66,8 +66,11 @@ newTVar :: a -> STM (TVar a)
 newTVar x = STM $ \c -> \s -> case unsafeCoerce# newTVar# x s of
                                 (# s', tv #) -> c (TVar tv) s'
 
+initK :: a -> State# RealWorld -> (# State# RealWorld, a #)
+initK a s = (# s, a #)
+
 atomically :: STM a -> IO a
-atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c (unsafeCoerce# commitTx#)) s)
+atomically (STM c) = IO (\s -> unsafeCoerce# atomically# (c initK) s)
 
 foreign import prim safe "stg_ptl2_atomicallyzh" atomically# 
         :: Any() -> State# RealWorld -> (# State# RealWorld, Any() #)
@@ -77,9 +80,6 @@ foreign import prim safe "stg_ptl2_readTVarzh" readTVar#
 
 foreign import prim safe "stg_ptl2_writeTVarzh" writeTVar#
         :: Any() -> Any() -> State# RealWorld -> (# State# RealWorld, a #)
-
-foreign import prim safe "stg_ptl2_commit" commitTx#
-        :: Any() -> State# RealWorld -> (# State# RealWorld, a #)
 
 foreign import ccall "c_ptl2_printSTMStats" printStats :: IO ()
 

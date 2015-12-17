@@ -10,7 +10,7 @@ import Control.Ordered.STM
 import Control.CPSFull.STM
 #elif defined(PTL2)
 import Control.PartialTL2.STM
-#elif defined(TL2)
+#elif defined(FTL2)
 import Control.FullTL2.STM
 #elif defined(CHUNKED)
 import Control.Chunked.STM

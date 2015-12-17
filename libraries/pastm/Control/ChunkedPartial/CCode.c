@@ -11,15 +11,15 @@
 
 //TRec 
 typedef struct {
-    StgHeader                  header;
-    StgPTRecChunk             *read_set;
-    StgPTRecWithK             *lastK;
-    StgPTRecChunk             *tail; //last chunk of linked list
-    StgWriteSet               *write_set;
-    StgPTRecOrElse            *retry_stack;
-    unsigned long              read_version;
-    StgInt64                   capture_freq;
-    StgInt                     numK;
+    StgHeader                  header;        //heap object header
+    StgPTRecChunk             *read_set;      //front of the read set (first chunk)
+    StgPTRecWithK             *lastK;         //DO NOT USE: contains the original STM code for aborts
+    StgPTRecChunk             *tail;          //last chunk of linked list
+    StgWriteSet               *write_set;     //write set
+    StgPTRecOrElse            *retry_stack;   //stack of retry entries.  Currently unused
+    unsigned long              read_version;  //time the transaction started
+    StgInt64                   abort_ret_val; //if partially aborting, apply this to the continuation
+    StgInt                     numK;          //not used
 } TRec;
 
 //casts
@@ -42,31 +42,6 @@ typedef struct {
 
 static volatile unsigned long version_clock = 0;
 
-void chk_trec(TRec * trec){
-    if(trec->header.info != &stg_PTREC_HEADER_info){
-	printf("header not right!\n");
-    }
-
-    StgPTRecChunk* ptr = trec->read_set;
-    while(ptr != (StgPTRecChunk*)NO_PTREC){
-	int i;
-	if(ptr->header.info != &stg_PTREC_CHUNK_info){
-	    printf("chunk doesn\'t have chunk header\n");
-	}
-
-	if(ptr->next_entry_idx >= PTREC_CHUNK_SIZE){
-	    printf("chunk has too many entries!\n");
-	}
-	
-	for(i = 0; i < ptr->next_entry_idx; i++){
-	    if(!LOOKS_LIKE_CLOSURE_PTR(ptr->entries[i])){
-		printf("entry %d, does\'nt look like a pointer\n", i);
-	    }
-	}
-	ptr = ptr->prev_chunk;
-    }
-}
-
 StgPTRecChunk * alloc_chunk(Capability * cap){
     StgPTRecChunk * chunk = (StgPTRecChunk *)allocate(cap, sizeofW(StgPTRecChunk));
     SET_HDR(chunk, &stg_PTREC_CHUNK_info, CCS_SYSTEM);
@@ -76,21 +51,22 @@ StgPTRecChunk * alloc_chunk(Capability * cap){
     chunk->next_entry_idx = 0;
     return chunk;
 }
+
 TRec * ptl2_stmStartTransaction(Capability *cap, TRec * ptrec){
     if(ptrec == NO_PTREC){
 	ptrec = (TRec *)allocate(cap, sizeofW(StgPTRecHeader));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
+	ptrec->lastK = TO_WITHK(NO_PTREC);
     }
 
     StgPTRecChunk * chunk = alloc_chunk(cap);
     ptrec->read_set = chunk;
     ptrec->tail = chunk;
-    ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
     ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
     
     ptrec->read_version = version_clock;
-    ptrec->capture_freq = 0; 
+    ptrec->abort_ret_val = 0; 
     ptrec->numK = 0;
 
     return ptrec;
@@ -150,7 +126,7 @@ static StgPTRecChunk * force_abort(TRec * trec, Capability * cap){
 		    trec->tail->next_entry_idx = 0;
 		    trec->tail->write_set = TO_WRITE_SET(NO_PTREC);
 		    trec->tail->checkpoint = TO_CLOSURE(NO_PTREC);
-		    trec->capture_freq = (StgInt64)val;
+		    trec->abort_ret_val = (StgInt64)val;
 		    return checkpoint;
 		}
 		clearTRec(trec);
@@ -186,7 +162,7 @@ static StgPTRecChunk * force_abort(TRec * trec, Capability * cap){
     trec->tail->next_entry_idx = 0;
     trec->tail->write_set = TO_WRITE_SET(NO_PTREC);
     trec->tail->checkpoint = TO_CLOSURE(NO_PTREC);
-    trec->capture_freq = (StgInt64)val;
+    trec->abort_ret_val = (StgInt64)val;
     return checkpoint;
 }
 static StgPTRecChunk * validate(TRec * trec, Capability * cap){
@@ -222,7 +198,7 @@ static StgPTRecChunk * validate(TRec * trec, Capability * cap){
 		    trec->tail->next_entry_idx = 0;
 		    trec->tail->write_set = TO_WRITE_SET(NO_PTREC);
 		    trec->tail->checkpoint = TO_CLOSURE(NO_PTREC);
-		    trec->capture_freq = (StgInt64)val;
+		    trec->abort_ret_val = (StgInt64)val;
 		    return checkpoint;
 		}
 		clearTRec(trec);
@@ -239,6 +215,8 @@ static StgPTRecChunk * validate(TRec * trec, Capability * cap){
     return (StgPTRecChunk*)PASTM_SUCCESS;
 }
 
+int i = 0;
+StgBool flag = FALSE;
 
 StgClosure * ptl2_stmReadTVar(Capability * cap, TRec * trec, 
 			      StgTL2TVar * tvar, StgClosure * k){
@@ -252,12 +230,12 @@ StgClosure * ptl2_stmReadTVar(Capability * cap, TRec * trec,
 
     StgClosure * val; 
     unsigned long stamp1, stamp2;
-
+    
  retry:
     stamp1 = tvar->currentStamp;
     val = tvar->current_value;
     stamp2 = tvar->currentStamp;
-
+    
     if(LOCKED(stamp1) || stamp1 != stamp2 || stamp1 > trec->read_version){
 	StgPTRecChunk * res = validate(trec, cap);
 	if(res != (StgPTRecChunk*)PASTM_SUCCESS){
@@ -285,7 +263,7 @@ StgClosure * ptl2_stmReadTVar(Capability * cap, TRec * trec,
 void ptl2_stmWriteTVar(Capability *cap,
 		       TRec *trec,
 		       StgTVar *tvar,
-		       StgClosure *new_value) {
+		       StgClosure *new_value) {    
     StgWriteSet * newEntry = (StgWriteSet *) allocate(cap, sizeofW(StgWriteSet));
     SET_HDR(newEntry , &stg_WRITE_SET_info, CCS_SYSTEM);
     newEntry->tvar = tvar;
@@ -351,7 +329,7 @@ StgPTRecChunk * ptl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThread
 		    }
 		    trec->read_version = write_version;
 		    trec->tail = checkpoint;
-		    trec->capture_freq = (StgInt64)val;
+		    trec->abort_ret_val = (StgInt64)val;
 		    return checkpoint;
 		}
 		clearTRec(trec);

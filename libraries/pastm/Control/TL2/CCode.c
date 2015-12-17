@@ -9,6 +9,20 @@
 #define KBOUND 20
 #define START_FREQ 4
 
+//TRec 
+typedef struct {
+    StgHeader                  header;        //heap object header
+    StgPTRecChunk             *read_set;      //front of the read set (first chunk)
+    StgPTRecWithK             *lastK;         //DO NOT USE: contains the original STM code for aborts
+    StgPTRecChunk             *tail;          //last chunk of linked list
+    StgWriteSet               *write_set;     //write set
+    StgPTRecOrElse            *retry_stack;   //stack of retry entries.  Currently unused
+    unsigned long              read_version;  //time the transaction started
+    StgInt64                   abort_ret_val; //if partially aborting, apply this to the continuation
+    StgInt                     numK;          //not used
+} TRec;
+
+
 //casts
 #define TO_WITHK(x) ((StgPTRecWithK*)x)
 #define TO_WITHOUTK(x) ((StgPTRecWithoutK*)x)
@@ -22,24 +36,37 @@
 
 #define PASTM_SUCCESS              ((StgClosure*)(void*)&stg_PA_STM_SUCCESS_closure)
 #define PASTM_FAIL                 ((StgClosure*)(void*)&stg_PA_STM_FAIL_closure)
-#define NO_PTREC                   ((StgPTRecHeader *)(void *)&stg_NO_PTREC_closure)
+#define NO_PTREC                   ((TRec *)(void *)&stg_NO_PTREC_closure)
 #define WITHK_HEADER               &stg_PTREC_WITHK_info
 #define WITHOUTK_HEADER            &stg_PTREC_WITHOUTK_info
 #define WRITESET_HEADER            &stg_WRITE_SET_info
 
 static volatile unsigned long version_clock = 0;
 
+StgPTRecChunk * alloc_chunk(Capability * cap){
+    StgPTRecChunk * chunk = (StgPTRecChunk *)allocate(cap, sizeofW(StgPTRecChunk));
+    SET_HDR(chunk, &stg_PTREC_CHUNK_info, CCS_SYSTEM);
+    chunk->write_set = TO_WRITE_SET(NO_PTREC);
+    chunk->checkpoint = TO_CLOSURE(NO_PTREC);
+    chunk->prev_chunk = (StgPTRecChunk*)NO_PTREC;
+    chunk->next_entry_idx = 0;
+    return chunk;
+}
+
+
 //Initialize metadata
-StgPTRecHeader * tl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec) {
+TRec * tl2_stmStartTransaction(Capability *cap, TRec * ptrec) {
     if(ptrec == NO_PTREC){
-	ptrec = (StgPTRecHeader *)allocate(cap, sizeofW(StgPTRecHeader));
+	ptrec = (TRec *)allocate(cap, sizeofW(TRec));
 	SET_HDR(ptrec , &stg_PTREC_HEADER_info, CCS_SYSTEM);
-	ptrec->tail = TO_WITHOUTK(NO_PTREC);
-	ptrec->capture_freq = 0;
+	ptrec->abort_ret_val = 0;
 	ptrec->numK = 0;
     }
+
+    StgPTRecChunk * chunk = alloc_chunk(cap);
+    ptrec->read_set = chunk;
+    ptrec->tail = chunk;
     
-    ptrec->read_set = TO_WITHOUTK(NO_PTREC);
     ptrec->lastK = TO_WITHK(NO_PTREC);
     ptrec->write_set = TO_WRITE_SET(NO_PTREC);
     ptrec->retry_stack = TO_OR_ELSE(NO_PTREC);
@@ -48,14 +75,15 @@ StgPTRecHeader * tl2_stmStartTransaction(Capability *cap, StgPTRecHeader * ptrec
     return ptrec;
 }
 
-static StgClosure * abort_tx(StgPTRecHeader * trec){
-    trec->read_set = TO_WITHOUTK(NO_PTREC);
+static StgClosure * abort_tx(TRec * trec){
+    trec->read_set = trec->tail;
+    trec->tail->next_entry_idx = 0;
     trec->write_set = TO_WRITE_SET(NO_PTREC);
     trec->read_version = version_clock;
     return PASTM_FAIL;
 }
 
-StgClosure * tl2_stmReadTVar(Capability * cap, StgPTRecHeader * trec, 
+StgClosure * tl2_stmReadTVar(Capability * cap, TRec * trec, 
 			    StgTL2TVar * tvar, StgClosure * k){
     StgWriteSet * ws = trec->write_set;
 
@@ -78,19 +106,20 @@ StgClosure * tl2_stmReadTVar(Capability * cap, StgPTRecHeader * trec,
 #endif
 	return abort_tx(trec);
     }
-    
-    StgPTRecWithoutK * entry = (StgPTRecWithoutK*)allocate(cap, sizeofW(StgPTRecWithoutK));
-    SET_HDR(entry, &stg_PTREC_WITHOUTK_info, CCS_SYSTEM);
-    entry->tvar = TO_NOREC(tvar);
-    entry->next = trec->read_set;
-    entry->read_value = val; //TL2 doesn't use this, but if we don't set it the garbage collector will have issues
-    trec->read_set = entry;
- 
+
+    StgPTRecChunk * current_chunk = trec->tail;
+    if(current_chunk->next_entry_idx == PTREC_CHUNK_SIZE){
+	current_chunk = alloc_chunk(cap);
+	trec->tail->prev_chunk = current_chunk;
+	trec->tail = current_chunk;
+    }
+    current_chunk->entries[current_chunk->next_entry_idx] = tvar;
+    current_chunk->next_entry_idx++;
     return val; 
 }
 
 void tl2_stmWriteTVar(Capability *cap,
-		     StgPTRecHeader *trec,
+		     TRec *trec,
 		     StgTVar *tvar,
 		     StgClosure *new_value) {
     StgWriteSet * newEntry = (StgWriteSet *) allocate(cap, sizeofW(StgWriteSet));
@@ -119,7 +148,7 @@ void releaseLocks(StgWriteSet * ws, StgWriteSet * sentinel){
  * traverse in reverse chronological order, we know that the first one locked
  * is our latest modification.
  */
-StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec, StgThreadID id) {
+StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, TRec *trec, StgThreadID id) {
     unsigned long myStamp = trec->read_version;
 
     /*
@@ -153,22 +182,21 @@ StgPTRecWithK * tl2_stmCommitTransaction(Capability *cap, StgPTRecHeader *trec, 
     }
     
     unsigned long write_version = atomic_inc(&version_clock, 2);
-    if(write_version != trec->read_version + 2){
-	//validate read set
-	StgPTRecWithoutK * rs_ptr = trec->read_set;
-	while(rs_ptr != TO_WITHOUTK(NO_PTREC)){
-	    StgTL2TVar * tvar = TO_TL2(rs_ptr->tvar);
-	    unsigned long stamp = tvar->currentStamp;
-	    if((stamp <= myStamp && !LOCKED(stamp)) || stamp == lockVal){
-		rs_ptr = rs_ptr->next;
-	    }else{
-#ifdef STATS
-		cap->pastmStats.commitTimeFullAborts++;
-#endif
+
+    //validate read set
+    StgPTRecChunk * ptr = trec->read_set;
+    while(ptr != (StgPTRecChunk*)NO_PTREC){
+	int i;
+	for(i = 0; i < ptr->next_entry_idx; i++){
+	    StgTL2TVar * tvar = ptr->entries[i];
+	    unsigned long s = tvar->currentStamp;
+	    if(s != lockVal && (s > myStamp || LOCKED(s))){
 		releaseLocks(trec->write_set, TO_WRITE_SET(NO_PTREC));
-		return TO_WITHK(abort_tx(trec));
+		abort_tx(trec);
+		return TO_WITHK(PASTM_FAIL);
 	    }
 	}
+	ptr = ptr->prev_chunk;
     }
     
     //push write set into global store

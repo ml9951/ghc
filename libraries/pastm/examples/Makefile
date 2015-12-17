@@ -3,7 +3,8 @@
 THREADED = -threaded -optc-DTHREADED_RTS
 GHC = ghc
 
-DEBUG = -rtsopts -optc-g -O0 -optc-O0
+#DEBUG = -rtsopts -optc-g -O0 -optc-O0 
+DEBUG = 
 
 all:	ll counter
 
@@ -20,11 +21,11 @@ PartialTL2_FILES = ../Control/PartialTL2/CmmHooks.cmm ../Control/PartialTL2/CCod
 CHUNKED_FILES = ../Control/Chunked/CmmHooks.cmm ../Control/Chunked/CCode.c ../Control/Chunked/STM.hs -I../../../rts
 FF_FILES = ../Control/FastForward/CmmHooks.cmm ../Control/FastForward/CCode.c ../Control/FastForward/STM.hs -I../../../rts 
 CHUNKED_TL2_FILES = ../Control/ChunkedPartial/CmmHooks.cmm ../Control/ChunkedPartial/CCode.c ../Control/ChunkedPartial/STM.hs -I../../../rts 
-OPT =
+OPT = -O2
 
 .PHONY:	llChunkedTL2
 llChunkedTL2:	ll.hs cbits/gettime.c  
-	$(GHC) -ddump-asm -ddump-to-file -ddump-stg -ddump-cmm $(THREADED) $(DEBUG) $(OPT) $(COMMON_FILES) -DCHUNKEDTL2 $(CHUNKED_TL2_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llChunkedTL2$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(COMMON_FILES) -DCHUNKEDTL2 $(CHUNKED_TL2_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llChunkedTL2$(OPT)
 
 .PHONY:	llOrdered
 llOrdered:	ll.hs cbits/gettime.c 
@@ -52,7 +53,7 @@ llPartialTL2:	ll.hs cbits/gettime.c
 
 .PHONY:	llTL2
 llTL2:	ll.hs cbits/gettime.c
-	$(GHC) $(THREADED) $(DEBUG) $(OPT) -DTL2 -optc-g $(TL2_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llTL2$(OPT)
+	$(GHC) $(THREADED) $(DEBUG) $(OPT) $(COMMON_FILES) -DFTL2 $(TL2_FILES) -fforce-recomp cbits/gettime.c ll.hs -o llTL2$(OPT)
 
 .PHONY:	llChunked
 llChunked:	ll.hs cbits/gettime.c

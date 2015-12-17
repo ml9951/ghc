@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ForeignFunctionInterface #-} 
+{-# LANGUAGE CPP, ForeignFunctionInterface, BangPatterns #-} 
 
 #ifdef STMHASKELL
 import Control.STMHaskell.STM     --full abort STM (STM Haskell)
@@ -10,8 +10,8 @@ import Control.Ordered.STM
 import Control.CPSFull.STM
 #elif defined(PTL2)
 import Control.PartialTL2.STM
-#elif defined(TL2)
-import Control.FullTL2.STM
+#elif defined(FTL2)
+import Control.TL2.STM
 #elif defined(CHUNKED)
 import Control.Chunked.STM
 #elif defined(PABORT)
@@ -44,20 +44,20 @@ newList = do
         l <- newTVarIO (Head nullPtr)
         return(l)
 
-lookup :: Eq a => TVar (STMList a) -> a -> STM Bool
+lookup :: (Eq a, Show a) => TVar (STMList a) -> a -> STM Bool
 lookup l x = do
        y <- readTVar l
        case y of
             Head t -> lookup t x
             Null -> return(False)
-            Node hd tl -> 
+            Node hd tl ->
                      if x == hd
                      then return(True)
                      else lookup tl x
 
-insert :: Ord a => TVar (STMList a) -> a -> STM()
-insert l x = do
-       raw <- readTVar l        
+insert :: (Ord a, Show a) => TVar (STMList a) -> a -> STM()
+insert l !x = do
+       raw <- readTVar l
        case raw of
             Head t -> insert t x
             Null -> do
@@ -97,7 +97,6 @@ delete trailer x = (do ptr <- next trailer; loop ptr trailer) where
 threadLoop :: (Ord a, Show a) => TVar (STMList a) -> [a] -> IO()
 threadLoop l [] = return()
 threadLoop l (hd:tl) = do
-           putStrLn("iteration " ++ show hd)
            atomically $ insert l hd
            res <- atomically $ lookup l hd
            if res == True
@@ -107,7 +106,6 @@ threadLoop l (hd:tl) = do
 remove :: Show a => Ord a => TVar (STMList a) -> [a] -> IO()
 remove l [] = return()
 remove l (hd:tl) = do
-       putStrLn "remove iter"
        removed <- atomically $ delete l hd 
        if removed == True
        then remove l tl >>= \_ -> return()
